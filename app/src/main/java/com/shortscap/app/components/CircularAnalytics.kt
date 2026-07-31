@@ -122,8 +122,6 @@ fun ScCircularAnalyticsCarousel(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(colors.Card, RoundedCornerShape(22.dp))
             .border(1.dp, colors.Divider, RoundedCornerShape(22.dp))
             .padding(vertical = 24.dp, horizontal = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
