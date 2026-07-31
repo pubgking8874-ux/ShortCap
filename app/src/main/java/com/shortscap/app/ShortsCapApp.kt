@@ -97,7 +97,10 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
 
                             Box(modifier = Modifier.fillMaxSize()) {
                                 Box(
-                                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 18.dp),
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .navigationBarsPadding()
+                                        .padding(start = 16.dp, end = 16.dp, bottom = 18.dp),
                                 ) {
                                     ScBottomNav(
                                         current = state.screen,

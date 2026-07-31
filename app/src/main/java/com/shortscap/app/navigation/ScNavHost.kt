@@ -1,10 +1,13 @@
 package com.shortscap.app.navigation
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.screens.activity.ActivityScreen
 import com.shortscap.app.screens.home.HomeScreen
@@ -30,7 +33,11 @@ import com.shortscap.app.viewmodel.AppViewModel
 fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
     val scroll = rememberScrollState()
     androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize().verticalScroll(scroll),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .navigationBarsPadding()
+            .padding(bottom = 100.dp),
     ) {
         when (state.screen) {
             ScScreen.HOME -> HomeScreen(loading = state.homeLoading, metrics = state.homeMetrics)

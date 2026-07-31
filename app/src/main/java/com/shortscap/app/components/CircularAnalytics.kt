@@ -45,7 +45,6 @@ fun ScCircularMetricRing(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalScColors.current
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val ringBrush = Brush.linearGradient(
         listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary),
     )
@@ -72,18 +71,7 @@ fun ScCircularMetricRing(
                 val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
                 val arcSize = Size(diameter, diameter)
 
-                // Track
-                drawArc(
-                    color = trackColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
-                )
-
-                // Animated progress arc
+                // Animated progress arc (no track — only the ring itself is drawn)
                 if (progress.value > 0f) {
                     drawArc(
                         brush = ringBrush,
@@ -148,7 +136,10 @@ fun ScCircularAnalyticsCarousel(
             key = { metrics[it].id },
             modifier = Modifier.fillMaxWidth(),
         ) { page ->
-            ScCircularMetricRing(metric = metrics[page])
+            ScCircularMetricRing(
+                metric = metrics[page],
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
         }
 
         Spacer(Modifier.height(14.dp))

@@ -35,10 +35,11 @@ fun ScBottomNav(
     val colors = LocalScColors.current
     Row(
         modifier = Modifier
+            .fillMaxWidth()
             .clip(RoundedCornerShape(999.dp))
             .background(colors.Card.copy(alpha = 0.85f), RoundedCornerShape(999.dp))
             .border(1.dp, colors.Divider, RoundedCornerShape(999.dp))
-            .padding(12.dp),
+            .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -46,21 +47,28 @@ fun ScBottomNav(
             val active = spec.screen == current
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(if (active) colors.Accent else Color.Transparent)
+                    .weight(1f)
+                    .height(56.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) { onSelect(spec.screen) },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    spec.icon,
-                    contentDescription = spec.screen.name,
-                    tint = if (active) Color.White else colors.TextSecondary,
-                    modifier = Modifier.size(20.dp),
-                )
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(if (active) colors.Accent else Color.Transparent),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        spec.icon,
+                        contentDescription = spec.screen.name,
+                        tint = if (active) Color.White else colors.TextSecondary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }
