@@ -25,7 +25,10 @@ import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScChip
 import com.shortscap.app.components.ScDivider
 import com.shortscap.app.components.ScEmptyState
+import com.shortscap.app.components.ScEntityRow
 import com.shortscap.app.components.ScSwitch
+import com.shortscap.app.model.ScEntity
+import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.model.SiteEntry
 import com.shortscap.app.model.WebTab
 import com.shortscap.app.theme.LocalScColors
@@ -108,7 +111,17 @@ fun WebScreen(
                 )
             } else {
                 filtered.forEachIndexed { index, site ->
-                    SiteRow(site = site, onToggle = { onToggleSite(site.name) })
+                    ScEntityRow(
+                        entity = ScEntity(
+                            id = site.name,
+                            title = site.name,
+                            type = ScEntityType.WEBSITE,
+                            websiteUrl = site.url,
+                            fallbackColor = colors.TextSecondary,
+                        ),
+                        subtitle = site.url,
+                        trailing = { ScSwitch(on = site.on, onToggle = { onToggleSite(site.name) }) },
+                    )
                     if (index < filtered.size - 1) ScDivider()
                 }
             }
@@ -133,24 +146,4 @@ private fun WebStat(value: String, label: String) {
     }
 }
 
-@Composable
-private fun SiteRow(site: SiteEntry, onToggle: () -> Unit) {
-    val colors = LocalScColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(colors.CardHover),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Language, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(16.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(site.name, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
-            Text(site.url, color = colors.TextSecondary, style = ScTextStyles.Caption, maxLines = 1)
-        }
-        ScSwitch(on = site.on, onToggle = onToggle)
-    }
-}
+

@@ -17,8 +17,29 @@ val WeekData = listOf(
 /** Mirrors `appUsage` pie-chart data */
 data class AppUsageSlice(val name: String, val value: Int, val color: Color)
 
-/** Mirrors Home screen "Recent Activity" rows */
-data class RecentActivityItem(val name: String, val time: String, val whenText: String, val color: Color)
+/** Kind of entity shown with a leading icon — installed apps vs websites */
+enum class ScEntityType { APP, WEBSITE }
+
+/**
+ * Reusable model for any app or website displayed in the UI (Home recent
+ * activity, Web site lists, and future analytics/history screens). Rendered
+ * through [com.shortscap.app.components.ScEntityIcon] and
+ * [com.shortscap.app.components.ScEntityRow]. The fields map 1:1 to future
+ * backend API and Android Accessibility-service data, so replacing the data
+ * source requires no UI changes.
+ */
+data class ScEntity(
+    val id: String,
+    val title: String,
+    val type: ScEntityType,
+    val packageName: String? = null,
+    val websiteUrl: String? = null,
+    val icon: String? = null,
+    val fallbackColor: Color,
+    val usageTime: String? = null,
+    val restrictionStatus: String? = null,
+    val timestamp: String? = null,
+)
 
 /** Mirrors Web screen site rows, keyed by tab (Blocked / Allowed / Recent) */
 data class SiteEntry(val name: String, val url: String, val on: Boolean)

@@ -13,16 +13,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScCircularAnalyticsCarousel
 import com.shortscap.app.components.ScDivider
+import com.shortscap.app.components.ScEntityRow
 import com.shortscap.app.components.ScSkeleton
 import com.shortscap.app.components.ScStatCard
-import com.shortscap.app.model.RecentActivityItem
 import com.shortscap.app.model.ScCircularMetric
+import com.shortscap.app.model.ScEntity
+import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScChrome
 import com.shortscap.app.theme.ScInstagram
@@ -30,9 +31,9 @@ import com.shortscap.app.theme.ScTextStyles
 import com.shortscap.app.theme.ScWhatsApp
 
 private val recentActivity = listOf(
-    RecentActivityItem("Instagram", "42m", "10 min ago", ScInstagram),
-    RecentActivityItem("Chrome", "28m", "38 min ago", ScChrome),
-    RecentActivityItem("WhatsApp", "15m", "1h ago", ScWhatsApp),
+    ScEntity(id = "instagram", title = "Instagram", type = ScEntityType.APP, packageName = "com.instagram.android", usageTime = "42m", timestamp = "10 min ago", fallbackColor = ScInstagram),
+    ScEntity(id = "chrome", title = "Chrome", type = ScEntityType.APP, packageName = "com.android.chrome", usageTime = "28m", timestamp = "38 min ago", fallbackColor = ScChrome),
+    ScEntity(id = "whatsapp", title = "WhatsApp", type = ScEntityType.APP, packageName = "com.whatsapp", usageTime = "15m", timestamp = "1h ago", fallbackColor = ScWhatsApp),
 )
 
 /** Mirrors function HomeScreen({ loading }) { ... } */
@@ -89,7 +90,13 @@ fun HomeScreen(loading: Boolean, metrics: List<ScCircularMetric>) {
             Spacer(Modifier.height(12.dp))
             ScCard(modifier = Modifier.fillMaxWidth()) {
                 recentActivity.forEachIndexed { index, item ->
-                    RecentActivityRow(item)
+                    ScEntityRow(
+                        entity = item,
+                        subtitle = item.timestamp,
+                        trailing = {
+                            Text(item.usageTime ?: "", color = colors.TextSecondary, fontSize = 13.sp)
+                        },
+                    )
                     if (index < recentActivity.size - 1) ScDivider()
                 }
             }
@@ -97,27 +104,4 @@ fun HomeScreen(loading: Boolean, metrics: List<ScCircularMetric>) {
     }
 }
 
-@Composable
-private fun RecentActivityRow(item: RecentActivityItem) {
-    val colors = LocalScColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(item.color.copy(alpha = 0.13f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(item.name.take(1), color = item.color, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(item.name, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
-            Text(item.whenText, color = colors.TextSecondary, style = ScTextStyles.Caption)
-        }
-        Text(item.time, color = colors.TextSecondary, fontSize = 13.sp)
-    }
-}
+

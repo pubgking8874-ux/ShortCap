@@ -235,3 +235,297 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 ---
 
 *ShortsCap v2.4.1 · Build 2026072801 · © 2026 ShortsCap*
+
+---
+
+# Dynamic App & Website Icons Architecture (Future Backend Ready)
+
+You are working on the existing ShortsCap Android project built with Kotlin + Jetpack Compose + Material Design 3.
+
+This is NOT a redesign request.
+
+Do NOT modify the existing UI layout, navigation, colors, animations, spacing, or screen hierarchy.
+
+Only enhance the existing architecture to support dynamic application and website icons.
+
+--------------------------------------------------------
+
+OBJECTIVE
+
+Currently, the application displays application names and website names such as:
+
+Instagram
+
+WhatsApp
+
+Chrome
+
+YouTube
+
+Reddit
+
+X (Twitter)
+
+TikTok
+
+etc.
+
+However, no icons are displayed.
+
+This makes the interface look incomplete.
+
+Every application and website should display its official icon/logo beside its name.
+
+--------------------------------------------------------
+
+WHERE THIS SHOULD WORK
+
+The icon system must work everywhere in the application.
+
+Examples include:
+
+• Home → Recent Activity
+
+• Activity Screen
+
+• Web Screen
+
+• Restricted Apps
+
+• Restricted Websites
+
+• Search Results
+
+• Future Analytics Screens
+
+• Future History Screens
+
+Every list displaying an app or website must automatically display its icon.
+
+--------------------------------------------------------
+
+APPLICATION ICONS
+
+Every Android application should display its official installed application icon.
+
+Examples:
+
+Instagram
+
+WhatsApp
+
+Chrome
+
+YouTube
+
+Facebook
+
+Telegram
+
+Snapchat
+
+Discord
+
+Spotify
+
+Gmail
+
+etc.
+
+The icon should always appear before the application name.
+
+Maintain consistent icon size.
+
+Maintain consistent spacing.
+
+Icons should be vertically centered.
+
+--------------------------------------------------------
+
+WEBSITE ICONS
+
+Every website should display its favicon or official logo.
+
+Examples:
+
+reddit.com
+
+x.com
+
+youtube.com
+
+instagram.com
+
+facebook.com
+
+tiktok.com
+
+github.com
+
+stackoverflow.com
+
+etc.
+
+Display the favicon before the website name.
+
+If a favicon is unavailable, show a clean default web icon instead of leaving the space empty.
+
+--------------------------------------------------------
+
+FUTURE BACKEND READY
+
+For the current frontend, mock data is acceptable.
+
+However, the architecture must be designed so that future backend integration requires only replacing the data source.
+
+When backend APIs are connected, each item should support fields similar to:
+
+App Name
+
+Package Name
+
+App Icon
+
+Website Name
+
+Website URL
+
+Website Icon
+
+Usage Time
+
+Restriction Status
+
+Timestamp
+
+The UI should automatically render the icon from the provided data.
+
+No UI redesign should be required.
+
+--------------------------------------------------------
+
+ACCESSIBILITY SERVICE READY
+
+The architecture should also be prepared for future Android Accessibility Service integration.
+
+When the application begins monitoring real user activity:
+
+Installed application information
+
+Package names
+
+Application icons
+
+Usage statistics
+
+Restriction status
+
+should all be capable of being retrieved and displayed.
+
+No changes to the UI should be required later.
+
+Only the repository/data source should change.
+
+--------------------------------------------------------
+
+DATA MODEL
+
+Design the UI using reusable models.
+
+Example fields may include:
+
+id
+
+title
+
+packageName
+
+websiteUrl
+
+icon
+
+type (App / Website)
+
+usageTime
+
+restrictionStatus
+
+timestamp
+
+This allows the same reusable UI components to render both applications and websites.
+
+--------------------------------------------------------
+
+REUSABLE COMPONENTS
+
+Create reusable list item composables.
+
+Each item should support:
+
+Leading Icon
+
+Title
+
+Subtitle
+
+Usage Information
+
+Restriction Status
+
+Trailing Action
+
+The same component should work for:
+
+Recent Activity
+
+Restricted Apps
+
+Websites
+
+Search Results
+
+History
+
+Future Lists
+
+Avoid duplicate UI implementations.
+
+--------------------------------------------------------
+
+ICON LOADING
+
+Icons should load efficiently.
+
+Prevent unnecessary recompositions.
+
+Provide placeholder icons while loading.
+
+Display fallback icons if an icon cannot be found.
+
+Never leave empty space where an icon should appear.
+
+--------------------------------------------------------
+
+PRESERVE EXISTING DESIGN
+
+Do NOT redesign any screen.
+
+Do NOT modify the Home layout.
+
+Do NOT modify Recent Activity design.
+
+Do NOT modify the Web screen layout.
+
+Do NOT modify Bottom Navigation.
+
+Do NOT modify Top App Bar.
+
+Do NOT modify animations.
+
+Do NOT modify colors.
+
+Do NOT modify spacing.
+
+Only enhance the existing architecture so that every application and website displayed in the UI automatically shows its correct icon now (using mock data) and later (using backend APIs or Android Accessibility data) without requiring any UI redesign.
+
+The ShortsCap design system must remain visually identical while becoming fully dynamic and future-ready.
