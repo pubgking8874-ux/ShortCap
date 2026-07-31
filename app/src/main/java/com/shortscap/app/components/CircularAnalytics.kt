@@ -123,11 +123,8 @@ fun ScCircularAnalyticsCarousel(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(
-                Brush.linearGradient(listOf(colors.SummaryCardGradientStart, colors.SummaryCardGradientEnd)),
-                RoundedCornerShape(22.dp),
-            )
-            .border(1.dp, colors.SummaryCardBorder, RoundedCornerShape(22.dp))
+            .background(colors.Card, RoundedCornerShape(22.dp))
+            .border(1.dp, colors.Divider, RoundedCornerShape(22.dp))
             .padding(vertical = 24.dp, horizontal = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -136,10 +133,14 @@ fun ScCircularAnalyticsCarousel(
             key = { metrics[it].id },
             modifier = Modifier.fillMaxWidth(),
         ) { page ->
-            ScCircularMetricRing(
-                metric = metrics[page],
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
+            // Every page fills the card width and centers the widget, so the
+            // ring, value, and subtitle sit in the exact middle on all pages.
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                ScCircularMetricRing(metric = metrics[page])
+            }
         }
 
         Spacer(Modifier.height(14.dp))
