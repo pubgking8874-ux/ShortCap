@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -39,8 +37,6 @@ import com.shortscap.app.R
 import com.shortscap.app.auth.components.AuthPrimaryButton
 import com.shortscap.app.auth.components.AuthSecondaryButton
 import com.shortscap.app.auth.components.AuthTextButton
-import com.shortscap.app.auth.theme.GradientEnd
-import com.shortscap.app.auth.theme.GradientStart
 import androidx.compose.runtime.LaunchedEffect
 
 @Composable
@@ -62,16 +58,12 @@ fun WelcomeScreen(
     ) {
         Spacer(Modifier.height(48.dp))
 
-        // Brand logo shown in a perfect circle inside the hero container.
+        // Brand logo floating directly on the screen background — no colored container behind it.
         AnimatedVisibility(visible = visible, enter = fadeIn(tween(500))) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(
-                        Brush.linearGradient(listOf(GradientStart.copy(alpha = 0.15f), GradientEnd.copy(alpha = 0.15f)))
-                    ),
+                    .height(220.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
