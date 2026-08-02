@@ -1,11 +1,14 @@
 package com.shortscap.app
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,6 +19,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shortscap.app.components.NavItemSpec
@@ -119,17 +124,14 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                         onClose = viewModel::closeDrawer,
                         items = drawerItems,
                         logoIcon = {
-                            Box(
+                            Image(
+                                painter = painterResource(R.drawable.logo_pic),
+                                contentDescription = "ShortsCap logo",
+                                contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.Accent, colors.Accent2)),
-                                    ),
-                            ) {
-                                androidx.compose.foundation.layout.Box(modifier = Modifier.padding(6.dp)) {
-                                    androidx.compose.material3.Text("S", color = androidx.compose.ui.graphics.Color.Black)
-                                }
-                            }
+                                    .size(36.dp)
+                                    .clip(CircleShape),
+                            )
                         },
                     )
 

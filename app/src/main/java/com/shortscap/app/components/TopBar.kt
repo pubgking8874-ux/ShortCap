@@ -1,5 +1,6 @@
 package com.shortscap.app.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,7 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.R
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -62,15 +66,14 @@ fun ScTopBar(
         ScIconButton(icon = menuIcon, contentDescription = "Menu", onClick = onMenu)
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            androidx.compose.foundation.layout.Box(
+            Image(
+                painter = painterResource(R.drawable.logo_pic),
+                contentDescription = "ShortsCap logo",
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(26.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.Accent, colors.Accent2))),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("S", color = Color.Black, style = ScTextStyles.BodySemiBold)
-            }
+                    .clip(CircleShape),
+            )
             Text("ShortsCap", color = colors.TextPrimary, style = ScTextStyles.LogoText)
         }
 
