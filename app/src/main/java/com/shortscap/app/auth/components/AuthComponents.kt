@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -46,36 +47,81 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.R
 import com.shortscap.app.auth.theme.GradientEnd
 import com.shortscap.app.auth.theme.GradientStart
 import com.shortscap.app.auth.theme.SuccessColor
 import com.shortscap.app.auth.theme.WarningColor
+import com.shortscap.app.theme.LocalScColors
 
-/** Filled, full-width primary CTA — same shape/elevation everywhere. */
+/** Filled, full-width primary CTA — [gradient] enables the premium ShortsCap brand look. */
 @Composable
 fun AuthPrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    loading: Boolean = false
+    loading: Boolean = false,
+    gradient: Boolean = false
 ) {
+    val scColors = LocalScColors.current
+    val shape = RoundedCornerShape(16.dp)
+    val isActive = enabled && !loading
+    // Theme-adaptive "soft dark gray" disabled treatment (reads gray in both themes).
+    val disabledSurface = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val disabledContent = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+    val styledModifier = if (gradient) {
+        modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(
+                brush = if (isActive) {
+                    Brush.linearGradient(listOf(scColors.Accent, scColors.Accent2))
+                } else {
+                    SolidColor(disabledSurface)
+                },
+                shape = shape
+            )
+    } else {
+        modifier
+            .fillMaxWidth()
+            .height(56.dp)
+    }
+
     Button(
         onClick = onClick,
-        enabled = enabled && !loading,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = Color.White
-        )
+        enabled = isActive,
+        modifier = styledModifier,
+        shape = shape,
+        colors = if (gradient) {
+            ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent,
+                contentColor = Color.White,
+                disabledContainerColor = Color.Transparent,
+                disabledContentColor = disabledContent
+            )
+        } else {
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.White
+            )
+        },
+        elevation = if (gradient) {
+            ButtonDefaults.buttonElevation(
+                defaultElevation = 4.dp,
+                pressedElevation = 2.dp,
+                disabledElevation = 0.dp
+            )
+        } else {
+            ButtonDefaults.buttonElevation()
+        }
     ) {
         if (loading) {
             CircularProgressIndicator(
@@ -113,13 +159,18 @@ fun AuthSecondaryButton(
 
 /** Low-emphasis text link, e.g. "Create Account" / "Forgot Password?". */
 @Composable
-fun AuthTextButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun AuthTextButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    strong: Boolean = false
+) {
     TextButton(onClick = onClick, modifier = modifier) {
         Text(
             text,
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = if (strong) FontWeight.Bold else FontWeight.SemiBold
         )
     }
 }
@@ -135,23 +186,37 @@ fun AuthTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     isError: Boolean = false,
     supportingText: String? = null,
-    singleLine: Boolean = true
+    singleLine: Boolean = true,
+    placeholder: String? = null
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
+        placeholder = placeholder?.let {
+            { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        },
         leadingIcon = leadingIcon,
         singleLine = singleLine,
         isError = isError,
         supportingText = supportingText?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(14.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            focusedLabelColor = MaterialTheme.colorScheme.primary,
-            cursorColor = MaterialTheme.colorScheme.primary
-        ),
+        colors = if (placeholder != null) {
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary,
+                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.8f)
+            )
+        } else {
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary
+            )
+        },
         modifier = modifier.fillMaxWidth()
     )
 }
@@ -166,12 +231,16 @@ fun AuthPasswordField(
     visible: Boolean,
     onToggleVisible: () -> Unit,
     isError: Boolean = false,
-    supportingText: String? = null
+    supportingText: String? = null,
+    placeholder: String? = null
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
+        placeholder = placeholder?.let {
+            { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        },
         singleLine = true,
         isError = isError,
         supportingText = supportingText?.let { { Text(it) } },
@@ -186,11 +255,21 @@ fun AuthPasswordField(
             }
         },
         shape = RoundedCornerShape(14.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            focusedLabelColor = MaterialTheme.colorScheme.primary,
-            cursorColor = MaterialTheme.colorScheme.primary
-        ),
+        colors = if (placeholder != null) {
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary,
+                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.8f)
+            )
+        } else {
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary
+            )
+        },
         modifier = modifier.fillMaxWidth()
     )
 }
@@ -283,7 +362,7 @@ fun OtpInputRow(
     }
 }
 
-/** Placeholder-only Google button (no real auth wired). */
+/** Google sign-in button — official multicolor G, polished alignment. */
 @Composable
 fun GoogleSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedButton(
@@ -292,15 +371,28 @@ fun GoogleSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(56.dp),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.onSurface
-        )
+        ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
     ) {
-        // Swap for an actual Google "G" icon asset when integrating.
-        Text("G", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(10.dp))
-        Text("Continue with Google", style = MaterialTheme.typography.labelLarge)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_google_g),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                "Continue with Google",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 
@@ -311,8 +403,9 @@ fun OrDivider(modifier: Modifier = Modifier) {
         HorizontalRule(Modifier.weight(1f))
         Text(
             "  OR  ",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
         )
         HorizontalRule(Modifier.weight(1f))
     }
@@ -323,24 +416,47 @@ private fun HorizontalRule(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .height(1.dp)
-            .background(MaterialTheme.colorScheme.outline)
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     )
 }
 
 /** Simple back-navigation top bar reused on Login / Forgot Password / etc. */
 @Composable
-fun AuthBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    IconButton(
-        onClick = onClick,
-        modifier = modifier
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Icon(
-            imageVector = Icons.Filled.ArrowBack,
-            contentDescription = "Back",
-            tint = MaterialTheme.colorScheme.onSurface
-        )
+fun AuthBackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    refined: Boolean = false
+) {
+    if (refined) {
+        IconButton(onClick = onClick, modifier = modifier.size(48.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    } else {
+        IconButton(
+            onClick = onClick,
+            modifier = modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 
