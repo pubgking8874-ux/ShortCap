@@ -221,6 +221,15 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 - **Bottom navigation spans most of the screen width:** the floating pill now uses `fillMaxWidth()` with modest 16 dp side margins, icons are distributed evenly via `weight(1f)`, and touch targets grew to 56 dp-tall full-width items (the circular active indicator stays 52 dp). Rounded floating-pill style preserved.
 - **Full scrolling:** the shared scroll container in `ScNavHost` now adds `navigationBarsPadding()` + 100 dp bottom padding, so the last content item always scrolls fully above the floating bottom navigation (which stays fixed).
 
+### Phase 5 — Application launch flow & auth navigation wiring *(mock-only, backend-ready)*
+**Files:** `AppRootNavHost.kt` (**new** — root NavHost: `auth_graph` → `dashboard`), `MainActivity.kt` (now launches `AppRootNavHost`), `viewmodel/AppViewModel.kt` (`sessionActive` placeholder + `setSessionActive`), `auth/**` (imported Auth UI module, packages renamed to `com.shortscap.app.auth.*`), plus this `README.md`
+
+- **Launch flow:** the app now opens on the Auth flow first — **Splash → Welcome → (Continue as Guest / Sign In / Create Account)**. On mock success (guest, sign-in, or account creation), the flow swaps to the **Dashboard**, clearing the auth back stack (`popUpTo(auth_graph) { inclusive = true }`) so back on the Dashboard exits the app (standard Android behavior).
+- **Forgot-password chain** wired inside the auth graph: Login → Forgot Password → OTP Verification → Reset Password → Login.
+- **Back navigation** handled by the auth graph's own NavHost: Login → Welcome, Create Account → Welcome, Forgot → Login, OTP → Forgot, Reset → OTP.
+- **Theme consistency:** the whole tree runs under `ShortsCapTheme`, so auth screens use the same design system and follow the persisted Dark / Light / System Default setting as the Dashboard; auth content is wrapped in safe-area padding (`statusBarsPadding` + `navigationBarsPadding`) without touching any auth screen layout.
+- **Backend-ready seam:** `AppUiState.sessionActive` (default `false`) drives the root start destination. When AWS Cognito / the Python backend / JWT session state is connected, set it from real session state so the app opens straight to the Dashboard — no UI changes required.
+
 ---
 
 ## Troubleshooting

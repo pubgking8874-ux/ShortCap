@@ -68,6 +68,12 @@ data class AppUiState(
 
     // Theme preference (persisted via ThemePreferenceStore)
     val themeMode: ThemeMode = ThemeMode.DARK,
+
+    // Session placeholder — false shows the Auth flow (Splash -> Welcome ->
+    // Login/CreateAccount/Guest) on launch. When AWS Cognito / the Python
+    // backend / JWT are connected, set this from the session state so the
+    // app opens straight to the Dashboard; no UI changes are required.
+    val sessionActive: Boolean = false,
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -96,6 +102,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         themeStore.saveThemeMode(mode)
         _uiState.update { it.copy(themeMode = mode) }
     }
+
+    // ---- Session (mock seam for the auth flow) ----
+    // Called by the auth graph's onExitToDashboard (Continue as Guest / mock
+    // Sign In / mock Create Account) to enter the Dashboard. Backend login
+    // will replace this with real session state — the UI stays the same.
+    fun setSessionActive(active: Boolean) = _uiState.update { it.copy(sessionActive = active) }
 
     // ---- Toast (mirrors showToast + clearTimeout/setTimeout dance) ----
     private var toastJob: Job? = null
