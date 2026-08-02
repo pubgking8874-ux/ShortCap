@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,9 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,9 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.R
 import com.shortscap.app.auth.components.AuthPrimaryButton
 import com.shortscap.app.auth.components.AuthSecondaryButton
 import com.shortscap.app.auth.components.AuthTextButton
@@ -59,8 +62,7 @@ fun WelcomeScreen(
     ) {
         Spacer(Modifier.height(48.dp))
 
-        // Hero illustration placeholder — swap Box for an Image(painterResource(...))
-        // once you have the real digital-wellbeing illustration asset.
+        // Brand logo shown in a perfect circle inside the hero container.
         AnimatedVisibility(visible = visible, enter = fadeIn(tween(500))) {
             Box(
                 modifier = Modifier
@@ -72,11 +74,13 @@ fun WelcomeScreen(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                androidx.compose.material3.Icon(
-                    imageVector = Icons.Filled.Insights,
-                    contentDescription = null,
-                    tint = GradientStart,
-                    modifier = Modifier.size(72.dp)
+                Image(
+                    painter = painterResource(R.drawable.logo_pic),
+                    contentDescription = "ShortsCap logo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(140.dp)
+                        .clip(CircleShape)
                 )
             }
         }
