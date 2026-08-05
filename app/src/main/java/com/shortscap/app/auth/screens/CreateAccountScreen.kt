@@ -2,6 +2,7 @@ package com.shortscap.app.auth.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,7 +43,6 @@ import com.shortscap.app.R
 import com.shortscap.app.auth.components.AuthBackButton
 import com.shortscap.app.auth.components.AuthPasswordField
 import com.shortscap.app.auth.components.AuthPrimaryButton
-import com.shortscap.app.auth.components.AuthTextButton
 import com.shortscap.app.auth.components.AuthTextField
 import com.shortscap.app.auth.components.OrDivider
 import com.shortscap.app.auth.components.PasswordStrengthIndicator
@@ -156,11 +157,14 @@ fun CreateAccountScreen(
                 onValueChange = { password = it },
                 label = "Password",
                 visible = passwordVisible,
-                onToggleVisible = { passwordVisible = !passwordVisible }
+                onToggleVisible = { passwordVisible = !passwordVisible },
+                // Lock icon on the left mirrors the Email field's leading icon.
+                leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) }
             )
             Spacer(Modifier.height(6.dp))
             PasswordStrengthIndicator(strength = strength)
 
+            // Terms & Privacy consent sits directly under the fields, before the CTA.
             Spacer(Modifier.height(12.dp))
             TermsCheckboxRow(
                 checked = agreedToTerms,
@@ -176,17 +180,20 @@ fun CreateAccountScreen(
                 onClick = { onCreateAccount(email, password) }
             )
 
-            Spacer(Modifier.height(12.dp))
+            // Cohesive "Sign up with" group directly under the CTA, with extra
+            // breathing room between the label and the social buttons.
+            Spacer(Modifier.height(3.dp))
             OrDivider(text = "Sign up with")
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             SocialLoginRow(
                 onGoogleClick = onGoogleSignIn,
                 onPhoneClick = onMobileSignIn
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(18.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
@@ -194,8 +201,15 @@ fun CreateAccountScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                AuthTextButton(text = "Sign In", onClick = onSignIn)
+                Text(
+                    "Sign In",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable(onClick = onSignIn)
+                )
             }
+
             Spacer(Modifier.height(24.dp))
         }
     }

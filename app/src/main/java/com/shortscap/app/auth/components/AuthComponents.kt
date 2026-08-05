@@ -72,8 +72,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -468,7 +473,12 @@ fun AuthTextField(
     )
 }
 
-/** Password field with a show/hide trailing toggle, built on top of AuthTextField styling. */
+/**
+ * Password field with a show/hide trailing toggle, built on top of
+ * AuthTextField styling. An optional [leadingIcon] (e.g. a lock) keeps it
+ * visually consistent with the email field; screens that don't pass one get
+ * the same field as before.
+ */
 @Composable
 fun AuthPasswordField(
     value: String,
@@ -479,13 +489,15 @@ fun AuthPasswordField(
     onToggleVisible: () -> Unit,
     isError: Boolean = false,
     supportingText: String? = null,
-    placeholder: String? = null
+    placeholder: String? = null,
+    leadingIcon: (@Composable () -> Unit)? = null
 ) {
     CompactAuthOutlinedField(
         value = value,
         onValueChange = onValueChange,
         label = label,
         modifier = modifier,
+        leadingIcon = leadingIcon,
         isError = isError,
         supportingText = supportingText,
         placeholder = placeholder,
@@ -1025,6 +1037,19 @@ fun BrandLogoMark(size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifi
     }
 }
 
+/**
+ * Terms & Privacy consent row — the checkbox and the inline "I have read and
+ * agree to the Terms & Privacy Policy" text are treated as a single unit. The
+ * checkbox lives in a compact 24dp box so its visual sits immediately beside
+ * the text (M3's default 48dp touch target would otherwise leave a ~15dp gap);
+ * a 4dp spacer keeps the visual gap at ~6-8dp. The row wraps its content and
+ * stays left-aligned (never stretched or centered), so the checkbox anchors
+ * the start of the row with the text immediately beside it and stays
+ * vertically centered on the text. The text is a single Text that wraps at
+ * word boundaries, and "Terms & Privacy Policy." is kept together with
+ * non-breaking spaces so the phrase (and its trailing period) can never land
+ * on a different line than "Terms".
+ */
 @Composable
 fun TermsCheckboxRow(
     checked: Boolean,
@@ -1033,31 +1058,40 @@ fun TermsCheckboxRow(
     onPrivacyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth()) {
+    val scheme = MaterialTheme.colorScheme
+    // Single Text so the sentence wraps at word boundaries; "Terms & Privacy
+    // Policy." uses non-breaking spaces so it never splits across lines, and
+    // "Terms"/"Privacy Policy" are individually clickable LinkAnnotations
+    // that Text handles natively.
+    val termsText = buildAnnotatedString {
+        append("I have read and agree to the ")
+        withLink(LinkAnnotation.Clickable(tag = "terms") { onTermsClick() }) {
+            withStyle(SpanStyle(color = scheme.primary, fontWeight = FontWeight.SemiBold)) {
+                append("Terms")
+            }
+        }
+        append("\u00A0&\u00A0")
+        withLink(LinkAnnotation.Clickable(tag = "privacy") { onPrivacyClick() }) {
+            withStyle(SpanStyle(color = scheme.primary, fontWeight = FontWeight.SemiBold)) {
+                append("Privacy\u00A0Policy")
+            }
+        }
+        append(".")
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Checkbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            modifier = Modifier.size(24.dp),
             colors = androidx.compose.material3.CheckboxDefaults.colors(
-                checkedColor = MaterialTheme.colorScheme.primary
+                checkedColor = scheme.primary
             )
         )
-        Row {
-            Text("I agree to the ", style = MaterialTheme.typography.bodySmall)
-            Text(
-                "Terms",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onTermsClick() }
-            )
-            Text(" & ", style = MaterialTheme.typography.bodySmall)
-            Text(
-                "Privacy Policy",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onPrivacyClick() }
-            )
-        }
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = termsText,
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurface
+        )
     }
 }
