@@ -10,9 +10,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.shortscap.app.auth.screens.CreateAccountScreen
 import com.shortscap.app.auth.screens.ForgotPasswordScreen
 import com.shortscap.app.auth.screens.LoginScreen
+import com.shortscap.app.auth.screens.MobileLoginScreen
 import com.shortscap.app.auth.screens.OtpVerificationScreen
 import com.shortscap.app.auth.screens.ResetPasswordScreen
 import com.shortscap.app.auth.screens.SplashScreen
@@ -23,6 +25,7 @@ import com.shortscap.app.auth.screens.WelcomeScreen
  *
  * Splash -> Welcome -> { Login | CreateAccount | Guest->Dashboard }
  * Login -> ForgotPassword -> OtpVerification -> ResetPassword -> Login
+ * Login -> MobileLogin -> OtpVerification (mode=login) -> Dashboard
  *
  * [onExitToDashboard] is the single hook back out to your real app graph —
  * called for "Continue as Guest", a successful "Sign In", and a successful
@@ -70,6 +73,28 @@ fun AuthNavGraph(
                     navController.navigate(AuthScreen.CreateAccount.route) {
                         popUpTo(AuthScreen.Login.route) { inclusive = true }
                     }
+                },
+                onMobileSignIn = { navController.navigate(AuthScreen.MobileLogin.route) }
+            )
+        }
+
+        composable(AuthScreen.MobileLogin.route) {
+            MobileLoginScreen(
+                onBack = { navController.popBackStack() },
+                onSendOtp = { phone ->
+                    navController.navigate(
+                        AuthScreen.OtpVerification.createRoute(
+                            destination = phone,
+                            mode = AuthScreen.OtpVerification.MODE_LOGIN
+                        )
+                    )
+                },
+                // MobileLogin is always pushed from Login, so popping reveals it.
+                onContinueWithEmail = { navController.popBackStack() },
+                onCreateAccount = {
+                    navController.navigate(AuthScreen.CreateAccount.route) {
+                        popUpTo(AuthScreen.Login.route) { inclusive = true }
+                    }
                 }
             )
         }
@@ -89,14 +114,37 @@ fun AuthNavGraph(
         composable(AuthScreen.ForgotPassword.route) {
             ForgotPasswordScreen(
                 onBack = { navController.popBackStack() },
-                onSendOtp = { navController.navigate(AuthScreen.OtpVerification.route) }
+                onSendOtp = { email ->
+                    navController.navigate(
+                        AuthScreen.OtpVerification.createRoute(destination = email)
+                    )
+                }
             )
         }
 
-        composable(AuthScreen.OtpVerification.route) {
+        composable(
+            route = AuthScreen.OtpVerification.route,
+            arguments = listOf(
+                navArgument(AuthScreen.OtpVerification.ARG_DESTINATION) { defaultValue = "" },
+                navArgument(AuthScreen.OtpVerification.ARG_MODE) {
+                    defaultValue = AuthScreen.OtpVerification.MODE_RESET
+                }
+            )
+        ) { entry ->
+            val destination =
+                entry.arguments?.getString(AuthScreen.OtpVerification.ARG_DESTINATION).orEmpty()
+            val mode = entry.arguments?.getString(AuthScreen.OtpVerification.ARG_MODE)
+                ?: AuthScreen.OtpVerification.MODE_RESET
             OtpVerificationScreen(
+                destination = destination,
                 onBack = { navController.popBackStack() },
-                onVerify = { navController.navigate(AuthScreen.ResetPassword.route) },
+                onVerify = {
+                    if (mode == AuthScreen.OtpVerification.MODE_LOGIN) {
+                        onExitToDashboard()
+                    } else {
+                        navController.navigate(AuthScreen.ResetPassword.route)
+                    }
+                },
                 onResend = { /* UI-only: countdown resets itself in the screen */ }
             )
         }

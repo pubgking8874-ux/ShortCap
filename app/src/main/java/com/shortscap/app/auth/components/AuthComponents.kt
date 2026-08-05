@@ -31,6 +31,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -665,6 +667,76 @@ fun GoogleSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+/** Outlined secondary sign-in options (Email / Mobile) — visually identical to the Google button. */
+@Composable
+private fun OutlinedOptionButton(
+    text: String,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            icon()
+            Text(
+                text,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+/** "Continue with Mobile Number" — modern smartphone icon, same style as the Google button. */
+@Composable
+fun MobileSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedOptionButton(
+        text = "Continue with Mobile Number",
+        onClick = onClick,
+        modifier = modifier,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.Smartphone,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    )
+}
+
+/** "Continue with Email" — same style as the Google button, used to jump back to Email login. */
+@Composable
+fun EmailSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedOptionButton(
+        text = "Continue with Email",
+        onClick = onClick,
+        modifier = modifier,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.Email,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    )
 }
 
 /** "OR" divider used between primary auth action and social sign-in. */

@@ -28,7 +28,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun OtpVerificationScreen(
-    email: String = "",
+    destination: String = "",
     onBack: () -> Unit,
     onVerify: (otp: String) -> Unit,
     onResend: () -> Unit
@@ -53,7 +53,7 @@ fun OtpVerificationScreen(
     ) {
         Spacer(Modifier.height(16.dp))
         AuthBackButton(onClick = onBack)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text(
             "Verify OTP",
@@ -63,21 +63,21 @@ fun OtpVerificationScreen(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            if (email.isNotBlank())
-                "Enter the 6-digit verification code sent to $email"
+            if (destination.isNotBlank())
+                "Enter the 6-digit verification code sent to $destination"
             else
                 "Enter the 6-digit verification code.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(28.dp))
         OtpInputRow(
             otpValues = otpValues,
             onValueChange = { index, value -> otpValues[index] = value }
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         Row {
             if (canResend) {
                 AuthTextButton(
@@ -96,7 +96,7 @@ fun OtpVerificationScreen(
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
         AuthPrimaryButton(
             text = "Verify",
             enabled = otpValues.all { it.isNotBlank() },

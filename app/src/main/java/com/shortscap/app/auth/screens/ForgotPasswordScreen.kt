@@ -45,11 +45,11 @@ fun ForgotPasswordScreen(
     ) {
         Spacer(Modifier.height(16.dp))
         AuthBackButton(onClick = onBack)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(20.dp))
 
         Box(icon = Icons.Filled.MarkEmailUnread)
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
         Text(
             "Forgot Password?",
             style = MaterialTheme.typography.headlineLarge,
@@ -63,7 +63,7 @@ fun ForgotPasswordScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
         AuthTextField(
             value = email,
             onValueChange = { email = it },
@@ -72,7 +72,7 @@ fun ForgotPasswordScreen(
             keyboardType = KeyboardType.Email
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(22.dp))
         AuthPrimaryButton(
             text = "Send OTP",
             enabled = email.isNotBlank(),

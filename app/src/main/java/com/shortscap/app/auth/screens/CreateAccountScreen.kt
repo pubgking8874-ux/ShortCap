@@ -68,7 +68,7 @@ fun CreateAccountScreen(
     ) {
         Spacer(Modifier.height(16.dp))
         AuthBackButton(onClick = onBack)
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
         Text(
             "Create Your Account",
@@ -83,7 +83,7 @@ fun CreateAccountScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
 
         AuthTextField(
             value = fullName,
@@ -91,7 +91,7 @@ fun CreateAccountScreen(
             label = "Full Name",
             leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) }
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         AuthTextField(
             value = email,
             onValueChange = { email = it },
@@ -99,7 +99,7 @@ fun CreateAccountScreen(
             leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
             keyboardType = KeyboardType.Email
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         AuthPasswordField(
             value = password,
             onValueChange = { password = it },
@@ -107,10 +107,10 @@ fun CreateAccountScreen(
             visible = passwordVisible,
             onToggleVisible = { passwordVisible = !passwordVisible }
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         PasswordStrengthIndicator(strength = strength)
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         AuthPasswordField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
@@ -129,14 +129,14 @@ fun CreateAccountScreen(
             onPrivacyClick = onPrivacyClick
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
         AuthPrimaryButton(
             text = "Create Account",
             enabled = formValid,
             onClick = { onCreateAccount(fullName, email, password) }
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
@@ -148,6 +148,6 @@ fun CreateAccountScreen(
             )
             AuthTextButton(text = "Sign In", onClick = onSignIn)
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
     }
 }

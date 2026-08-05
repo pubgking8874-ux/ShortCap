@@ -48,6 +48,7 @@ import com.shortscap.app.auth.components.AuthPrimaryButton
 import com.shortscap.app.auth.components.AuthTextButton
 import com.shortscap.app.auth.components.AuthTextField
 import com.shortscap.app.auth.components.GoogleSignInButton
+import com.shortscap.app.auth.components.MobileSignInButton
 import com.shortscap.app.auth.components.OrDivider
 import com.shortscap.app.theme.LocalScColors
 
@@ -58,6 +59,7 @@ fun LoginScreen(
     onForgotPassword: () -> Unit,
     onCreateAccount: () -> Unit,
     onGoogleSignIn: () -> Unit = {},
+    onMobileSignIn: () -> Unit = {},
     onTermsClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {}
 ) {
@@ -108,7 +110,7 @@ fun LoginScreen(
         ) {
             Spacer(Modifier.height(8.dp))
             AuthBackButton(onClick = onBack, refined = true)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
 
             Image(
                 painter = painterResource(R.drawable.logo_pic),
@@ -119,7 +121,7 @@ fun LoginScreen(
                     .size(106.dp)
                     .clip(CircleShape)
             )
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(20.dp))
 
             Text(
                 "Welcome Back",
@@ -127,14 +129,14 @@ fun LoginScreen(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 "Continue your digital wellbeing journey.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(Modifier.height(36.dp))
+            Spacer(Modifier.height(28.dp))
 
             AuthTextField(
                 value = email,
@@ -144,7 +146,7 @@ fun LoginScreen(
                 leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
                 keyboardType = KeyboardType.Email
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             AuthPasswordField(
                 value = password,
                 onValueChange = { password = it },
@@ -154,7 +156,7 @@ fun LoginScreen(
                 onToggleVisible = { passwordVisible = !passwordVisible }
             )
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -183,7 +185,7 @@ fun LoginScreen(
                 AuthTextButton(text = "Forgot Password?", onClick = onForgotPassword)
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
 
             AuthPrimaryButton(
                 text = "Sign In",
@@ -202,8 +204,10 @@ fun LoginScreen(
             OrDivider()
             Spacer(Modifier.height(12.dp))
             GoogleSignInButton(onClick = onGoogleSignIn)
+            Spacer(Modifier.height(12.dp))
+            MobileSignInButton(onClick = onMobileSignIn)
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -218,7 +222,7 @@ fun LoginScreen(
                 Spacer(Modifier.width(6.dp))
                 AuthTextButton(text = "Create Account", onClick = onCreateAccount, strong = true)
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -242,7 +246,7 @@ fun LoginScreen(
                     modifier = Modifier.clickable(onClick = onTermsClick)
                 )
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(28.dp))
         }
     }
 }

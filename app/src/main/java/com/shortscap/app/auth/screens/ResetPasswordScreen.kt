@@ -48,7 +48,7 @@ fun ResetPasswordScreen(
     ) {
         Spacer(Modifier.height(16.dp))
         AuthBackButton(onClick = onBack)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text(
             "Create New Password",
@@ -63,7 +63,7 @@ fun ResetPasswordScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
         AuthPasswordField(
             value = newPassword,
             onValueChange = { newPassword = it },
@@ -71,10 +71,10 @@ fun ResetPasswordScreen(
             visible = newVisible,
             onToggleVisible = { newVisible = !newVisible }
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         PasswordStrengthIndicator(strength = strength)
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         AuthPasswordField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
@@ -85,7 +85,7 @@ fun ResetPasswordScreen(
             supportingText = if (!passwordsMatch) "Passwords do not match" else null
         )
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
         AuthPrimaryButton(
             text = "Update Password",
             enabled = formValid,
