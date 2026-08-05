@@ -31,6 +31,7 @@ This document explains everything from scratch: what the app does, the tech stac
 - **Settings**: expandable category list with switches, and a **Theme selector** (Dark / Light / System Default) under *Appearance*.
 - **App chrome**: navigation drawer (slide-in with scrim), profile popover menu, and toast feedback.
 - **Complete theme system**: dark + light palettes, system-follow mode, persisted selection, smooth animated switching, and automatic system-bar icon adaptation.
+- **Authentication (mock, backend-ready)**: Splash → Welcome → Sign In / Create Account / Continue as Guest. Sign In offers **Email + Password**, **Continue with Google**, and **Continue with Mobile Number**; the mobile flow uses a country-code + phone-number field and reuses the shared **OTP Verification** screen (Forgot Password shares it too).
 
 ---
 
@@ -229,6 +230,60 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 - **Back navigation** handled by the auth graph's own NavHost: Login → Welcome, Create Account → Welcome, Forgot → Login, OTP → Forgot, Reset → OTP.
 - **Theme consistency:** the whole tree runs under `ShortsCapTheme`, so auth screens use the same design system and follow the persisted Dark / Light / System Default setting as the Dashboard; auth content is wrapped in safe-area padding (`statusBarsPadding` + `navigationBarsPadding`) without touching any auth screen layout.
 - **Backend-ready seam:** `AppUiState.sessionActive` (default `false`) drives the root start destination. When AWS Cognito / the Python backend / JWT session state is connected, set it from real session state so the app opens straight to the Dashboard — no UI changes required.
+
+### Phase 6 — Mobile Number (OTP) authentication & auth-screen spacing *(Aug 5, 2026)*
+**Files:** `auth/screens/MobileLoginScreen.kt` (**new**), `auth/components/AuthComponents.kt` (`MobileSignInButton` / `EmailSignInButton`), `auth/screens/LoginScreen.kt`, `auth/navigation/AuthScreen.kt`, `auth/navigation/AuthNavGraph.kt`, `auth/screens/OtpVerificationScreen.kt`, plus spacing polish on `auth/screens/ForgotPasswordScreen.kt` / `CreateAccountScreen.kt` / `ResetPasswordScreen.kt`, and this `README.md` + `auth/README.md`
+
+- **"Continue with Mobile Number"** added below the Google button on Sign In — a new `MobileSignInButton` using the modern **smartphone icon** (not a telephone receiver), visually identical to the Google button (same 56 dp outline style, 16 dp corners, icon + label).
+- **New `MobileLoginScreen`** — a dedicated screen (the Email Login page is untouched, not replaced). Same logo, "Welcome Back", subtitle, glow accents, footer and buttons as Sign In; adds a single horizontal phone input (country selector with flag + dial code + dropdown → vertical divider → digit-only number field), a **Send OTP** button, and "Continue with Email" / "Continue with Google" fallbacks.
+- **Extensible country catalog:** `PhoneCountry` + `SupportedPhoneCountries` ship with India (+91), USA (+1), UK (+44), Canada (+1), Australia (+61), UAE (+971). Adding a country is **one list entry**; the field auto-caps digits per country and the selector highlights the current pick with a checkmark.
+- **OTP screen reused — zero duplication:** `OtpVerificationScreen` now carries two optional route args — `destination` (email or phone) and `mode` (`reset` | `login`). Forgot Password passes the email; Mobile Login passes e.g. `+91 9876543210`. On "Verify", `mode=login` completes into the Dashboard, `mode=reset` keeps the existing Reset Password path.
+- **Back-stack safe:** "Continue with Email" pops back to the Email Login (no duplicate back-stack entries); the back button on Mobile Login returns to Sign In; "Create Account" behaves exactly like from Sign In.
+- **Spacing rebalanced** across all auth form screens on a consistent **8dp Material grid** (small 8–12 / medium 16 / large 24): Sign In content moved ~22 dp upward, fields and their helper rows are visually grouped, and every screen keeps comfortable top/bottom margins above the system bars.
+
+### Phase 6.1 — Compact social login row & top-section polish on Sign In *(Aug 5, 2026)*
+**Files:** `auth/components/AuthComponents.kt` (new `SocialLoginRow`), `auth/screens/LoginScreen.kt`, and this `README.md`
+
+- **Two stacked full-width buttons → one compact row:** "Continue with Google" + "Continue with Mobile Number" are now **`| G Google | 📱 Mobile Number |`** — two equal-width outline buttons (same 56 dp height, 16 dp corners, 1 dp border, official Google "G" and modern smartphone icons) with a 12 dp gap. Saves one full button row of vertical space; tap targets unchanged (56 dp). The "Mobile Number" button navigates to the Mobile Login screen.
+- **Top section tightened:** status-bar margin and back-button gap reduced to 4 dp and the logo→heading gap to 12 dp, moving the logo/heading block ~12 dp higher while the logo stays well clear of the status bar.
+- **Rebalanced:** with the shorter social row the Sign In content now fits typical screens without scrolling, ending with comfortable bottom breathing space. Only Sign In was touched — `GoogleSignInButton` / `EmailSignInButton` (used by the Mobile Login screen) are unchanged, as are all other screens and all logic.
+
+---
+
+## Mobile Number Authentication (OTP Login)
+
+A premium, design-consistent **mobile-number login** was added without touching the existing Email or Google flows. Users can now switch freely between **Email Login**, **Google Login**, and **Mobile Number Login** with zero visible difference in design quality.
+
+### Flow
+
+```
+Splash → Welcome → Sign In
+  ├─ Continue with Mobile Number → Mobile Login
+  │     └─ Send OTP → OTP Verification (mode=login) → Verify → Dashboard
+  └─ Forgot Password → OTP Verification (mode=reset) → Reset Password → Login
+```
+
+### How it's implemented
+
+| Concern | File | What it does |
+| --- | --- | --- |
+| Entry point | `auth/screens/LoginScreen.kt` | New `onMobileSignIn` callback + `MobileSignInButton` below the Google button |
+| New screen | `auth/screens/MobileLoginScreen.kt` (**new**) | Country-code + phone-number input, Send OTP, Email/Google fallbacks, standard footer. Owns `PhoneCountry` + `SupportedPhoneCountries` |
+| Option buttons | `auth/components/AuthComponents.kt` | `MobileSignInButton` (smartphone icon) + `EmailSignInButton`, sharing one private outline-button style matching the Google button |
+| Routes | `auth/navigation/AuthScreen.kt` | `mobile_login` route; `OtpVerification` gains `destination` + `mode` args (`createRoute(...)` helper, URI-encoded) |
+| Wiring | `auth/navigation/AuthNavGraph.kt` | Mobile Login → OTP with `mode=login`; Forgot Password → OTP with the email; verify branches by mode (`login` → Dashboard, `reset` → Reset Password) |
+| Shared OTP UI | `auth/screens/OtpVerificationScreen.kt` | Renamed `email` → `destination` so one screen shows "code sent to <email | phone>" for both flows |
+
+### Key mechanics
+
+- **Single-row phone field** — one 50 dp box (14 dp corners, animated 1→2 dp border on focus) split by a vertical divider: country selector (flag emoji + dial code + caret, opens a `DropdownMenu`) on the left, digit-only `BasicTextField` (phone keyboard) on the right.
+- **Input hygiene** — only ASCII digits `0-9` are accepted, capped at the selected country's `maxNumberDigits`; "Send OTP" enables once 7–max digits are entered.
+- **No new OTP UI** — the existing 6-box OTP screen is reused for both Forgot Password and Mobile Login; only the subtitle and the post-verify destination differ (`mode` arg).
+
+### How to extend
+
+- **Add a country:** append one `PhoneCountry(name, dialCode, flag, maxNumberDigits)` entry to `SupportedPhoneCountries` — nothing else changes.
+- **Wire a real OTP backend:** everything is already callback-based (`onSendOtp`, `onVerify`, `onResend`). Replace the mock bodies with your provider (e.g., SMS gateway / Firebase Phone Auth) — no UI changes required.
 
 ---
 

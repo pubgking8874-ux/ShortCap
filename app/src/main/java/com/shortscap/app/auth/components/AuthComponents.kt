@@ -71,10 +71,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.lerp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.shortscap.app.R
@@ -675,7 +677,9 @@ private fun OutlinedOptionButton(
     text: String,
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+    iconTextSpacing: Dp = 12.dp
 ) {
     OutlinedButton(
         onClick = onClick,
@@ -687,38 +691,22 @@ private fun OutlinedOptionButton(
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+        contentPadding = contentPadding
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(iconTextSpacing)
         ) {
             icon()
             Text(
                 text,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
-}
-
-/** "Continue with Mobile Number" — modern smartphone icon, same style as the Google button. */
-@Composable
-fun MobileSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedOptionButton(
-        text = "Continue with Mobile Number",
-        onClick = onClick,
-        modifier = modifier,
-        icon = {
-            Icon(
-                imageVector = Icons.Filled.Smartphone,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    )
 }
 
 /** "Continue with Email" — same style as the Google button, used to jump back to Email login. */
@@ -737,6 +725,55 @@ fun EmailSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             )
         }
     )
+}
+
+/**
+ * Compact social sign-in options — "Google" and "Mobile Number" side by
+ * side in a single row (equal width, 12dp gap, same outline style as the
+ * Google button). Replaces the two stacked full-width buttons on Sign In.
+ */
+@Composable
+fun SocialLoginRow(
+    onGoogleClick: () -> Unit,
+    onPhoneClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        OutlinedOptionButton(
+            text = "Google",
+            onClick = onGoogleClick,
+            modifier = Modifier.weight(1f),
+            icon = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_google_g),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        )
+        OutlinedOptionButton(
+            text = "Mobile Number",
+            onClick = onPhoneClick,
+            modifier = Modifier.weight(1f),
+            // Compact inner padding so the longer label fits half-width buttons
+            // on 360dp screens (Google keeps the default padding — visually
+            // identical since button content stays centered).
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 12.dp),
+            iconTextSpacing = 6.dp,
+            icon = {
+                Icon(
+                    imageVector = Icons.Filled.Smartphone,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        )
+    }
 }
 
 /** "OR" divider used between primary auth action and social sign-in. */
