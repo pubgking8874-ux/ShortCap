@@ -2,6 +2,7 @@ package com.shortscap.app.auth.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +57,9 @@ fun LoginScreen(
     onSignIn: (email: String, password: String) -> Unit,
     onForgotPassword: () -> Unit,
     onCreateAccount: () -> Unit,
-    onGoogleSignIn: () -> Unit = {}
+    onGoogleSignIn: () -> Unit = {},
+    onTermsClick: () -> Unit = {},
+    onPrivacyClick: () -> Unit = {}
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -103,9 +106,9 @@ fun LoginScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
         ) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
             AuthBackButton(onClick = onBack, refined = true)
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(24.dp))
 
             Image(
                 painter = painterResource(R.drawable.logo_pic),
@@ -113,7 +116,7 @@ fun LoginScreen(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
-                    .size(96.dp)
+                    .size(106.dp)
                     .clip(CircleShape)
             )
             Spacer(Modifier.height(32.dp))
@@ -195,12 +198,12 @@ fun LoginScreen(
                 }
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(12.dp))
             OrDivider()
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(12.dp))
             GoogleSignInButton(onClick = onGoogleSignIn)
 
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(18.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -214,6 +217,30 @@ fun LoginScreen(
                 )
                 Spacer(Modifier.width(6.dp))
                 AuthTextButton(text = "Create Account", onClick = onCreateAccount, strong = true)
+            }
+            Spacer(Modifier.height(20.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "Privacy Policy",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable(onClick = onPrivacyClick)
+                )
+                Text(
+                    "  •  ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Terms of Service",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable(onClick = onTermsClick)
+                )
             }
             Spacer(Modifier.height(24.dp))
         }

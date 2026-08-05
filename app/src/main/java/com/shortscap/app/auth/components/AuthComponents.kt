@@ -1,28 +1,33 @@
 package com.shortscap.app.auth.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -34,26 +39,42 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.lerp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import com.shortscap.app.R
 import com.shortscap.app.auth.theme.GradientEnd
 import com.shortscap.app.auth.theme.GradientStart
@@ -175,7 +196,244 @@ fun AuthTextButton(
     }
 }
 
-/** Standard outlined text field with consistent 16dp rounding + focus animation. */
+// ---------------------------------------------------------------------------------------------
+// Compact auth text fields
+//
+// Material 3 hard-codes a 56dp minimum height on OutlinedTextField (TextFieldDefaults.MinHeight),
+// so no contentPadding change can make the stock component shorter. These fields are hand-built on
+// BasicTextField with the *exact* M3 1.3.0 look — same 14dp corners, same border colors/thickness,
+// same floating-label animation (bodyLarge -> bodySmall lerp, 150ms), same border notch cutout,
+// same leading/trailing icon alignment and colors, same error + supporting-text behavior — but at a
+// compact 50dp height with ~20% tighter effective vertical padding. Text, hint and icons stay
+// vertically centered, and the 50dp height keeps a comfortable Material touch target (>= 48dp).
+// ---------------------------------------------------------------------------------------------
+
+/** Height of every compact auth field (was 56dp in stock M3). */
+private val CompactFieldHeight = 50.dp
+
+/** Corner rounding for the compact auth fields (unchanged from the original 14dp). */
+private val CompactFieldCornerRadius = 14.dp
+
+/** M3 default animation duration for text field transitions. */
+private const val FieldAnimationDurationMillis = 150
+
+/** Standard compact outlined field used by every authentication input. */
+@Composable
+private fun CompactAuthOutlinedField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    leadingIcon: (@Composable () -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    isError: Boolean = false,
+    supportingText: String? = null,
+    singleLine: Boolean = true,
+    placeholder: String? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None
+) {
+    val scheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    // Label float progress (focused or filled) — drives the label's position/size and the
+    // placeholder fade, mirroring M3's transition.
+    val labelProgress by animateFloatAsState(
+        targetValue = if (isFocused || value.isNotEmpty()) 1f else 0f,
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactAuthLabelProgress"
+    )
+
+    // Border: 1dp -> 2dp on focus, animated color (error > focused > unfocused). The
+    // unfocused border honors the original alpha-0.8 treatment used when a placeholder is set.
+    val targetBorderColor = when {
+        isError -> scheme.error
+        isFocused -> scheme.primary
+        else -> if (placeholder != null) scheme.outline.copy(alpha = 0.8f) else scheme.outline
+    }
+    val borderColor by animateColorAsState(
+        targetValue = targetBorderColor,
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactAuthBorderColor"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (isFocused) 2.dp else 1.dp,
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactAuthBorderWidth"
+    )
+
+    val labelColor by animateColorAsState(
+        targetValue = when {
+            isError -> scheme.error
+            isFocused -> scheme.primary
+            else -> scheme.onSurfaceVariant
+        },
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactAuthLabelColor"
+    )
+
+    val placeholderAlpha by animateFloatAsState(
+        targetValue = if (isFocused) 1f else 0f,
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactAuthPlaceholderAlpha"
+    )
+
+    // Live label size drives the top-border notch cutout (M3's outlineCutout behavior).
+    val labelSize = remember { mutableStateOf(Size.Zero) }
+
+    // Label geometry: M3 lerps the label between bodyLarge (idle, centered) and bodySmall
+    // (floating on the top border) while sliding it up. Reproduced with identical formulas.
+    val labelIdleStyle = MaterialTheme.typography.bodyLarge
+    val labelFloatingStyle = MaterialTheme.typography.bodySmall
+    val animatedLabelStyle = lerp(labelIdleStyle, labelFloatingStyle, labelProgress)
+    val animatedLabelHeightPx = with(density) {
+        if (animatedLabelStyle.lineHeight != androidx.compose.ui.unit.TextUnit.Unspecified) {
+            animatedLabelStyle.lineHeight.toPx()
+        } else {
+            24.dp.toPx()
+        }
+    }
+    val fieldHeightPx = with(density) { CompactFieldHeight.toPx() }
+    // Idle label sits vertically centered, shifted right of a leading icon ((48 - 12) + 16 = 52dp).
+    val idleLabelXPx = with(density) { (if (leadingIcon != null) 52.dp else 16.dp).toPx() }
+    val labelXPx = lerp(idleLabelXPx, with(density) { 16.dp.toPx() }, labelProgress)
+    val labelYPx = lerp(
+        (fieldHeightPx - animatedLabelHeightPx) / 2f,
+        -animatedLabelHeightPx / 2f,
+        labelProgress
+    )
+
+    // Horizontal insets replicate M3: 16dp, reduced by the icon gutter when an icon is present.
+    val startTextPadding = if (leadingIcon != null) 4.dp else 16.dp
+    val endTextPadding = if (trailingIcon != null) 4.dp else 16.dp
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(CompactFieldHeight)
+                .drawWithContent {
+                    drawContent()
+                    val strokeW = borderWidth.toPx()
+                    val corner = CompactFieldCornerRadius.toPx()
+                    val drawBorder: DrawScope.() -> Unit = {
+                        drawRoundRect(
+                            color = borderColor,
+                            topLeft = Offset(strokeW / 2, strokeW / 2),
+                            size = Size(size.width - strokeW, size.height - strokeW),
+                            cornerRadius = CornerRadius(corner),
+                            style = Stroke(width = strokeW)
+                        )
+                    }
+                    val labelW = labelSize.value.width
+                    if (labelW > 0f) {
+                        // Cut the top border around the floating label, exactly like M3's cutout.
+                        val inner = 4.dp.toPx()
+                        val left = 16.dp.toPx() - inner
+                        val right = left + labelW + 2 * inner
+                        val labelH = labelSize.value.height
+                        clipRect(left, -labelH / 2, right, labelH / 2, ClipOp.Difference) {
+                            drawBorder()
+                        }
+                    } else {
+                        drawBorder()
+                    }
+                }
+        ) {
+            if (leadingIcon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .align(Alignment.CenterStart),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides scheme.onSurfaceVariant) {
+                        leadingIcon()
+                    }
+                }
+            }
+
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxSize(),
+                singleLine = singleLine,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+                cursorBrush = SolidColor(if (isError) scheme.error else scheme.primary),
+                visualTransformation = visualTransformation,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                interactionSource = interactionSource,
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = startTextPadding, end = endTextPadding),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        // Only compose the placeholder once it is visible — an alpha-0 composable
+                        // would still be read by TalkBack (M3 removes it for the same reason).
+                        if (value.isEmpty() && placeholder != null && placeholderAlpha > 0f) {
+                            Text(
+                                text = placeholder,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = scheme.onSurfaceVariant.copy(alpha = placeholderAlpha),
+                                maxLines = 1
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
+
+            if (label.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            translationX = labelXPx
+                            translationY = labelYPx
+                        }
+                        .onSizeChanged {
+                            labelSize.value = Size(it.width.toFloat(), it.height.toFloat())
+                        }
+                ) {
+                    Text(
+                        text = label,
+                        style = animatedLabelStyle.copy(color = labelColor),
+                        maxLines = 1
+                    )
+                }
+            }
+
+            if (trailingIcon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .align(Alignment.CenterEnd),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CompositionLocalProvider(
+                        LocalContentColor provides if (isError) scheme.error else scheme.onSurfaceVariant
+                    ) {
+                        trailingIcon()
+                    }
+                }
+            }
+        }
+
+        if (supportingText != null) {
+            Text(
+                text = supportingText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isError) scheme.error else scheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp)
+            )
+        }
+    }
+}
+
+/** Standard outlined text field with consistent 16dp rounding + focus animation (compact height). */
 @Composable
 fun AuthTextField(
     value: String,
@@ -189,35 +447,17 @@ fun AuthTextField(
     singleLine: Boolean = true,
     placeholder: String? = null
 ) {
-    OutlinedTextField(
+    CompactAuthOutlinedField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = placeholder?.let {
-            { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        },
+        label = label,
+        modifier = modifier,
         leadingIcon = leadingIcon,
-        singleLine = singleLine,
+        keyboardType = keyboardType,
         isError = isError,
-        supportingText = supportingText?.let { { Text(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        shape = RoundedCornerShape(14.dp),
-        colors = if (placeholder != null) {
-            OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                cursorColor = MaterialTheme.colorScheme.primary,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.8f)
-            )
-        } else {
-            OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                cursorColor = MaterialTheme.colorScheme.primary
-            )
-        },
-        modifier = modifier.fillMaxWidth()
+        supportingText = supportingText,
+        singleLine = singleLine,
+        placeholder = placeholder
     )
 }
 
@@ -234,18 +474,16 @@ fun AuthPasswordField(
     supportingText: String? = null,
     placeholder: String? = null
 ) {
-    OutlinedTextField(
+    CompactAuthOutlinedField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = placeholder?.let {
-            { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        },
-        singleLine = true,
+        label = label,
+        modifier = modifier,
         isError = isError,
-        supportingText = supportingText?.let { { Text(it) } },
+        supportingText = supportingText,
+        placeholder = placeholder,
+        keyboardType = KeyboardType.Password,
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         trailingIcon = {
             IconButton(onClick = onToggleVisible) {
                 Icon(
@@ -253,24 +491,7 @@ fun AuthPasswordField(
                     contentDescription = if (visible) "Hide password" else "Show password"
                 )
             }
-        },
-        shape = RoundedCornerShape(14.dp),
-        colors = if (placeholder != null) {
-            OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                cursorColor = MaterialTheme.colorScheme.primary,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.8f)
-            )
-        } else {
-            OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                cursorColor = MaterialTheme.colorScheme.primary
-            )
-        },
-        modifier = modifier.fillMaxWidth()
+        }
     )
 }
 
@@ -325,6 +546,9 @@ fun PasswordStrengthIndicator(strength: PasswordStrength, modifier: Modifier = M
     }
 }
 
+private val OtpBoxCornerRadius = 12.dp
+private val OtpBoxHeight = 50.dp
+
 /** Six-box OTP entry row. Purely local state driven, no verification logic. */
 @Composable
 fun OtpInputRow(
@@ -337,28 +561,75 @@ fun OtpInputRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         otpValues.forEachIndexed { index, digit ->
-            OutlinedTextField(
+            CompactOtpDigitBox(
                 value = digit,
                 onValueChange = { new ->
                     if (new.length <= 1 && new.all { it.isDigit() }) {
                         onValueChange(index, new)
                     }
                 },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                ),
-                textStyle = MaterialTheme.typography.titleLarge.copy(
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                ),
                 modifier = Modifier
                     .width(48.dp)
-                    .height(56.dp)
+                    .height(OtpBoxHeight)
             )
         }
+    }
+}
+
+/** Single OTP digit box — compact 50dp, centered digit, same border behavior as before. */
+@Composable
+private fun CompactOtpDigitBox(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val borderColor by animateColorAsState(
+        targetValue = if (isFocused) scheme.primary else scheme.outline,
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactOtpBorderColor"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (isFocused) 2.dp else 1.dp,
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactOtpBorderWidth"
+    )
+
+    Box(
+        modifier = modifier.drawWithContent {
+            drawContent()
+            val strokeW = borderWidth.toPx()
+            drawRoundRect(
+                color = borderColor,
+                topLeft = Offset(strokeW / 2, strokeW / 2),
+                size = Size(size.width - strokeW, size.height - strokeW),
+                cornerRadius = CornerRadius(OtpBoxCornerRadius.toPx()),
+                style = Stroke(width = strokeW)
+            )
+        },
+        contentAlignment = Alignment.Center
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxSize(),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.titleLarge.copy(
+                color = scheme.onSurface,
+                textAlign = TextAlign.Center
+            ),
+            cursorBrush = SolidColor(scheme.primary),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            interactionSource = interactionSource,
+            decorationBox = { innerTextField ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    innerTextField()
+                }
+            }
+        )
     }
 }
 
