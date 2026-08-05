@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
@@ -154,7 +155,9 @@ fun LoginScreen(
                 label = "Password",
                 placeholder = "Enter your password",
                 visible = passwordVisible,
-                onToggleVisible = { passwordVisible = !passwordVisible }
+                onToggleVisible = { passwordVisible = !passwordVisible },
+                // Lock icon on the left mirrors the Email field's leading icon.
+                leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) }
             )
 
             Spacer(Modifier.height(8.dp))

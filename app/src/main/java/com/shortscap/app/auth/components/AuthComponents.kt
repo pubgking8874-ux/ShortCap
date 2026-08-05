@@ -94,7 +94,7 @@ import com.shortscap.app.auth.theme.SuccessColor
 import com.shortscap.app.auth.theme.WarningColor
 import com.shortscap.app.theme.LocalScColors
 
-/** Filled, full-width primary CTA — [gradient] enables the premium ShortsCap brand look. */
+/** Filled, full-width primary CTA — [gradient] renders the ShortsCap brand color (single solid Accent). */
 @Composable
 fun AuthPrimaryButton(
     text: String,
@@ -110,34 +110,23 @@ fun AuthPrimaryButton(
     // Theme-adaptive "soft dark gray" disabled treatment (reads gray in both themes).
     val disabledSurface = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     val disabledContent = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-    val styledModifier = if (gradient) {
-        modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .background(
-                brush = if (isActive) {
-                    Brush.linearGradient(listOf(scColors.Accent, scColors.Accent2))
-                } else {
-                    SolidColor(disabledSurface)
-                },
-                shape = shape
-            )
-    } else {
-        modifier
-            .fillMaxWidth()
-            .height(56.dp)
-    }
 
+    // Single rendering path: the Button's own containerColor paints the entire
+    // background — there is no extra .background() modifier, nested surface, or
+    // second container, so the button can never render as two stacked layers,
+    // including when it flips to enabled on focus/state changes.
     Button(
         onClick = onClick,
         enabled = isActive,
-        modifier = styledModifier,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
         shape = shape,
         colors = if (gradient) {
             ButtonDefaults.buttonColors(
-                containerColor = Color.Transparent,
+                containerColor = scColors.Accent,
                 contentColor = Color.White,
-                disabledContainerColor = Color.Transparent,
+                disabledContainerColor = disabledSurface,
                 disabledContentColor = disabledContent
             )
         } else {
@@ -317,9 +306,11 @@ private fun CompactAuthOutlinedField(
         labelProgress
     )
 
-    // Horizontal insets replicate M3: 16dp, reduced by the icon gutter when an icon is present.
-    val startTextPadding = if (leadingIcon != null) 4.dp else 16.dp
-    val endTextPadding = if (trailingIcon != null) 4.dp else 16.dp
+    // Text clears the 48dp leading/trailing icon gutter (M3-style): with an
+    // icon present the text (and placeholder/cursor) starts 52dp in, aligned
+    // with the idle label, so it can never overlap the icon on any screen size.
+    val startTextPadding = if (leadingIcon != null) 52.dp else 16.dp
+    val endTextPadding = if (trailingIcon != null) 52.dp else 16.dp
 
     Column(modifier = modifier.fillMaxWidth()) {
         Box(
