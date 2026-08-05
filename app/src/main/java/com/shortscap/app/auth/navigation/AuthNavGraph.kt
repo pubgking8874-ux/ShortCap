@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.shortscap.app.auth.screens.CompleteProfileScreen
 import com.shortscap.app.auth.screens.CreateAccountScreen
 import com.shortscap.app.auth.screens.ForgotPasswordScreen
 import com.shortscap.app.auth.screens.LoginScreen
@@ -25,7 +26,8 @@ import com.shortscap.app.auth.screens.WelcomeScreen
  *
  * Splash -> Welcome -> { Login | CreateAccount | Guest->Dashboard }
  * Login -> ForgotPassword -> OtpVerification -> ResetPassword -> Login
- * Login -> MobileLogin -> OtpVerification (mode=login) -> Dashboard
+ * Email / Google / Mobile -> CompleteProfile -> Dashboard
+ * Login -> MobileLogin -> OtpVerification (mode=login) -> CompleteProfile
  *
  * [onExitToDashboard] is the single hook back out to your real app graph —
  * called for "Continue as Guest", a successful "Sign In", and a successful
@@ -74,6 +76,7 @@ fun AuthNavGraph(
                         popUpTo(AuthScreen.Login.route) { inclusive = true }
                     }
                 },
+                onGoogleSignIn = { navController.navigate(AuthScreen.CompleteProfile.route) },
                 onMobileSignIn = { navController.navigate(AuthScreen.MobileLogin.route) }
             )
         }
@@ -91,6 +94,7 @@ fun AuthNavGraph(
                 },
                 // MobileLogin is always pushed from Login, so popping reveals it.
                 onContinueWithEmail = { navController.popBackStack() },
+                onContinueWithGoogle = { navController.navigate(AuthScreen.CompleteProfile.route) },
                 onCreateAccount = {
                     navController.navigate(AuthScreen.CreateAccount.route) {
                         popUpTo(AuthScreen.Login.route) { inclusive = true }
@@ -102,12 +106,22 @@ fun AuthNavGraph(
         composable(AuthScreen.CreateAccount.route) {
             CreateAccountScreen(
                 onBack = { navController.popBackStack() },
-                onCreateAccount = { _, _, _ -> onExitToDashboard() },
+                onCreateAccount = { email, _ ->
+                    // Email -> Verify (shared OTP screen) -> Complete Profile.
+                    navController.navigate(
+                        AuthScreen.OtpVerification.createRoute(
+                            destination = email,
+                            mode = AuthScreen.OtpVerification.MODE_EMAIL_VERIFY
+                        )
+                    )
+                },
                 onSignIn = {
                     navController.navigate(AuthScreen.Login.route) {
                         popUpTo(AuthScreen.CreateAccount.route) { inclusive = true }
                     }
-                }
+                },
+                onGoogleSignIn = { navController.navigate(AuthScreen.CompleteProfile.route) },
+                onMobileSignIn = { navController.navigate(AuthScreen.MobileLogin.route) }
             )
         }
 
@@ -139,10 +153,12 @@ fun AuthNavGraph(
                 destination = destination,
                 onBack = { navController.popBackStack() },
                 onVerify = {
-                    if (mode == AuthScreen.OtpVerification.MODE_LOGIN) {
-                        onExitToDashboard()
-                    } else {
-                        navController.navigate(AuthScreen.ResetPassword.route)
+                    when (mode) {
+                        AuthScreen.OtpVerification.MODE_LOGIN,
+                        AuthScreen.OtpVerification.MODE_EMAIL_VERIFY ->
+                            navController.navigate(AuthScreen.CompleteProfile.route)
+
+                        else -> navController.navigate(AuthScreen.ResetPassword.route)
                     }
                 },
                 onResend = { /* UI-only: countdown resets itself in the screen */ }
@@ -157,6 +173,13 @@ fun AuthNavGraph(
                         popUpTo(AuthScreen.Welcome.route) { inclusive = false }
                     }
                 }
+            )
+        }
+
+        composable(AuthScreen.CompleteProfile.route) {
+            CompleteProfileScreen(
+                onBack = { navController.popBackStack() },
+                onContinue = { _, _, _ -> onExitToDashboard() }
             )
         }
     }

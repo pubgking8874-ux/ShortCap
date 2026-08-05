@@ -24,8 +24,9 @@ sealed class AuthScreen(val route: String) {
         const val ARG_DESTINATION = "destination"
         const val ARG_MODE = "mode"
 
-        const val MODE_RESET = "reset" // Forgot Password flow -> Reset Password
-        const val MODE_LOGIN = "login" // Mobile login flow -> Dashboard
+        const val MODE_RESET = "reset"         // Forgot Password flow -> Reset Password
+        const val MODE_LOGIN = "login"         // Mobile login flow -> Complete Profile
+        const val MODE_EMAIL_VERIFY = "email_verify" // Create Account flow -> Complete Profile
 
         /** Builds a navigation route carrying what the OTP was sent to + the origin flow. */
         fun createRoute(destination: String = "", mode: String = MODE_RESET): String =
@@ -33,6 +34,7 @@ sealed class AuthScreen(val route: String) {
     }
 
     data object ResetPassword : AuthScreen("reset_password")
+    data object CompleteProfile : AuthScreen("complete_profile")
 
     /**
      * Not part of this module — represents where "Continue as Guest" /

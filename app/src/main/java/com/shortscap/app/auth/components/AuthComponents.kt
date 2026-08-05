@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Visibility
@@ -63,6 +65,7 @@ import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -497,6 +500,173 @@ fun AuthPasswordField(
             }
         }
     )
+}
+
+/**
+ * Compact outlined picker field (dropdown / date picker) matching the auth
+ * text fields — same 50dp height, 14dp corners, animated border and floating
+ * label. Shows the selected [value] (or the label as an idle hint) with a
+ * trailing icon. Pair it with a DropdownMenu or DatePickerDialog; set
+ * [active] while the menu/dialog is open so the border highlights like a
+ * focused text field.
+ */
+@Composable
+fun AuthPickerField(
+    label: String,
+    value: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailingIcon: ImageVector = Icons.Filled.ArrowDropDown,
+    isError: Boolean = false,
+    supportingText: String? = null,
+    active: Boolean = false,
+    iconContentDescription: String? = null
+) {
+    val scheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Floating label progress: floats once a value is picked (or while active).
+    val labelProgress by animateFloatAsState(
+        targetValue = if (value != null || active) 1f else 0f,
+        animationSpec = tween(150),
+        label = "authPickerLabelProgress"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            isError -> scheme.error
+            active || isPressed -> scheme.primary
+            else -> scheme.outline
+        },
+        animationSpec = tween(150),
+        label = "authPickerBorderColor"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (isError || active || isPressed) 2.dp else 1.dp,
+        animationSpec = tween(150),
+        label = "authPickerBorderWidth"
+    )
+    val labelColor by animateColorAsState(
+        targetValue = when {
+            isError -> scheme.error
+            active || isPressed -> scheme.primary
+            else -> scheme.onSurfaceVariant
+        },
+        animationSpec = tween(150),
+        label = "authPickerLabelColor"
+    )
+
+    // Same label geometry as the compact auth fields (bodyLarge -> bodySmall lerp).
+    val labelIdleStyle = MaterialTheme.typography.bodyLarge
+    val labelFloatingStyle = MaterialTheme.typography.bodySmall
+    val animatedLabelStyle = lerp(labelIdleStyle, labelFloatingStyle, labelProgress)
+    val animatedLabelHeightPx = with(density) { animatedLabelStyle.lineHeight.toPx() }
+    val fieldHeightPx = with(density) { 50.dp.toPx() }
+    val idleLabelXPx = with(density) { 16.dp.toPx() }
+    val labelXPx = idleLabelXPx
+    val labelYPx = lerp(
+        (fieldHeightPx - animatedLabelHeightPx) / 2f,
+        -animatedLabelHeightPx / 2f,
+        labelProgress
+    )
+    val labelSize = remember { mutableStateOf(Size.Zero) }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null, // matches the text fields: no ripple, border animates instead
+                    onClick = onClick
+                )
+                .drawWithContent {
+                    drawContent()
+                    val strokeW = borderWidth.toPx()
+                    val corner = 14.dp.toPx()
+                    val drawBorder: DrawScope.() -> Unit = {
+                        drawRoundRect(
+                            color = borderColor,
+                            topLeft = Offset(strokeW / 2, strokeW / 2),
+                            size = Size(size.width - strokeW, size.height - strokeW),
+                            cornerRadius = CornerRadius(corner),
+                            style = Stroke(width = strokeW)
+                        )
+                    }
+                    val labelW = labelSize.value.width
+                    if (labelW > 0f) {
+                        // Notch cutout around the floating label, exactly like the text fields.
+                        val inner = 4.dp.toPx()
+                        val left = 16.dp.toPx() - inner
+                        val right = left + labelW + 2 * inner
+                        val labelH = labelSize.value.height
+                        clipRect(left, -labelH / 2, right, labelH / 2, ClipOp.Difference) {
+                            drawBorder()
+                        }
+                    } else {
+                        drawBorder()
+                    }
+                }
+        ) {
+            if (label.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            translationX = labelXPx
+                            translationY = labelYPx
+                        }
+                        .onSizeChanged { labelSize.value = Size(it.width.toFloat(), it.height.toFloat()) }
+                ) {
+                    Text(
+                        text = label,
+                        style = animatedLabelStyle.copy(color = labelColor),
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 16.dp, end = 48.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (value != null) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = scheme.onSurface,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .align(Alignment.CenterEnd),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = trailingIcon,
+                    contentDescription = iconContentDescription,
+                    tint = if (isError) scheme.error else scheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        if (supportingText != null) {
+            Text(
+                text = supportingText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isError) scheme.error else scheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp)
+            )
+        }
+    }
 }
 
 enum class PasswordStrength(val label: String, val color: Color, val fraction: Float) {

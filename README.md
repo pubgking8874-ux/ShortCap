@@ -255,6 +255,28 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 - The two full-width fallback buttons were replaced by the Sign In-style section: a **"Sign in with"** divider (same styling as the "OR" divider — `OrDivider` gained a configurable `text` param, default unchanged) above a compact **[ Google ] [ Email ]** row (`SignInWithRow`) — equal width, same 56 dp height / 16 dp corners / 1 dp border / colors / spacing / typography as Sign In's social row.
 - **Google** reuses the official "G" icon and triggers the existing Google flow; **Email** uses the mail icon and pops back to the existing Email Sign In screen (no new screen created). Phone input, Send OTP, OTP verification, and the bottom section (Create Account / Privacy / Terms) are unchanged.
 
+### Phase 6.3 — Create Account screen aligned with the Sign In design *(Aug 5, 2026)*
+**Files:** `auth/screens/CreateAccountScreen.kt`, `auth/navigation/AuthNavGraph.kt`, and this `README.md`
+
+- Added the Sign In-style **logo** (106 dp, same spacing) and the premium glow accents; the title was reduced to the same **28 sp** as "Welcome Back" and the tagline is now "Create your account and start taking control of your digital habits."
+- Added a **"Sign up with"** section exactly matching Sign In: divider + compact **[ Google ] [ Mobile Number ]** row (`SocialLoginRow` — same size, border, radius, colors, spacing and press animation). Google uses the existing Google flow; **Mobile Number** uses the smartphone icon and navigates to the existing Mobile Login flow via a new `onMobileSignIn` callback (that flow is untouched).
+- **Spacing rebalanced** on the same 8dp grid as Sign In: fields 12 dp apart, the Terms & Privacy row sits closer to the password section, and the bottom margin was tightened. Field order (Full Name → Email → Password → Confirm Password), password validation, and all auth logic are unchanged.
+
+### Phase 6.4 — Complete Profile screen (shared by Email / Google / Mobile flows) *(Aug 5, 2026)*
+**Files:** `auth/screens/CompleteProfileScreen.kt` (**new**), `auth/components/AuthComponents.kt` (new `AuthPickerField`), `auth/navigation/AuthScreen.kt`, `auth/navigation/AuthNavGraph.kt`, and this `README.md`
+
+- **New dedicated `CompleteProfileScreen`** — same auth design language (logo, glows, 28 sp heading, compact 50 dp fields, footer). Layout: back button → logo → **"Complete Your Profile"** → "One last step before you get started." → **Name** (pre-fillable via `initialName` for Google, editable) → **Gender** dropdown (Male / Female / Prefer not to say) → **Date of Birth** (Material `DatePickerDialog`, displayed **DD/MM/YYYY**, no plain-text input, future dates disabled) → full-width **Continue** → Privacy / Terms.
+- **Validation on Continue** using the existing error style (`isError` + red supporting text): Name required, Gender required, Date of Birth required; errors clear as the user fixes each field.
+- **Shared by all three flows** (one screen, zero duplication): Email Create Account → Complete Profile → Dashboard; Google → Complete Profile → Dashboard; Mobile Login → OTP → Complete Profile → Dashboard. "Continue" saves the profile (mock) and exits to the Dashboard via `onExitToDashboard()`.
+- **Reuse:** new `AuthPickerField` (compact 50 dp / 14 dp corner picker with animated border + floating label + error support) lives in `AuthComponents.kt`; everything else reuses `AuthTextField`, `AuthPrimaryButton`, `AuthBackButton`, the theme, and the footer pattern.
+
+### Phase 6.5 — Create Account simplified to Email + Password, email-verification step *(Aug 5, 2026)*
+**Files:** `auth/screens/CreateAccountScreen.kt`, `auth/navigation/AuthScreen.kt`, `auth/navigation/AuthNavGraph.kt`, and this `README.md`
+
+- **Create Account now collects only Email + Password** (per the master spec — **Full Name** and **Confirm Password** removed; the password strength indicator and the Terms checkbox remain). Layout: Logo → heading → tagline → Email → Password → Create Account → "Sign up with" [Google] [Mobile Number] → "Already have an account? Sign In" → Privacy • Terms.
+- **Email verification step added without a new screen:** after Create Account, the shared **OTP Verification** screen is reused as the email-verification step (new `mode=email_verify`; it already shows "code sent to <email>"), then **Complete Profile** → **Dashboard**. The full Email flow now matches the spec: `Email → Password → Create Account → Verify Email → Complete Profile → Dashboard`.
+- Google → Complete Profile → Dashboard and Mobile → OTP → Complete Profile → Dashboard were already wired (Phase 6.4) and are unchanged.
+
 ---
 
 ## Mobile Number Authentication (OTP Login)
