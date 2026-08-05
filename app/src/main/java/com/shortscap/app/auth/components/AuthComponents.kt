@@ -2,6 +2,7 @@ package com.shortscap.app.auth.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -50,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +60,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -71,11 +76,13 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
@@ -93,6 +100,7 @@ import com.shortscap.app.auth.theme.GradientStart
 import com.shortscap.app.auth.theme.SuccessColor
 import com.shortscap.app.auth.theme.WarningColor
 import com.shortscap.app.theme.LocalScColors
+import kotlinx.coroutines.delay
 
 /** Filled, full-width primary CTA — [gradient] renders the ShortsCap brand color (single solid Accent). */
 @Composable
@@ -102,7 +110,9 @@ fun AuthPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loading: Boolean = false,
-    gradient: Boolean = false
+    gradient: Boolean = false,
+    /** When set, the loading state shows a small spinner + this label (e.g. "Verifying..."). */
+    loadingLabel: String? = null
 ) {
     val scColors = LocalScColors.current
     val shape = RoundedCornerShape(16.dp)
@@ -146,11 +156,24 @@ fun AuthPrimaryButton(
         }
     ) {
         if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(22.dp),
-                color = Color.White,
-                strokeWidth = 2.5.dp
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = Color.White,
+                    strokeWidth = 2.5.dp
+                )
+                if (loadingLabel != null) {
+                    Text(
+                        loadingLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }
+            }
         } else {
             Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
         }
@@ -564,7 +587,17 @@ fun AuthPickerField(
     val labelIdleStyle = MaterialTheme.typography.bodyLarge
     val labelFloatingStyle = MaterialTheme.typography.bodySmall
     val animatedLabelStyle = lerp(labelIdleStyle, labelFloatingStyle, labelProgress)
-    val animatedLabelHeightPx = with(density) { animatedLabelStyle.lineHeight.toPx() }
+    val animatedLabelHeightPx = with(density) {
+        // Mirror the compact text field guard: the app theme's bodySmall has no
+        // lineHeight, so the lerp yields TextUnit.Unspecified once the label
+        // floats (progress >= 0.5); Unspecified.toPx() would throw
+        // "Only Sp can convert to Px". Fall back to the M3 bodyLarge height.
+        if (animatedLabelStyle.lineHeight != androidx.compose.ui.unit.TextUnit.Unspecified) {
+            animatedLabelStyle.lineHeight.toPx()
+        } else {
+            24.dp.toPx()
+        }
+    }
     val fieldHeightPx = with(density) { 50.dp.toPx() }
     val idleLabelXPx = with(density) { 16.dp.toPx() }
     val labelXPx = idleLabelXPx
@@ -725,26 +758,90 @@ fun PasswordStrengthIndicator(strength: PasswordStrength, modifier: Modifier = M
 
 private val OtpBoxCornerRadius = 12.dp
 private val OtpBoxHeight = 50.dp
+private const val OtpBoxCount = 6
 
-/** Six-box OTP entry row. Purely local state driven, no verification logic. */
+/**
+ * Six-box OTP entry row with professional input behavior:
+ *  - the first box auto-focuses when the screen opens (numeric keyboard pops up)
+ *  - entering a digit fills the box and advances focus to the next
+ *  - backspace on a filled box clears it; backspace on an empty box moves focus back
+ *  - pasting a full/partial code distributes it across the boxes
+ *  - only digits are accepted; each box holds at most one digit
+ *  - the active box is highlighted with an animated border + subtle fill
+ *  - [isError] turns every box red and shakes the row
+ */
 @Composable
 fun OtpInputRow(
     otpValues: List<String>,
     onValueChange: (index: Int, value: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isError: Boolean = false
 ) {
+    val focusRequesters = remember { List(OtpBoxCount) { FocusRequester() } }
+    val shake = remember { Animatable(0f) }
+
+    // Auto-focus the first box once the screen opens.
+    LaunchedEffect(Unit) {
+        delay(100) // let the first frame compose so the requester is attached
+        focusRequesters.first().requestFocus()
+    }
+
+    // One-shot horizontal shake whenever the error state appears.
+    LaunchedEffect(isError) {
+        if (isError) {
+            repeat(5) { i ->
+                val amplitude = (10 - i * 2).coerceAtLeast(2).toFloat()
+                shake.animateTo(amplitude, tween(45))
+                shake.animateTo(-amplitude, tween(45))
+            }
+            shake.animateTo(0f, tween(45))
+        }
+    }
+
+    fun moveFocusTo(index: Int) {
+        focusRequesters[index.coerceIn(0, OtpBoxCount - 1)].requestFocus()
+    }
+
+    fun handleChange(index: Int, incoming: String) {
+        val digits = incoming.filter { it.isDigit() }
+        if (digits.isEmpty()) {
+            // Deletion: clear this box if it holds a digit; on an empty box hop focus back.
+            if (otpValues[index].isNotEmpty()) {
+                onValueChange(index, "")
+            } else if (index > 0) {
+                moveFocusTo(index - 1)
+            }
+            return
+        }
+        if (digits.length > 1) {
+            // Pasted code: distribute across the boxes from here, then focus the next free box.
+            var pos = index
+            for (digit in digits) {
+                if (pos < OtpBoxCount) {
+                    onValueChange(pos, digit.toString())
+                    pos++
+                }
+            }
+            moveFocusTo(pos)
+        } else {
+            // Single digit: fill this box and advance to the next.
+            onValueChange(index, digits)
+            if (index < OtpBoxCount - 1) moveFocusTo(index + 1)
+        }
+    }
+
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer { translationX = shake.value * density },
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         otpValues.forEachIndexed { index, digit ->
             CompactOtpDigitBox(
                 value = digit,
-                onValueChange = { new ->
-                    if (new.length <= 1 && new.all { it.isDigit() }) {
-                        onValueChange(index, new)
-                    }
-                },
+                onValueChange = { handleChange(index, it) },
+                isError = isError,
+                focusRequester = focusRequesters[index],
                 modifier = Modifier
                     .width(48.dp)
                     .height(OtpBoxHeight)
@@ -753,19 +850,29 @@ fun OtpInputRow(
     }
 }
 
-/** Single OTP digit box — compact 50dp, centered digit, same border behavior as before. */
+/**
+ * Single OTP digit box — compact 50dp, centered digit, animated focus border
+ * with a subtle primary fill, red border when [isError], numeric keyboard only.
+ */
 @Composable
 private fun CompactOtpDigitBox(
     value: String,
     onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    focusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false
 ) {
     val scheme = MaterialTheme.colorScheme
+    val focusManager = LocalFocusManager.current
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     val borderColor by animateColorAsState(
-        targetValue = if (isFocused) scheme.primary else scheme.outline,
+        targetValue = when {
+            isError -> scheme.error
+            isFocused -> scheme.primary
+            else -> scheme.outline
+        },
         animationSpec = tween(FieldAnimationDurationMillis),
         label = "compactOtpBorderColor"
     )
@@ -774,32 +881,49 @@ private fun CompactOtpDigitBox(
         animationSpec = tween(FieldAnimationDurationMillis),
         label = "compactOtpBorderWidth"
     )
+    // Subtle focus fill fades in/out with the border highlight.
+    val focusFill by animateFloatAsState(
+        targetValue = if (isFocused) 1f else 0f,
+        animationSpec = tween(FieldAnimationDurationMillis),
+        label = "compactOtpFocusFill"
+    )
 
     Box(
-        modifier = modifier.drawWithContent {
-            drawContent()
-            val strokeW = borderWidth.toPx()
-            drawRoundRect(
-                color = borderColor,
-                topLeft = Offset(strokeW / 2, strokeW / 2),
-                size = Size(size.width - strokeW, size.height - strokeW),
-                cornerRadius = CornerRadius(OtpBoxCornerRadius.toPx()),
-                style = Stroke(width = strokeW)
+        modifier = modifier
+            .background(
+                color = (if (isError) scheme.error else scheme.primary).copy(alpha = 0.08f * focusFill),
+                shape = RoundedCornerShape(OtpBoxCornerRadius)
             )
-        },
+            .drawWithContent {
+                drawContent()
+                val strokeW = borderWidth.toPx()
+                drawRoundRect(
+                    color = borderColor,
+                    topLeft = Offset(strokeW / 2, strokeW / 2),
+                    size = Size(size.width - strokeW, size.height - strokeW),
+                    cornerRadius = CornerRadius(OtpBoxCornerRadius.toPx()),
+                    style = Stroke(width = strokeW)
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester),
             singleLine = true,
             textStyle = MaterialTheme.typography.titleLarge.copy(
                 color = scheme.onSurface,
                 textAlign = TextAlign.Center
             ),
-            cursorBrush = SolidColor(scheme.primary),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            cursorBrush = SolidColor(if (isError) scheme.error else scheme.primary),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             interactionSource = interactionSource,
             decorationBox = { innerTextField ->
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

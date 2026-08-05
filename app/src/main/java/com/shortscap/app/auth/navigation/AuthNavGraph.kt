@@ -179,7 +179,9 @@ fun AuthNavGraph(
         composable(AuthScreen.CompleteProfile.route) {
             CompleteProfileScreen(
                 onBack = { navController.popBackStack() },
-                onContinue = { _, _, _ -> onExitToDashboard() }
+                onContinue = { _, _, _ -> onExitToDashboard() },
+                // Skip: no dialog, no validation — straight to the Dashboard.
+                onSkip = { onExitToDashboard() }
             )
         }
     }

@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,6 +58,8 @@ import com.shortscap.app.theme.LocalScColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private enum class GenderOption(val label: String) {
     MALE("Male"),
@@ -86,6 +90,7 @@ fun CompleteProfileScreen(
     onBack: () -> Unit,
     onContinue: (name: String, gender: String, dateOfBirth: String) -> Unit,
     initialName: String = "",
+    onSkip: () -> Unit = {},
     onTermsClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {}
 ) {
@@ -108,6 +113,18 @@ fun CompleteProfileScreen(
     )
     val dobText = dobMillis?.let { formatDate(it) }
 
+    // Dismisses the IME before opening a picker window. Creating a Popup/Dialog
+    // window while the keyboard is animating is the crash trigger on compose-ui
+    // < 1.7.1, so the window is opened only after the hide animation settles.
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
+    fun openPicker(onOpen: () -> Unit) {
+        keyboardController?.hide()
+        scope.launch {
+            delay(250) // let the IME hide animation finish first
+            onOpen()
+        }
+    }
     val scColors = LocalScColors.current
 
     Box(
@@ -140,6 +157,23 @@ fun CompleteProfileScreen(
                     )
                 )
         )
+
+        // Minimal "Skip" action pinned to the top-right corner: small text in
+        // the app's accent color, 48dp touch target, equal top/right padding.
+        TextButton(
+            onClick = onSkip,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 8.dp, end = 8.dp)
+                .height(48.dp) // 48dp touch target; width wraps the small text
+        ) {
+            Text(
+                "Skip",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -194,7 +228,7 @@ fun CompleteProfileScreen(
                 AuthPickerField(
                     label = "Gender",
                     value = gender,
-                    onClick = { genderMenuOpen = true },
+                    onClick = { openPicker { genderMenuOpen = true } },
                     active = genderMenuOpen,
                     isError = genderError,
                     supportingText = if (genderError) "Please select your gender" else null,
@@ -239,7 +273,7 @@ fun CompleteProfileScreen(
             AuthPickerField(
                 label = "Date of Birth",
                 value = dobText,
-                onClick = { showDatePicker = true },
+                onClick = { openPicker { showDatePicker = true } },
                 active = showDatePicker,
                 trailingIcon = Icons.Filled.CalendarMonth,
                 isError = dobError,

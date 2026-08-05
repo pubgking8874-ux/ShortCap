@@ -45,7 +45,10 @@ android {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
+    // 2024.10.01 -> compose ui/foundation 1.7.5 + material3 1.3.1: includes the
+    // compose-ui 1.7.x patch fixes for Popup/DropdownMenu crashes when opened
+    // while the IME is visible or inside a scrollable container (1.7.0 regression).
+    val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
