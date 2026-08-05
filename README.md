@@ -235,10 +235,10 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 **Files:** `auth/screens/MobileLoginScreen.kt` (**new**), `auth/components/AuthComponents.kt` (`MobileSignInButton` / `EmailSignInButton`), `auth/screens/LoginScreen.kt`, `auth/navigation/AuthScreen.kt`, `auth/navigation/AuthNavGraph.kt`, `auth/screens/OtpVerificationScreen.kt`, plus spacing polish on `auth/screens/ForgotPasswordScreen.kt` / `CreateAccountScreen.kt` / `ResetPasswordScreen.kt`, and this `README.md` + `auth/README.md`
 
 - **"Continue with Mobile Number"** added below the Google button on Sign In — a new `MobileSignInButton` using the modern **smartphone icon** (not a telephone receiver), visually identical to the Google button (same 56 dp outline style, 16 dp corners, icon + label).
-- **New `MobileLoginScreen`** — a dedicated screen (the Email Login page is untouched, not replaced). Same logo, "Welcome Back", subtitle, glow accents, footer and buttons as Sign In; adds a single horizontal phone input (country selector with flag + dial code + dropdown → vertical divider → digit-only number field), a **Send OTP** button, and "Continue with Email" / "Continue with Google" fallbacks.
+- **New `MobileLoginScreen`** — a dedicated screen (the Email Login page is untouched, not replaced). Same logo, "Welcome Back", glow accents, footer and buttons as Sign In; adds a single horizontal phone input (country selector with flag + dial code + dropdown → vertical divider → digit-only number field), a **Send OTP** button, and a **"Sign in with"** section with compact **[ Google ] [ Email ]** buttons (Email returns to the Email Login screen, Google starts the Google flow).
 - **Extensible country catalog:** `PhoneCountry` + `SupportedPhoneCountries` ship with India (+91), USA (+1), UK (+44), Canada (+1), Australia (+61), UAE (+971). Adding a country is **one list entry**; the field auto-caps digits per country and the selector highlights the current pick with a checkmark.
 - **OTP screen reused — zero duplication:** `OtpVerificationScreen` now carries two optional route args — `destination` (email or phone) and `mode` (`reset` | `login`). Forgot Password passes the email; Mobile Login passes e.g. `+91 9876543210`. On "Verify", `mode=login` completes into the Dashboard, `mode=reset` keeps the existing Reset Password path.
-- **Back-stack safe:** "Continue with Email" pops back to the Email Login (no duplicate back-stack entries); the back button on Mobile Login returns to Sign In; "Create Account" behaves exactly like from Sign In.
+- **Back-stack safe:** the **Email** button pops back to the Email Login (no duplicate back-stack entries); the back button on Mobile Login returns to Sign In; "Create Account" behaves exactly like from Sign In.
 - **Spacing rebalanced** across all auth form screens on a consistent **8dp Material grid** (small 8–12 / medium 16 / large 24): Sign In content moved ~22 dp upward, fields and their helper rows are visually grouped, and every screen keeps comfortable top/bottom margins above the system bars.
 
 ### Phase 6.1 — Compact social login row & top-section polish on Sign In *(Aug 5, 2026)*
@@ -246,7 +246,14 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 
 - **Two stacked full-width buttons → one compact row:** "Continue with Google" + "Continue with Mobile Number" are now **`| G Google | 📱 Mobile Number |`** — two equal-width outline buttons (same 56 dp height, 16 dp corners, 1 dp border, official Google "G" and modern smartphone icons) with a 12 dp gap. Saves one full button row of vertical space; tap targets unchanged (56 dp). The "Mobile Number" button navigates to the Mobile Login screen.
 - **Top section tightened:** status-bar margin and back-button gap reduced to 4 dp and the logo→heading gap to 12 dp, moving the logo/heading block ~12 dp higher while the logo stays well clear of the status bar.
-- **Rebalanced:** with the shorter social row the Sign In content now fits typical screens without scrolling, ending with comfortable bottom breathing space. Only Sign In was touched — `GoogleSignInButton` / `EmailSignInButton` (used by the Mobile Login screen) are unchanged, as are all other screens and all logic.
+- **Rebalanced:** with the shorter social row the Sign In content now fits typical screens without scrolling, ending with comfortable bottom breathing space. Only Sign In was touched, and all other screens and all logic are unchanged.
+
+### Phase 6.2 — Mobile Login "Sign in with" section *(Aug 5, 2026)*
+**Files:** `auth/components/AuthComponents.kt` (`OrDivider` text param, new `SignInWithRow`), `auth/screens/MobileLoginScreen.kt`, and this `README.md`
+
+- **Subtitle** on Mobile Login is now **"Sign in with your mobile number."** (same typography/style as before).
+- The two full-width fallback buttons were replaced by the Sign In-style section: a **"Sign in with"** divider (same styling as the "OR" divider — `OrDivider` gained a configurable `text` param, default unchanged) above a compact **[ Google ] [ Email ]** row (`SignInWithRow`) — equal width, same 56 dp height / 16 dp corners / 1 dp border / colors / spacing / typography as Sign In's social row.
+- **Google** reuses the official "G" icon and triggers the existing Google flow; **Email** uses the mail icon and pops back to the existing Email Sign In screen (no new screen created). Phone input, Send OTP, OTP verification, and the bottom section (Create Account / Privacy / Terms) are unchanged.
 
 ---
 
@@ -267,9 +274,9 @@ Splash → Welcome → Sign In
 
 | Concern | File | What it does |
 | --- | --- | --- |
-| Entry point | `auth/screens/LoginScreen.kt` | New `onMobileSignIn` callback + `MobileSignInButton` below the Google button |
-| New screen | `auth/screens/MobileLoginScreen.kt` (**new**) | Country-code + phone-number input, Send OTP, Email/Google fallbacks, standard footer. Owns `PhoneCountry` + `SupportedPhoneCountries` |
-| Option buttons | `auth/components/AuthComponents.kt` | `MobileSignInButton` (smartphone icon) + `EmailSignInButton`, sharing one private outline-button style matching the Google button |
+| Entry point | `auth/screens/LoginScreen.kt` | New `onMobileSignIn` callback; the compact `SocialLoginRow` (Google + Mobile Number) routes the Mobile Number button to it |
+| New screen | `auth/screens/MobileLoginScreen.kt` (**new**) | Country-code + phone-number input, Send OTP, a **"Sign in with"** section ([Google] [Email]), standard footer. Owns `PhoneCountry` + `SupportedPhoneCountries` |
+| Option buttons | `auth/components/AuthComponents.kt` | `SocialLoginRow` (Google + Mobile Number on Sign In) and `SignInWithRow` (Google + Email on Mobile Login) — compact half-width outline buttons sharing one private style matching the Google button |
 | Routes | `auth/navigation/AuthScreen.kt` | `mobile_login` route; `OtpVerification` gains `destination` + `mode` args (`createRoute(...)` helper, URI-encoded) |
 | Wiring | `auth/navigation/AuthNavGraph.kt` | Mobile Login → OTP with `mode=login`; Forgot Password → OTP with the email; verify branches by mode (`login` → Dashboard, `reset` → Reset Password) |
 | Shared OTP UI | `auth/screens/OtpVerificationScreen.kt` | Renamed `email` → `destination` so one screen shows "code sent to <email | phone>" for both flows |

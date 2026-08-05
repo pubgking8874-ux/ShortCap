@@ -637,41 +637,7 @@ private fun CompactOtpDigitBox(
     }
 }
 
-/** Google sign-in button — official multicolor G, polished alignment. */
-@Composable
-fun GoogleSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_google_g),
-                contentDescription = null,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(20.dp)
-            )
-            Text(
-                "Continue with Google",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-/** Outlined secondary sign-in options (Email / Mobile) — visually identical to the Google button. */
+/** Outlined secondary sign-in option buttons — icon + label, identical style to the Google button. */
 @Composable
 private fun OutlinedOptionButton(
     text: String,
@@ -707,24 +673,6 @@ private fun OutlinedOptionButton(
             )
         }
     }
-}
-
-/** "Continue with Email" — same style as the Google button, used to jump back to Email login. */
-@Composable
-fun EmailSignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedOptionButton(
-        text = "Continue with Email",
-        onClick = onClick,
-        modifier = modifier,
-        icon = {
-            Icon(
-                imageVector = Icons.Filled.Email,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    )
 }
 
 /**
@@ -776,13 +724,61 @@ fun SocialLoginRow(
     }
 }
 
-/** "OR" divider used between primary auth action and social sign-in. */
+/**
+ * Compact "Sign in with" options for the Mobile Login screen — Google and
+ * Email side by side (equal width, 12dp gap), visually identical to the
+ * [SocialLoginRow] used on Sign In. Email pops back to the Email Login.
+ */
 @Composable
-fun OrDivider(modifier: Modifier = Modifier) {
+fun SignInWithRow(
+    onGoogleClick: () -> Unit,
+    onEmailClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        OutlinedOptionButton(
+            text = "Google",
+            onClick = onGoogleClick,
+            modifier = Modifier.weight(1f),
+            icon = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_google_g),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        )
+        OutlinedOptionButton(
+            text = "Email",
+            onClick = onEmailClick,
+            modifier = Modifier.weight(1f),
+            icon = {
+                Icon(
+                    imageVector = Icons.Filled.Email,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        )
+    }
+}
+
+/**
+ * "OR" divider used between primary auth action and social sign-in. The
+ * label is configurable (e.g. "Sign in with") while keeping the exact same
+ * divider styling on every screen.
+ */
+@Composable
+fun OrDivider(modifier: Modifier = Modifier, text: String = "OR") {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth()) {
         HorizontalRule(Modifier.weight(1f))
         Text(
-            "  OR  ",
+            "  $text  ",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)

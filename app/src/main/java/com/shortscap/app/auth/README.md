@@ -14,9 +14,10 @@ theme/
 components/
   AuthComponents.kt — shared building blocks: buttons, text fields, password
                        field w/ show-hide, strength indicator, 6-box OTP row,
-                       Google sign-in button, Email/Mobile sign-in option
-                       buttons, OR divider, back button, gradient logo mark,
-                       terms checkbox row
+                       compact sign-in option rows (Google | Mobile Number on
+                       Sign In, Google | Email on Mobile Login), OR / "Sign in
+                       with" divider, back button, gradient logo mark, terms
+                       checkbox row
 screens/
   SplashScreen.kt
   WelcomeScreen.kt
@@ -80,8 +81,14 @@ dedicated screen that reuses the module's design system end-to-end: same logo,
 Forgot Password now also passes the email through, so the OTP subtitle shows
 "code sent to <email>". Mobile Login passes e.g. `+91 9876543210`.
 
+**"Sign in with" options:** below Send OTP, a divider labeled "Sign in with"
+(same styling as the OR divider) sits above a compact **[ Google ] [ Email ]**
+row (`SignInWithRow`, same size/border/colors as Sign In's social row). Google
+reuses the official G icon and triggers the existing Google flow; Email pops
+back to the existing Email Login screen.
+
 **Back navigation:** Mobile Login is pushed from Login, so the back button and
-"Continue with Email" both `popBackStack()` back to the Email Login; "Create
+the Email option both `popBackStack()` back to the Email Login; "Create
 Account" behaves exactly as it does from Sign In.
 
 ---

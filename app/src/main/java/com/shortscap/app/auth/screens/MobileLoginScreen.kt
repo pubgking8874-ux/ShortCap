@@ -62,9 +62,8 @@ import com.shortscap.app.R
 import com.shortscap.app.auth.components.AuthBackButton
 import com.shortscap.app.auth.components.AuthPrimaryButton
 import com.shortscap.app.auth.components.AuthTextButton
-import com.shortscap.app.auth.components.EmailSignInButton
-import com.shortscap.app.auth.components.GoogleSignInButton
 import com.shortscap.app.auth.components.OrDivider
+import com.shortscap.app.auth.components.SignInWithRow
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -175,7 +174,7 @@ fun MobileLoginScreen(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Continue your ShortsCap journey",
+                "Sign in with your mobile number.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -210,11 +209,12 @@ fun MobileLoginScreen(
             )
 
             Spacer(Modifier.height(12.dp))
-            OrDivider()
+            OrDivider(text = "Sign in with")
             Spacer(Modifier.height(12.dp))
-            EmailSignInButton(onClick = onContinueWithEmail)
-            Spacer(Modifier.height(12.dp))
-            GoogleSignInButton(onClick = onContinueWithGoogle)
+            SignInWithRow(
+                onGoogleClick = onContinueWithGoogle,
+                onEmailClick = onContinueWithEmail
+            )
 
             Spacer(Modifier.height(18.dp))
 
