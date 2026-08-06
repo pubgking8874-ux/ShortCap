@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
+import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SiteEntry
@@ -69,6 +70,11 @@ data class AppUiState(
     // Theme preference (persisted via ThemePreferenceStore)
     val themeMode: ThemeMode = ThemeMode.DARK,
 
+    // Full-screen drawer sub-screen currently open (null = none). Modular:
+    // each destination maps to a dedicated UI screen; backend APIs plug in
+    // later without redesigning any screen.
+    val drawerScreen: DrawerScreen? = null,
+
     // Session placeholder — false shows the Auth flow (Splash -> Welcome ->
     // Login/CreateAccount/Guest) on launch. When AWS Cognito / the Python
     // backend / JWT are connected, set this from the session state so the
@@ -108,6 +114,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Sign In / mock Create Account) to enter the Dashboard. Backend login
     // will replace this with real session state — the UI stays the same.
     fun setSessionActive(active: Boolean) = _uiState.update { it.copy(sessionActive = active) }
+
+    // ---- Drawer sub-screens (modular; backend-ready) ----
+    fun openDrawerScreen(screen: DrawerScreen) =
+        _uiState.update { it.copy(drawerOpen = false, drawerScreen = screen) }
+
+    fun closeDrawerScreen() = _uiState.update { it.copy(drawerScreen = null) }
 
     // ---- Toast (mirrors showToast + clearTimeout/setTimeout dance) ----
     private var toastJob: Job? = null

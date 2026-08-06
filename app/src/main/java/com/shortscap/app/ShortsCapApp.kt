@@ -1,5 +1,6 @@
 package com.shortscap.app
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -16,10 +17,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -30,17 +33,21 @@ import com.shortscap.app.components.ScProfileMenu
 import com.shortscap.app.components.ScTopBar
 import com.shortscap.app.components.ScToast
 import com.shortscap.app.model.DrawerItem
+import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.ProfileMenuItem
 import com.shortscap.app.model.ScScreen
+import com.shortscap.app.navigation.DrawerNavHost
 import com.shortscap.app.navigation.ScNavHost
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ShortsCapTheme
+import com.shortscap.app.util.ShareUtils
 import com.shortscap.app.viewmodel.AppViewModel
 
 private val drawerItems = listOf(
     DrawerItem(Icons.Filled.HelpOutline, "Help & Support"),
     DrawerItem(Icons.Filled.Description, "Privacy Policy"),
-    DrawerItem(Icons.Filled.Info, "About the App"),
+    DrawerItem(Icons.Filled.Gavel, "Terms & Conditions"),
+    DrawerItem(Icons.Filled.Info, "About ShortsCap"),
     DrawerItem(Icons.Filled.Message, "Feedback"),
     DrawerItem(Icons.Filled.Share, "Share App"),
 )
@@ -119,10 +126,30 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                     }
 
                     // Drawer + scrim sit above everything, matching sc-overlay/.sc-drawer z-index
+                    // System Back while the drawer is open closes it instead of
+                    // exiting the app.
+                    BackHandler(enabled = state.drawerOpen) {
+                        viewModel.closeDrawer()
+                    }
+                    val context = LocalContext.current
                     ScAppDrawer(
                         open = state.drawerOpen,
                         onClose = viewModel::closeDrawer,
                         items = drawerItems,
+                        onItemClick = { item ->
+                            when (item.label) {
+                                "Help & Support" -> viewModel.openDrawerScreen(DrawerScreen.HELP_SUPPORT)
+                                "Privacy Policy" -> viewModel.openDrawerScreen(DrawerScreen.PRIVACY_POLICY)
+                                "Terms & Conditions" -> viewModel.openDrawerScreen(DrawerScreen.TERMS_CONDITIONS)
+                                "About ShortsCap" -> viewModel.openDrawerScreen(DrawerScreen.ABOUT_SHORTSCAP)
+                                "Feedback" -> viewModel.openDrawerScreen(DrawerScreen.FEEDBACK)
+                                "Share App" -> {
+                                    viewModel.closeDrawer()
+                                    ShareUtils.shareApp(context)
+                                }
+                                else -> viewModel.closeDrawer()
+                            }
+                        },
                         logoIcon = {
                             Image(
                                 painter = painterResource(R.drawable.logo_pic),
@@ -141,6 +168,24 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                         onClose = viewModel::closeProfileMenu,
                         items = profileItems,
                     )
+
+                    // Full-screen drawer sub-screen — on top of everything, shown
+                    // while a drawer destination is open. Back-stack navigation:
+                    // system Back pops the drawer stack one level at a time and
+                    // then closes the overlay back to the Dashboard — it never
+                    // exits the app while a drawer screen is open.
+                    state.drawerScreen?.let { screen ->
+                        // keyed by screen so each drawer destination gets a fresh
+                        // NavController/back stack even on an in-place change.
+                        key(screen) {
+                            DrawerNavHost(
+                                screen = screen,
+                                onClose = viewModel::closeDrawerScreen,
+                                onBugSubmitted = { viewModel.showToast("Bug report submitted") },
+                                onFeedbackSubmitted = { viewModel.showToast("Thank you for your feedback.") },
+                            )
+                        }
+                    }
                 }
             }
         }

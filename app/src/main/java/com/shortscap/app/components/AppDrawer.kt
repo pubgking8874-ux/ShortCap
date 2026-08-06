@@ -35,6 +35,7 @@ fun ScAppDrawer(
     onClose: () -> Unit,
     items: List<DrawerItem>,
     logoIcon: @Composable () -> Unit,
+    onItemClick: (DrawerItem) -> Unit = { onClose() },
 ) {
     val colors = LocalScColors.current
     val scrimAlpha by animateFloatAsState(if (open) 0.45f else 0f, animationSpec = tween(250), label = "scrim")
@@ -85,7 +86,7 @@ fun ScAppDrawer(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onItemClick(item) }
                         .padding(horizontal = 22.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -100,15 +101,17 @@ fun ScAppDrawer(
 
             Spacer(Modifier.weight(1f))
 
-            // Footer
+            // Footer — lifted ~24dp off the drawer bottom edge so it never
+            // touches the bottom navigation area.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Transparent),
+                    .background(Color.Transparent)
+                    .padding(bottom = 24.dp),
             ) {
                 ScDivider()
                 Text(
-                    "ShortsCap v2.4.1 · Build 2026072801\n© 2026 ShortsCap. All rights reserved.",
+                    "Version 1.1.1\nBuild 2026072801\n©2026 ShortsCap\nAll Rights Reserved.",
                     color = colors.TextDisabled,
                     style = ScTextStyles.Caption.copy(fontSize = 11.sp),
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),

@@ -9,6 +9,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -183,6 +185,7 @@ fun ScButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val colors = LocalScColors.current
     val (bg, border, fg) = when (variant) {
@@ -194,15 +197,20 @@ fun ScButton(
     Row(
         modifier = modifier
             .clip(shape)
-            .background(bg, shape)
+            .background(if (enabled) bg else colors.CardHover, shape)
             .then(if (border != null) Modifier.border(1.dp, border, shape) else Modifier)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            )
             .padding(vertical = 13.dp, horizontal = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
-        Text(label, color = fg, style = ScTextStyles.ButtonLabel)
+        if (icon != null) Icon(icon, contentDescription = null, tint = if (enabled) fg else colors.TextDisabled, modifier = Modifier.size(16.dp))
+        Text(label, color = if (enabled) fg else colors.TextDisabled, style = ScTextStyles.ButtonLabel)
     }
 }
 
@@ -216,4 +224,62 @@ fun ScDivider(modifier: Modifier = Modifier) {
             .height(1.dp)
             .background(colors.Divider),
     )
+}
+
+/**
+ * Settings-style navigation list item: leading icon tile + label + trailing
+ * chevron. Used for sub-menu rows that navigate to their own dedicated screen
+ * (e.g. Help & Support and About sub-menus). Matches the Settings category row
+ * look while leaving only the chevron (no expansion indicator).
+ */
+@Composable
+fun ScSettingsListItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalScColors.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(vertical = 13.dp, horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(colors.CardHover),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(17.dp))
+        }
+        Text(label, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold, modifier = Modifier.weight(1f))
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(16.dp))
+    }
+}
+
+/**
+ * Label / value info row used on contact, about, version pages. The value sits
+ * right-aligned, the label left — matching the ShortsCap settings aesthetic.
+ */
+@Composable
+fun ScInfoRow(label: String, value: String, modifier: Modifier = Modifier, valueSecondary: Boolean = false) {
+    val colors = LocalScColors.current
+    Row(
+        modifier = modifier.fillMaxWidth().padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, color = colors.TextSecondary, style = ScTextStyles.Body)
+        Text(
+            value,
+            color = if (valueSecondary) colors.TextSecondary else colors.TextPrimary,
+            style = if (valueSecondary) ScTextStyles.Body else ScTextStyles.BodySemiBold,
+        )
+    }
 }

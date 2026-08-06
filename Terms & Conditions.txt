@@ -1,0 +1,755 @@
+Terms & Conditions
+
+
+
+ – Welcome to ShortsCap
+
+Welcome to ShortsCap.
+
+These Terms & Conditions ("Terms") govern your access to and use of the ShortsCap mobile application, website (if available), cloud services, and any related features or functionality provided by ShortsCap.
+
+By downloading, installing, registering, signing in, or otherwise using ShortsCap, you agree to comply with these Terms & Conditions.
+
+If you do not agree with any part of these Terms, you must discontinue use of the application immediately.
+
+These Terms form a legally binding agreement between you ("User") and ShortsCap ("Company", "We", "Us", or "Our").
+
+Please read these Terms carefully before using any ShortsCap services.
+
+Continued use of the application indicates your acceptance of these Terms and any future updates made to them.
+
+ – Definitions
+
+For the purpose of these Terms & Conditions, the following definitions apply:
+
+"Application" means the ShortsCap mobile application.
+
+"User" means any individual who installs, accesses, registers, or uses ShortsCap.
+
+"Account" means a registered ShortsCap account created using Email, Google Sign-In, or Mobile Number verification.
+
+"Services" means all features provided by ShortsCap including authentication, dashboard, app blocking, analytics, focus mode, profile management, and future services.
+
+"Content" means any information, settings, preferences, profile details, or materials available through the application.
+
+"Device" means the Android device used to access ShortsCap.
+
+"Permissions" means Android permissions granted by the user including Usage Access, Accessibility Service, Notifications, Internet, and any other permissions required by the application.
+
+"Third-Party Services" means external services integrated with ShortsCap such as Google Sign-In, OTP providers, cloud infrastructure providers, analytics services, and future integrations.
+
+These definitions apply throughout this document unless otherwise stated.
+
+ – Acceptance of Terms
+
+By using ShortsCap, you confirm that:
+
+• You have read these Terms & Conditions.
+
+• You understand these Terms.
+
+• You agree to comply with all applicable rules described in this document.
+
+• You are legally permitted to use this application in your jurisdiction.
+
+Acceptance of these Terms occurs when you:
+
+• Install the application.
+
+• Create an account.
+
+• Sign in using Email, Google, or Mobile Number.
+
+• Grant required Android permissions.
+
+• Continue using ShortsCap after updates to these Terms become effective.
+
+If you do not agree with these Terms, you should immediately stop using ShortsCap and uninstall the application if desired.
+
+Your continued use of the application constitutes your ongoing acceptance of these Terms.
+
+ – Eligibility & Account Requirements
+
+To use ShortsCap, you must satisfy the following requirements:
+
+• You must meet the minimum legal age required to use digital services in your country or region.
+
+• You must provide accurate registration information.
+
+• You must maintain only information that belongs to you.
+
+• You must not impersonate another individual or organization.
+
+• You must not create accounts for fraudulent or unlawful purposes.
+
+Users are responsible for maintaining the security of their own accounts and authentication credentials.
+
+ShortsCap reserves the right to suspend, restrict, or terminate accounts that violate these Terms or applicable laws.
+
+Additional eligibility requirements may apply to future features introduced within ShortsCap.
+
+ – Scope of Services
+
+ShortsCap is a productivity-focused application designed to help users build healthier digital habits and reduce unnecessary distractions.
+
+Depending on the version of the application, ShortsCap may provide services including:
+
+• Secure Authentication
+
+• Dashboard Analytics
+
+• App Blocking
+
+• Focus Mode
+
+• Screen Time Monitoring
+
+• Usage Reports
+
+• Profile Management
+
+• Notification Management
+
+• Account Security Features
+
+• Future Productivity Features
+
+Some features may depend on Android version, device compatibility, system permissions, internet connectivity, or future application updates.
+
+ShortsCap reserves the right to modify, improve, replace, temporarily suspend, or permanently discontinue any feature where necessary for security, maintenance, legal compliance, or product improvement.
+
+The availability of certain features may vary depending on device capabilities and future service offerings.
+
+ – User Registration
+
+To access certain features of ShortsCap, users may be required to create a registered account.
+
+Users may register using one of the authentication methods supported by ShortsCap, including:
+
+• Email Address
+• Mobile Number (OTP Verification)
+• Google Sign-In
+
+During registration, users agree to provide accurate, complete, and up-to-date information.
+
+Users are responsible for maintaining the accuracy of their account information.
+
+Creating multiple accounts for fraudulent purposes, impersonation, abuse of application features, or attempts to bypass application restrictions is strictly prohibited.
+
+ShortsCap reserves the right to refuse registration or suspend accounts that violate these Terms & Conditions or applicable laws.
+
+Registration grants access only to the services available for the user's account type. Future premium or subscription-based features may require additional registration steps or acceptance of separate terms.
+
+ – Email Authentication
+
+Users choosing Email Authentication must provide a valid email address and create a secure password.
+
+Where applicable, ShortsCap may require email verification before granting full access to account features.
+
+Users are responsible for maintaining the confidentiality of their passwords.
+
+Users must not:
+
+• Share passwords with others.
+• Use another person's email account.
+• Attempt unauthorized access to another user's account.
+
+If a user believes that their account has been compromised, they should immediately update their password and notify ShortsCap through official support channels.
+
+Repeated failed authentication attempts, suspicious login activity, or security concerns may result in temporary verification requirements or account protection measures.
+
+ShortsCap reserves the right to require additional verification whenever unusual account activity is detected.
+
+ – Mobile Number Authentication
+
+Users may choose to authenticate using their mobile number through One-Time Password (OTP) verification.
+
+By using Mobile Number Authentication, users confirm that:
+
+• They own or are authorized to use the provided mobile number.
+
+• They will not use temporary, fraudulent, or unauthorized phone numbers.
+
+• They understand that successful OTP verification serves as proof of account ownership during the authentication process.
+
+Users are responsible for protecting access to their mobile devices and SIM cards.
+
+ShortsCap is not responsible for delays, failures, or interruptions caused by telecommunications providers, network issues, or third-party OTP delivery services.
+
+Repeated misuse of OTP requests, automated verification attempts, or suspicious authentication behavior may result in temporary restrictions or additional verification requirements.
+
+ – Google Sign-In
+
+ShortsCap supports secure authentication through Google Sign-In for user convenience.
+
+When using Google Sign-In:
+
+• Authentication is handled by Google's secure authentication system.
+
+• Users remain responsible for maintaining the security of their Google account.
+
+• ShortsCap does not receive or store the user's Google password.
+
+If access to a user's Google account is lost, account recovery must be completed through Google's official recovery procedures.
+
+Users are responsible for ensuring that the Google account used for authentication belongs to them.
+
+Abuse of Google authentication services, identity impersonation, or unauthorized account access is strictly prohibited.
+
+Future authentication providers may be introduced by ShortsCap without affecting these Terms.
+
+ – Account Security
+
+Maintaining account security is a shared responsibility between ShortsCap and the user.
+
+Users should:
+
+• Use strong passwords where applicable.
+
+• Protect their mobile devices.
+
+• Keep authentication methods secure.
+
+• Avoid sharing verification codes.
+
+• Sign out from shared devices.
+
+• Immediately report suspected unauthorized account access.
+
+Users remain responsible for all activities performed using their account unless otherwise required by applicable law.
+
+ShortsCap may temporarily restrict account access, request additional verification, or suspend account activity where necessary to protect users, prevent fraud, investigate suspicious behavior, or maintain platform security.
+
+Failure to follow reasonable security practices may increase the risk of unauthorized account access, for which ShortsCap may not be responsible to the extent permitted by applicable law.
+
+ – User Responsibilities
+
+Every user is responsible for using ShortsCap in a lawful, ethical, and responsible manner.
+
+By using ShortsCap, you agree to:
+
+• Provide accurate and truthful account information.
+
+• Keep your account credentials secure.
+
+• Use the application only for legitimate personal or authorized purposes.
+
+• Respect all applicable laws and regulations while using the application.
+
+• Grant only the permissions that you willingly choose to provide.
+
+• Keep your application updated to the latest available version whenever possible.
+
+• Immediately report any unauthorized access or suspicious account activity.
+
+Users are solely responsible for all actions performed through their accounts.
+
+Failure to comply with these responsibilities may result in temporary restrictions, suspension, or permanent termination of access to ShortsCap services.
+
+Users are also responsible for ensuring that their use of ShortsCap does not interfere with the rights, privacy, or security of other individuals.
+
+
+ – Acceptable Use Policy
+
+ShortsCap is intended to help users improve productivity, reduce distractions, and manage digital habits responsibly.
+
+Users agree to use the application only in accordance with its intended purpose.
+
+Acceptable use includes:
+
+• Monitoring personal app usage.
+
+• Managing focus sessions.
+
+• Configuring app blocking preferences.
+
+• Viewing dashboard insights.
+
+• Managing personal profile settings.
+
+• Using authentication features provided by ShortsCap.
+
+Users must not use ShortsCap in any manner that may:
+
+• Violate applicable laws.
+
+• Harm other users.
+
+• Disrupt application functionality.
+
+• Interfere with security systems.
+
+• Abuse authentication mechanisms.
+
+ShortsCap reserves the right to investigate activity that appears inconsistent with the intended purpose of the application.
+
+ – Prohibited Activities
+
+Users agree NOT to engage in any of the following activities while using ShortsCap:
+
+• Creating fake or fraudulent accounts.
+
+• Using another person's identity.
+
+• Sharing or selling user accounts.
+
+• Attempting to bypass app-blocking restrictions.
+
+• Circumventing Focus Mode limitations.
+
+• Modifying application behavior through unauthorized methods.
+
+• Reverse engineering, decompiling, or disassembling the application.
+
+• Using automation tools, bots, scripts, or emulators to abuse application functionality.
+
+• Attempting unauthorized access to servers, APIs, databases, or cloud infrastructure.
+
+• Uploading malicious software, viruses, ransomware, spyware, or harmful code.
+
+• Interfering with authentication systems.
+
+• Misusing OTP verification.
+
+• Attempting to exploit bugs, security vulnerabilities, or unintended application behavior.
+
+• Using ShortsCap for unlawful, fraudulent, abusive, or deceptive purposes.
+
+Violation of these rules may result in immediate suspension or permanent termination of your account without prior notice where permitted by applicable law.
+
+ShortsCap also reserves the right to cooperate with law enforcement authorities where illegal activity is suspected.
+
+ – User Content & Information
+
+Users remain responsible for all information they provide within ShortsCap.
+
+This may include:
+
+• Profile information.
+
+• Display name.
+
+• Date of birth.
+
+• Gender selection.
+
+• Account preferences.
+
+• Feedback submitted through the application.
+
+Users agree not to submit information that:
+
+• Is false or misleading.
+
+• Violates another person's rights.
+
+• Contains unlawful, defamatory, abusive, or offensive material.
+
+• Attempts to disrupt application functionality.
+
+ShortsCap reserves the right to remove, restrict, or reject content that violates these Terms or applicable laws.
+
+Nothing in this section grants ShortsCap ownership of user-created personal profile information beyond what is necessary to provide application services.
+
+ – Accuracy of Information
+
+Users are responsible for ensuring that the information associated with their account remains accurate and up to date.
+
+Users should promptly update their information whenever changes occur, including:
+
+• Email address.
+
+• Mobile number.
+
+• Profile name.
+
+• Date of birth.
+
+• Other account details where applicable.
+
+Providing inaccurate, misleading, or fraudulent information may affect account functionality, authentication, security verification, or future account recovery.
+
+ShortsCap shall not be responsible for issues resulting from incorrect or outdated information provided by the user.
+
+The Company reserves the right to request additional verification where necessary to confirm account ownership or maintain platform security.
+
+ – Dashboard Features
+
+The ShortsCap Dashboard serves as the primary interface through which users can monitor and manage their productivity-related information.
+
+Depending on the version of the application, the Dashboard may include features such as:
+
+• Daily usage overview.
+
+• Screen time statistics.
+
+• App usage summaries.
+
+• Productivity insights.
+
+• Focus session history.
+
+• Account information.
+
+• Notification preferences.
+
+• Profile management.
+
+• Future dashboard enhancements.
+
+Dashboard information is provided for informational purposes only and should not be interpreted as professional, medical, psychological, or legal advice.
+
+ShortsCap reserves the right to improve, redesign, reorganize, or modify Dashboard features at any time to enhance user experience or maintain application security.
+
+ – App Blocking
+
+App Blocking is a core productivity feature of ShortsCap designed to help users reduce distractions by limiting access to selected applications according to user-defined preferences.
+
+Users are solely responsible for selecting which applications they choose to block.
+
+ShortsCap does not automatically block applications without user action or permission where such permission is required by the Android operating system.
+
+Users acknowledge that:
+
+• App Blocking effectiveness may vary depending on Android version and device manufacturer.
+
+• Some system applications may not be blockable due to operating system restrictions.
+
+• Certain third-party applications may behave differently because of Android security limitations.
+
+Users must not attempt to intentionally bypass or disable App Blocking through unauthorized methods, automation tools, or system modifications.
+
+Future versions of ShortsCap may introduce additional App Blocking capabilities, schedules, categories, or premium controls, which shall also be governed by these Terms.
+
+ – Focus Mode
+
+Focus Mode is designed to help users maintain concentration by reducing access to distracting applications and encouraging uninterrupted work or study sessions.
+
+Users control the duration, configuration, and activation of Focus Mode according to the options made available within the application.
+
+Users acknowledge that:
+
+• Focus Mode is intended as a productivity aid and not as a guarantee of improved performance.
+
+• Device-specific behavior may vary based on Android version, manufacturer restrictions, and granted permissions.
+
+• Certain emergency or essential system functions may remain available even while Focus Mode is active.
+
+Users are responsible for configuring Focus Mode according to their personal needs.
+
+Future updates may introduce additional Focus Mode options, schedules, automation, or premium functionality.
+
+ – Usage Analytics
+
+ShortsCap may present users with usage analytics to help them better understand their digital habits.
+
+Analytics may include:
+
+• Daily application usage.
+
+• Weekly summaries.
+
+• Monthly trends.
+
+• Screen time reports.
+
+• Productivity statistics.
+
+• Focus session performance.
+
+• Future analytical insights.
+
+These analytics are generated automatically from information available to the application through authorized Android permissions and are intended solely for informational and productivity purposes.
+
+Analytics displayed within ShortsCap should not be relied upon as official records, legal evidence, medical assessments, or professional evaluations.
+
+The presentation and availability of analytics may change over time as new features are introduced.
+
+ – Accessibility Service Usage
+
+Certain ShortsCap features may require Android Accessibility Service in order to function as intended.
+
+Accessibility Service is requested solely for features that require enhanced interaction with the Android operating system, including productivity-related functionality such as App Blocking and Focus Mode.
+
+Users remain in full control of whether Accessibility Service is enabled or disabled.
+
+By enabling Accessibility Service, users acknowledge that:
+
+• They voluntarily grant the required Android permission.
+
+• Some features may not function correctly if the permission is disabled.
+
+• Android system behavior may differ across devices and manufacturers.
+
+ShortsCap does not use Accessibility Service for purposes unrelated to the features clearly presented to the user.
+
+Users may disable Accessibility Service at any time through Android system settings, although doing so may limit or disable certain application functionality.
+
+Future features that require Accessibility Service will remain subject to these Terms & Conditions and any additional disclosures provided within the application.
+
+ – Android Permissions
+
+ShortsCap requires certain Android permissions to provide its intended functionality.
+
+Depending on the features used, the application may request permissions including:
+
+• Accessibility Service
+• Usage Access
+• Notification Access
+• Internet Access
+• Network State Access
+• Alarm & Reminder Permissions (if applicable)
+• Other permissions required for future features
+
+All permissions requested by ShortsCap are intended solely to enable the features selected and used by the user.
+
+Users may grant or revoke supported permissions at any time through Android system settings.
+
+Disabling certain permissions may limit or prevent specific ShortsCap features from functioning correctly.
+
+ShortsCap will only request permissions that are reasonably necessary for providing application functionality and improving the user experience.
+
+ – Device Compatibility
+
+ShortsCap is designed for supported Android devices; however, feature availability may vary depending on:
+
+• Android version
+• Device manufacturer
+• Hardware capabilities
+• System security restrictions
+• Regional software limitations
+
+Some features may behave differently on devices that include customized Android versions or manufacturer-specific modifications.
+
+ShortsCap does not guarantee identical functionality across all Android devices.
+
+Users are responsible for ensuring that their device meets the minimum technical requirements needed to operate the application effectively.
+
+ – Updates & Feature Availability
+
+ShortsCap may periodically release updates to improve performance, security, stability, and functionality.
+
+Updates may include:
+
+• Bug fixes
+• Security improvements
+• User interface enhancements
+• Performance optimizations
+• New productivity features
+• Future premium services
+
+Certain features may be modified, replaced, temporarily unavailable, or permanently discontinued as part of ongoing development.
+
+Users are encouraged to keep the application updated to the latest available version to ensure the best experience and continued compatibility.
+
+Failure to install important updates may affect the availability or proper functioning of certain application features.
+
+ – Internet Connectivity
+
+Certain ShortsCap features require an active internet connection.
+
+Depending on the feature, internet connectivity may be necessary for:
+
+• User authentication
+• Account verification
+• Cloud synchronization
+• Security validation
+• Profile management
+• Future online services
+
+Users are responsible for any internet or mobile data charges imposed by their network providers.
+
+ShortsCap is not responsible for service interruptions caused by poor network connectivity, internet outages, third-party service disruptions, or factors beyond its reasonable control.
+
+Some application features may continue to function offline, while others may require an active connection.
+
+ – Third-Party Services
+
+ShortsCap may integrate with trusted third-party services to provide certain features and improve the overall user experience.
+
+Examples may include:
+
+• Google Sign-In
+• OTP verification providers
+• Cloud infrastructure providers
+• Analytics services
+• Push notification providers
+• Future payment providers
+• Other authorized service providers
+
+Use of third-party services may also be subject to the respective provider's own terms, conditions, and privacy policies.
+
+ShortsCap is not responsible for the availability, policies, or actions of independent third-party service providers.
+
+The Company reserves the right to replace, add, or remove third-party integrations where necessary to improve security, reliability, legal compliance, or application functionality.
+
+ – Intellectual Property Rights
+
+All intellectual property rights relating to ShortsCap, including but not limited to its software, source code, user interface, visual design, graphics, logos, icons, branding, animations, layouts, documentation, databases, cloud architecture, and related materials, are owned by or licensed to ShortsCap.
+
+These rights are protected under applicable copyright, trademark, intellectual property, and other relevant laws.
+
+Except as expressly permitted under these Terms & Conditions, no part of ShortsCap may be copied, reproduced, modified, distributed, sold, published, licensed, or otherwise exploited without prior written permission from ShortsCap.
+
+Nothing contained in these Terms grants users ownership of any intellectual property belonging to ShortsCap.
+
+ – License to Use ShortsCap
+
+Subject to compliance with these Terms & Conditions, ShortsCap grants users a limited, non-exclusive, non-transferable, non-sublicensable, and revocable license to install and use the application solely for personal, lawful, and non-commercial purposes.
+
+This license does not permit users to:
+
+• Redistribute the application.
+
+• Sell, lease, rent, or sublicense the application.
+
+• Use ShortsCap for commercial exploitation without authorization.
+
+• Remove copyright notices or branding.
+
+• Claim ownership of any part of the application.
+
+The license automatically terminates if a user violates these Terms & Conditions.
+
+Upon termination, users must immediately discontinue use of ShortsCap where required by applicable law.
+
+ – Restrictions on Reverse Engineering
+
+To protect the security, integrity, and intellectual property of ShortsCap, users must not:
+
+• Reverse engineer the application.
+
+• Decompile or disassemble any component.
+
+• Modify or create derivative works.
+
+• Attempt to discover proprietary algorithms or source code.
+
+• Circumvent security mechanisms.
+
+• Bypass licensing or authentication systems.
+
+• Inject malicious code or modify application behavior.
+
+These restrictions apply except where such activities are expressly permitted under applicable law.
+
+Violation of this section may result in suspension or termination of access to ShortsCap and may also lead to legal action where appropriate.
+
+ – Trademark & Branding
+
+"ShortsCap", its logo, visual identity, product names, slogans, interface elements, and associated branding are the exclusive property of ShortsCap unless otherwise stated.
+
+Users may not:
+
+• Use the ShortsCap name for commercial purposes.
+
+• Copy or imitate the application's branding.
+
+• Create confusingly similar names, logos, or trademarks.
+
+• Represent themselves as officially affiliated with ShortsCap without written authorization.
+
+Nothing in these Terms grants users any trademark rights or branding permissions beyond normal personal use of the application.
+
+ – Copyright Policy
+
+All original content made available within ShortsCap, including text, graphics, illustrations, icons, layouts, software components, documentation, and other creative works, is protected by copyright laws.
+
+Users agree not to copy, publish, distribute, reproduce, or commercially exploit copyrighted material without prior written permission.
+
+If ShortsCap receives a valid copyright infringement complaint, the Company reserves the right to investigate the matter and remove or restrict access to the allegedly infringing content where appropriate.
+
+Users who repeatedly violate copyright laws or intellectual property rights may have their accounts suspended or permanently terminated.
+
+ – Disclaimer of Warranties
+
+ShortsCap is provided on an "as is" and "as available" basis, to the maximum extent permitted by applicable law.
+
+While ShortsCap strives to provide a reliable, secure, and high-quality experience, the Company does not guarantee that:
+
+• The application will always operate without interruption.
+
+• All features will function identically on every Android device.
+
+• The application will be completely free from bugs, errors, or technical issues.
+
+• Every feature will remain permanently available.
+
+• App Blocking or Focus Mode will prevent all possible distractions under every circumstance.
+
+Users acknowledge that application performance may vary depending on device specifications, Android version, granted permissions, network connectivity, and third-party services.
+
+Except where prohibited by law, ShortsCap disclaims all warranties, whether express, implied, statutory, or otherwise, including warranties of merchantability, fitness for a particular purpose, and non-infringement.
+
+ – Limitation of Liability
+
+To the fullest extent permitted by applicable law, ShortsCap, its developers, employees, affiliates, licensors, and service providers shall not be liable for any indirect, incidental, consequential, special, exemplary, or punitive damages arising from or related to the use of the application.
+
+This includes, but is not limited to:
+
+• Loss of productivity.
+
+• Loss of data.
+
+• Loss of profits.
+
+• Device malfunction.
+
+• Service interruptions.
+
+• Authentication failures caused by third-party providers.
+
+• Android operating system limitations.
+
+• Temporary feature unavailability.
+
+Users acknowledge that they use ShortsCap at their own discretion and accept responsibility for configuring and using the application's features appropriately.
+
+Nothing in these Terms limits liability where such limitation is prohibited under applicable law.
+
+ – Suspension & Termination
+
+ShortsCap reserves the right to suspend, restrict, or permanently terminate user accounts where reasonably necessary to protect the platform, other users, or comply with legal obligations.
+
+Reasons for suspension or termination may include:
+
+• Violation of these Terms & Conditions.
+
+• Fraudulent account activity.
+
+• Abuse of authentication systems.
+
+• Attempts to bypass security mechanisms.
+
+• Reverse engineering or unauthorized modification of the application.
+
+• Misuse of App Blocking or other core features.
+
+• Illegal or harmful activities involving the application.
+
+Users may also choose to stop using ShortsCap and delete their account at any time, subject to applicable data retention requirements described in the Privacy Policy.
+
+Termination of an account does not affect any legal rights or obligations that arose before the termination date.
+
+ – Governing Law & Dispute Resolution
+
+These Terms & Conditions shall be governed by and interpreted in accordance with the laws applicable in the jurisdiction where ShortsCap is legally operated, unless mandatory local laws require otherwise.
+
+The parties agree to attempt to resolve disputes through good-faith communication before initiating formal legal proceedings.
+
+If a dispute cannot be resolved informally, it shall be submitted to the appropriate courts or legal authorities having jurisdiction, subject to applicable law.
+
+If any provision of these Terms is determined to be invalid or unenforceable, the remaining provisions shall remain valid and enforceable to the fullest extent permitted by law.
+
+ – Final Agreement & Acceptance
+
+These Terms & Conditions constitute the complete agreement between the User and ShortsCap regarding the use of the application and supersede any prior understandings relating to the same subject matter.
+
+ShortsCap reserves the right to update these Terms periodically to reflect legal requirements, security improvements, product enhancements, or new services.
+
+Users will be deemed to have accepted the updated Terms by continuing to use the application after such updates become effective.
+
+If you do not agree with any revised Terms, you should discontinue use of ShortsCap and, where appropriate, delete your account.
+
+Thank you for choosing ShortsCap. We appreciate your trust and remain committed to providing a secure, reliable, and productivity-focused experience for all users.
+

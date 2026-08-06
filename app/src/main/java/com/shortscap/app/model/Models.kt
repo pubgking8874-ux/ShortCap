@@ -49,6 +49,19 @@ enum class WebTab { BLOCKED, ALLOWED, RECENT }
 /** Mirrors drawer item list */
 data class DrawerItem(val icon: ImageVector, val label: String)
 
+/**
+ * Full-screen destinations opened from the Dashboard drawer. Each maps to a
+ * dedicated sub-screen (Help & Support, legal readers, About, Feedback).
+ * Share App is not here — it launches the native share sheet directly.
+ */
+enum class DrawerScreen {
+    HELP_SUPPORT,
+    PRIVACY_POLICY,
+    TERMS_CONDITIONS,
+    ABOUT_SHORTSCAP,
+    FEEDBACK,
+}
+
 /** Mirrors profile popover item list */
 data class ProfileMenuItem(val icon: ImageVector, val label: String, val isDanger: Boolean = false)
 

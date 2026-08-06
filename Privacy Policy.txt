@@ -1,0 +1,862 @@
+Privacy Policy
+
+# Privacy Policy
+
+Effective Date: [To Be Added]
+Last Updated: [To Be Added]
+Version: 1.0
+
+Welcome to ShortsCap.
+
+Your privacy is important to us. This Privacy Policy explains how ShortsCap ("we," "our," or "us") collects, uses, stores, protects, and manages your information when you use our mobile application and related services.
+
+ShortsCap is a productivity and digital well-being application designed to help users better understand and manage their application usage. The application provides secure authentication, usage analytics, application blocking, focus features, personalized dashboard insights, and account management while maintaining a strong commitment to user privacy and data security.
+
+We believe that privacy should be transparent and easy to understand. This Privacy Policy describes:
+
+• What information we collect.
+• Why we collect it.
+• How we use your information.
+• How we protect your information.
+• When information may be shared.
+• Your rights regarding your personal data.
+• How you can contact us regarding privacy-related questions.
+
+By creating an account, signing in, or using ShortsCap, you acknowledge that you have read and understood this Privacy Policy and agree to the practices described in this document.
+
+# Definitions
+
+For the purposes of this Privacy Policy, the following terms shall have the meanings described below.
+
+"Application" refers to the ShortsCap mobile application, including all current and future features, updates, services, and functionalities provided by ShortsCap.
+
+"User" means any individual who installs, accesses, registers for, or uses the ShortsCap application.
+
+"Account" refers to a registered ShortsCap user account created using an email address, Google Sign-In, or mobile number authentication.
+
+"Personal Information" means any information that can identify an individual directly or indirectly, including but not limited to name, email address, mobile number, profile information, and authentication details.
+
+"Usage Data" refers to information related to application usage, screen time statistics, dashboard analytics, blocked application activity, and productivity insights generated while using ShortsCap.
+
+"Authentication" means the identity verification process performed using email/password, Google Sign-In, or mobile number with OTP verification.
+
+"Services" means all features, functionality, tools, and experiences made available through the ShortsCap application.
+
+"Device" means any Android smartphone or compatible device used to access ShortsCap.
+
+"Permissions" refer to Android system permissions granted voluntarily by the user, including Usage Access, Accessibility Service, Notifications, and Internet permissions required for specific features.
+
+"Dashboard" refers to the personalized area within the application that displays analytics, productivity insights, usage reports, and account-related information.
+
+Throughout this Privacy Policy, the words "we," "our," and "us" refer to ShortsCap, while "you" and "your" refer to the user of the application.
+
+# Scope of this Privacy Policy
+
+This Privacy Policy applies to all users of the ShortsCap application and governs the collection, use, storage, protection, and disclosure of information obtained through the application.
+
+This Privacy Policy applies to:
+
+• User registration and account creation.
+• Email authentication.
+• Google Sign-In authentication.
+• Mobile number authentication using One-Time Password (OTP).
+• Profile creation and profile management.
+• Application usage analytics.
+• Dashboard functionality.
+• App blocking features.
+• Accessibility Service functionality.
+• Usage Access functionality.
+• Notifications and reminders.
+• Security and fraud prevention.
+• Customer support interactions.
+• Future updates released under the ShortsCap application.
+
+This Privacy Policy does not apply to third-party websites, services, or applications that are not owned or controlled by ShortsCap, even if links to those services are available within the application.
+
+When using third-party authentication providers, such as Google Sign-In, your interaction with those providers is also governed by their respective privacy policies.
+
+If any feature within ShortsCap requires additional permissions or introduces new categories of data collection in future updates, this Privacy Policy will be updated accordingly, and users will be notified where required by applicable laws or platform policies.
+
+# Eligibility
+
+ShortsCap is intended for individuals who are legally permitted to use mobile applications under the laws of their country or region.
+
+By creating an account or using ShortsCap, you represent and warrant that:
+
+• You have the legal capacity to enter into this agreement.
+• All information provided during registration is accurate, complete, and up to date.
+• You will maintain the accuracy of your account information.
+• You will use the application only for lawful purposes.
+
+Users under the age required by applicable laws should use ShortsCap only under the supervision or consent of a parent or legal guardian where required.
+
+We reserve the right to suspend or terminate accounts that are created using false, misleading, fraudulent, or unauthorized information.
+
+ShortsCap may refuse access to its services if we reasonably believe that the application is being used in violation of these Privacy Policy provisions, applicable laws, or our Terms & Conditions.
+
+# Information We Collect
+
+To provide a secure, personalized, and reliable experience, ShortsCap collects only the information necessary to deliver its services.
+
+The categories of information we may collect include:
+
+## A. Account Information
+
+Depending on the authentication method selected by the user, we may collect:
+
+• Full Name
+• Email Address
+• Mobile Number
+• Profile Photo (when available through Google Sign-In)
+
+## B. Profile Information
+
+During profile setup or profile updates, we may collect:
+
+• Name
+• Gender
+• Date of Birth
+
+Providing profile information is optional unless required for a specific feature.
+
+## C. Authentication Information
+
+We collect authentication-related information required to securely identify your account, including:
+
+• Email authentication
+• Password (stored securely in encrypted or hashed form where applicable)
+• Mobile number verification using One-Time Password (OTP)
+• Google Sign-In authentication tokens where supported
+
+## D. Device Information
+
+To improve application stability and compatibility, we may collect limited device-related information such as:
+
+• Android OS Version
+• Device Manufacturer
+• Device Model
+• Application Version
+• Device Language
+• Time Zone
+
+This information is used solely for application compatibility, diagnostics, security, and performance improvements.
+
+## E. Usage Information
+
+With your explicit permission, ShortsCap may collect application usage statistics, including:
+
+• Screen Time
+• App Usage Duration
+• Daily Usage Reports
+• Weekly Usage Reports
+• Monthly Usage Reports
+• Productivity Analytics
+• Dashboard Statistics
+• Blocked Application Activity
+
+Usage information is collected only after the required Android permissions are granted by the user.
+
+## F. Technical Information
+
+To maintain application reliability, we may collect:
+
+• Crash Reports
+• Error Logs
+• Performance Diagnostics
+• Network Request Logs
+• Anonymous Analytics
+
+These logs help us identify bugs, improve stability, and enhance the overall user experience.
+
+# Authentication Information
+
+ShortsCap provides multiple secure authentication methods to allow users to access their accounts conveniently and safely.
+
+Users may authenticate using one of the following methods:
+
+## Email Authentication
+
+Users may register and sign in using an email address and password.
+
+Email verification may be required during account creation to confirm ownership of the email address.
+
+Passwords are never displayed publicly and are handled using secure authentication practices.
+
+## Mobile Number Authentication
+
+Users may choose to authenticate using their mobile number.
+
+Mobile authentication is performed using a One-Time Password (OTP) sent to the registered mobile number.
+
+ShortsCap does not require users authenticated through OTP to create or remember a password unless additional security features are introduced.
+
+## Google Sign-In
+
+Users may choose to sign in using their Google Account.
+
+When Google Sign-In is used, ShortsCap may receive basic profile information authorized by the user, such as:
+
+• Display Name
+• Email Address
+• Profile Picture
+
+ShortsCap does not receive or store the user's Google password.
+
+## Authentication Security
+
+Authentication information is used only to:
+
+• Verify user identity.
+• Secure user accounts.
+• Prevent unauthorized access.
+• Maintain login sessions.
+• Improve account security.
+
+Authentication information is never sold to advertisers or unrelated third parties.
+
+# Information We Do NOT Collect
+
+Protecting user privacy is a core principle of ShortsCap.
+
+Unless explicitly stated and authorized by the user, ShortsCap does not collect, access, monitor, record, or store the following types of personal content:
+
+• SMS or text message contents
+• WhatsApp messages
+• Telegram messages
+• Signal messages
+• Social media conversations
+• Emails stored outside authentication purposes
+• Photos
+• Videos
+• Audio recordings
+• Phone call recordings
+• Contacts
+• Banking credentials
+• Credit or debit card information
+• UPI PINs
+• Passwords for third-party services
+• Clipboard contents
+• Personal documents stored on the device
+
+Although ShortsCap may request Usage Access and Accessibility Service permissions to provide productivity features such as screen-time analytics and application blocking, these permissions are not used to read the content displayed within other applications.
+
+Our goal is to help users manage their digital habits while respecting their personal privacy.
+
+# Permissions We Request
+
+To provide the intended functionality of ShortsCap, the application may request certain Android system permissions. Each permission is requested only when required for a specific feature and only after the user grants explicit consent where applicable.
+
+The permissions requested by ShortsCap may include:
+
+• Internet Permission
+• Notification Permission
+• Usage Access Permission
+• Accessibility Service Permission
+
+Each permission serves a specific purpose and is never requested without a valid functional reason.
+
+## Internet Permission
+
+Internet access is required to:
+
+• Authenticate user accounts.
+• Verify email and OTP requests.
+• Synchronize account information.
+• Retrieve user profile data.
+• Communicate securely with our cloud infrastructure.
+• Deliver application updates and security improvements.
+
+## Notification Permission
+
+Notification permission allows ShortsCap to:
+
+• Send important account notifications.
+• Deliver OTP verification updates.
+• Remind users about productivity goals.
+• Display focus mode reminders.
+• Inform users about blocked application events.
+• Notify users about important security-related activities.
+
+Users may disable notifications at any time through their device settings. Some productivity features may become limited when notifications are disabled.
+
+ShortsCap requests only the permissions necessary for its functionality and never requests permissions unrelated to its services.
+
+# Usage Access Permission
+
+ShortsCap requests Usage Access permission to provide accurate screen-time monitoring, application usage statistics, and productivity insights.
+
+Usage Access allows ShortsCap to identify:
+
+• Which applications have been used.
+• Duration of application usage.
+• Daily screen time.
+• Weekly and monthly usage summaries.
+• Productivity reports displayed within the dashboard.
+
+This permission enables core features including:
+
+• Daily Analytics
+• Weekly Reports
+• Monthly Reports
+• Usage Dashboard
+• Productivity Insights
+• App Blocking Rules
+• Focus Mode Statistics
+
+Usage Access does NOT allow ShortsCap to read:
+
+• Messages
+• Photos
+• Videos
+• Personal files
+• Passwords
+• Banking information
+• Clipboard contents
+• Email contents
+• Social media conversations
+
+ShortsCap only accesses Android's application usage statistics that are made available through the Usage Access permission granted by the user.
+
+Users remain in full control and may revoke this permission at any time through Android Settings.
+
+Revoking Usage Access may disable or limit certain productivity features that rely on application usage statistics.
+
+# Accessibility Service
+
+Certain productivity features within ShortsCap require Android Accessibility Service permission.
+
+Accessibility Service is used exclusively to provide features that the user has intentionally enabled.
+
+These features may include:
+
+• App Blocking
+• Focus Mode
+• Preventing access to selected distracting applications
+• Productivity automation
+• User-requested accessibility-based actions
+
+Accessibility Service is never used to monitor personal communications or collect sensitive personal information.
+
+Specifically, ShortsCap does NOT use Accessibility Service to:
+
+• Read chat messages
+• Record passwords
+• Capture banking information
+• Record keystrokes
+• Read email contents
+• Access personal documents
+• Capture photos or videos
+• Record microphone audio
+
+Accessibility Service operates only within the functionality explicitly enabled by the user and only for improving digital well-being and productivity.
+
+Users may disable Accessibility Service at any time through Android Settings. Disabling this permission may prevent App Blocking and other related productivity features from functioning correctly.
+
+# Notifications & Reminders
+
+ShortsCap may send notifications to improve the user experience and support productivity goals.
+
+Notifications may include:
+
+• OTP verification notifications.
+• Account security alerts.
+• Login confirmations.
+• Daily productivity summaries.
+• Screen-time reminders.
+• Focus mode reminders.
+• App blocking notifications.
+• Goal completion notifications.
+• Important application updates.
+
+Notifications are designed to provide helpful information and are not intended for advertising purposes.
+
+ShortsCap does not send unnecessary promotional notifications that interfere with the user's experience.
+
+Users can control notification preferences through:
+
+• ShortsCap Settings
+• Android Notification Settings
+
+Disabling notifications may reduce the availability of reminder-based productivity features, but core application functionality will continue wherever possible.
+
+ShortsCap respects the user's notification preferences and does not override Android system notification controls.
+
+# App Blocking
+
+App Blocking is one of the core productivity features of ShortsCap. This feature enables users to intentionally restrict access to selected applications in order to reduce distractions, improve focus, and promote healthier digital habits.
+
+App Blocking operates only after the user explicitly enables the feature and grants the required Android permissions.
+
+ShortsCap never blocks applications automatically without user action.
+
+Users have complete control over:
+
+• Which applications are blocked.
+• When blocking is enabled.
+• Focus sessions and schedules.
+• Blocking preferences.
+• Permission management.
+
+App Blocking is intended solely for productivity and digital well-being purposes.
+
+The application does not remotely modify, uninstall, interfere with, or damage any third-party applications installed on the user's device.
+
+Blocking decisions are processed based on user-defined preferences and Android system capabilities.
+
+Users may disable App Blocking or modify blocked applications at any time through the ShortsCap application settings.
+
+Certain App Blocking functionality depends on Android Accessibility Service and Usage Access permissions. Disabling these permissions may prevent the feature from functioning correctly.
+
+# Dashboard Analytics
+
+ShortsCap provides a personalized dashboard designed to help users better understand their digital habits through meaningful analytics and productivity insights.
+
+Dashboard information may include:
+
+• Daily Screen Time
+• Weekly Usage Summary
+• Monthly Usage Summary
+• Most Used Applications
+• Blocked Application Statistics
+• Focus Session Statistics
+• Productivity Trends
+• Usage History
+• Personal Progress Indicators
+
+The dashboard is generated using application usage statistics collected only after the user grants the required permissions.
+
+Dashboard analytics are intended to provide informational and motivational insights only.
+
+The information displayed within the dashboard should not be interpreted as medical, psychological, or professional advice.
+
+ShortsCap continuously updates dashboard information to improve accuracy, provide better visualizations, and enhance the overall user experience.
+
+Users may delete or reset dashboard data where such functionality is available.
+# How We Use Your Information
+
+ShortsCap uses collected information solely for providing, maintaining, securing, and improving the application and its services.
+
+We may use your information to:
+
+• Create and manage your account.
+• Authenticate your identity.
+• Verify email addresses and mobile numbers.
+• Deliver OTP verification.
+• Synchronize profile information.
+• Display dashboard analytics.
+• Generate productivity insights.
+• Enable App Blocking features.
+• Support Focus Mode functionality.
+• Improve application performance.
+• Detect technical issues and crashes.
+• Prevent fraud and unauthorized access.
+• Respond to customer support requests.
+• Comply with applicable legal obligations.
+
+Information collected through ShortsCap is used only for purposes directly related to the services provided by the application.
+
+We do not use your personal information to build advertising profiles or sell your information to advertisers.
+
+Where anonymous or aggregated information is used for product improvement, such information does not identify individual users.
+
+# Data Storage & Security
+
+Protecting user information is one of ShortsCap's highest priorities.
+
+We implement appropriate administrative, technical, and organizational safeguards designed to protect user information against unauthorized access, disclosure, alteration, misuse, or destruction.
+
+Security measures may include:
+
+• Secure account authentication.
+• Encrypted communication using HTTPS/TLS.
+• Access control mechanisms.
+• Authentication token management.
+• Secure password handling.
+• Role-based access controls where applicable.
+• Cloud infrastructure security.
+• Continuous monitoring for security improvements.
+
+User passwords are never stored in plain text.
+
+Authentication tokens are managed securely to help maintain account integrity and reduce unauthorized access.
+
+Although we strive to protect all user information using industry-standard security practices, no method of electronic transmission or digital storage can be guaranteed to be completely secure.
+
+Users are encouraged to:
+
+• Keep their passwords confidential.
+• Protect their devices using screen locks or biometrics.
+• Avoid sharing OTP verification codes.
+• Sign out from shared devices when necessary.
+
+If ShortsCap becomes aware of a security incident affecting user information, appropriate actions will be taken in accordance with applicable laws and platform requirements.
+
+# Data Sharing & Disclosure
+
+ShortsCap respects your privacy and is committed to ensuring that your personal information is handled responsibly.
+
+As a general principle, ShortsCap does not sell, rent, trade, or commercially distribute your personal information to advertisers, data brokers, or unrelated third parties.
+
+Your information may only be shared under the following limited circumstances:
+
+## Service Providers
+
+We may share limited information with trusted technology providers that assist us in operating the application, including cloud infrastructure, authentication services, analytics, and security monitoring.
+
+These providers are contractually obligated to protect your information and may use it only for the services they provide on behalf of ShortsCap.
+
+## Legal Compliance
+
+We may disclose information if required to:
+
+• Comply with applicable laws or legal processes.
+• Respond to lawful governmental requests.
+• Enforce our Terms & Conditions.
+• Protect the rights, property, or safety of ShortsCap, our users, or others.
+• Investigate fraud, abuse, or security incidents.
+
+## Business Transfers
+
+If ShortsCap undergoes a merger, acquisition, restructuring, or sale of assets, user information may be transferred as part of that transaction.
+
+Users will be notified where required by applicable law.
+
+## With Your Consent
+
+We may share information with third parties only when you explicitly authorize or request such sharing.
+
+Outside of these circumstances, your personal information remains private and under your control.
+
+# Third-Party Services
+
+ShortsCap integrates with selected third-party services to provide secure authentication, reliable infrastructure, and improved application functionality.
+
+Depending on the features you choose to use, ShortsCap may interact with services including:
+
+• Google Sign-In
+• Email Delivery Services
+• OTP Verification Providers
+• Amazon Web Services (AWS)
+• Crash Reporting Services
+• Analytics Services
+
+Each third-party provider operates under its own privacy policy and security standards.
+
+ShortsCap carefully selects providers that maintain appropriate security and privacy practices.
+
+We encourage users to review the privacy policies of any third-party service they choose to interact with through ShortsCap.
+
+ShortsCap does not control the privacy practices of independent third-party platforms.
+
+Where possible, only the minimum information required for the requested service is shared.
+
+No third-party provider is permitted to use your information for unrelated advertising or marketing on behalf of ShortsCap without your explicit consent.
+
+# Google Sign-In & External Authentication
+
+ShortsCap allows users to securely authenticate using supported third-party identity providers, including Google Sign-In.
+
+When you choose Google Sign-In, ShortsCap may receive limited account information that you authorize Google to share.
+
+This information may include:
+
+• Google Display Name
+• Email Address
+• Profile Picture
+
+ShortsCap does not receive, store, or have access to:
+
+• Your Google password.
+• Gmail contents.
+• Google Drive files.
+• Search history.
+• Personal Google account activity.
+
+Google authentication is performed directly by Google's secure authentication systems.
+
+Similarly, mobile number authentication is completed using secure One-Time Password (OTP) verification provided through authorized verification services.
+
+External authentication providers remain responsible for securing their own authentication systems.
+
+Users are encouraged to review the privacy policies of external authentication providers before using their services.
+
+ShortsCap uses external authentication information solely for account identification, account security, and providing application functionality.
+
+# AWS Cloud Infrastructure & Data Processing
+
+To provide secure, scalable, and reliable services, ShortsCap may use Amazon Web Services (AWS) as part of its cloud infrastructure.
+
+AWS services may be used for purposes including:
+
+• Secure user authentication.
+• Cloud data storage.
+• API hosting.
+• Application backend services.
+• File storage.
+• Secure communication.
+• Performance monitoring.
+• System scalability.
+• Disaster recovery.
+
+All communication between the ShortsCap application and cloud services is intended to use secure encrypted connections where supported.
+
+Access to cloud resources is restricted using appropriate authentication and authorization mechanisms.
+
+Only authorized systems and personnel may access cloud-hosted information when necessary for operational purposes.
+
+ShortsCap follows the principle of least privilege when managing cloud resources and administrative access.
+
+Cloud infrastructure configurations are periodically reviewed to improve security, reliability, and performance.
+
+Although AWS provides enterprise-grade security capabilities, ShortsCap remains responsible for protecting user information stored within its own systems and services.
+
+# Cookies, Local Storage & Session Management
+
+ShortsCap may use secure local storage and authentication session mechanisms to improve user experience, maintain account security, and provide uninterrupted access to application features.
+
+Unlike traditional websites, the ShortsCap mobile application does not rely on browser cookies for its primary functionality. Instead, the application may securely store limited information on the user's device.
+
+Locally stored information may include:
+
+• Authentication session tokens.
+• User preferences.
+• Theme preferences.
+• Notification preferences.
+• Language preferences.
+• Login status.
+• Device-specific application settings.
+
+This information is stored only to enhance application performance and user convenience.
+
+Sensitive authentication information is protected using secure storage mechanisms where supported by the Android operating system.
+
+Users may clear locally stored application data through Android system settings. Doing so may require signing in again and reconfiguring certain application preferences.
+
+Session information automatically expires when required for security purposes or after the user signs out of the application.
+
+ShortsCap does not use local storage to secretly monitor user activity outside the intended application functionality.
+
+# Data Retention
+
+ShortsCap retains user information only for as long as it is necessary to provide the services requested by the user, comply with applicable legal obligations, resolve disputes, maintain security, and enforce our policies.
+
+Different categories of information may be retained for different periods depending on their purpose.
+
+Examples include:
+
+• Account information while the account remains active.
+• Authentication records necessary for account security.
+• Application preferences.
+• Productivity settings.
+• Dashboard statistics.
+• Security logs.
+• Error reports used for improving application stability.
+
+When information is no longer required, it is securely deleted, anonymized, or otherwise processed in accordance with applicable legal and operational requirements.
+
+Users may request deletion of their accounts as described in this Privacy Policy.
+
+Certain information may be retained for a limited period after account deletion where required to comply with legal obligations, investigate fraud, resolve disputes, or protect the security and integrity of ShortsCap.
+
+# Account Deletion & Data Removal
+
+ShortsCap respects every user's right to delete their account and personal information.
+
+Users may request account deletion through the application settings or any officially supported account management process provided by ShortsCap.
+
+Once an account deletion request is confirmed:
+
+• The user account will be scheduled for deletion.
+• Authentication credentials associated with the account will be removed.
+• Profile information will be deleted where applicable.
+• Personalized preferences may be removed.
+• Dashboard information linked to the account may be deleted.
+• Future access to the deleted account will no longer be possible unless a new account is created.
+
+Some technical records, security logs, or legally required information may be retained for a limited period where necessary to:
+
+• Prevent fraud.
+• Resolve disputes.
+• Comply with legal obligations.
+• Protect system security.
+
+Account deletion is generally irreversible. Users are encouraged to carefully review their decision before permanently deleting their account.
+
+# User Privacy Rights
+
+ShortsCap believes that users should have meaningful control over their personal information.
+
+Subject to applicable laws, users may have the right to:
+
+• Access their personal information.
+• Update inaccurate information.
+• Correct profile details.
+• Request deletion of eligible personal information.
+• Withdraw previously granted permissions.
+• Disable Accessibility Service.
+• Revoke Usage Access permission.
+• Sign out of the application.
+• Delete their account.
+• Request assistance regarding privacy-related concerns.
+
+Users may also control many privacy-related settings directly within the ShortsCap application or through Android system settings.
+
+Where legally applicable, users may contact ShortsCap regarding questions about the processing of their personal information.
+
+We are committed to responding to legitimate privacy requests within a reasonable timeframe and in accordance with applicable laws.
+
+Nothing in this Privacy Policy limits any statutory privacy rights that users may have under applicable legislation.
+
+# Children's Privacy
+
+Protecting the privacy of children is important to ShortsCap.
+
+ShortsCap is not intentionally designed for or directed toward children below the minimum age required under applicable laws to independently use digital services.
+
+We do not knowingly collect personal information from children without the consent of a parent or legal guardian where such consent is required by law.
+
+If we become aware that personal information has been collected from a child in violation of applicable legal requirements, we will take reasonable steps to remove that information from our systems as soon as practicable.
+
+Parents or legal guardians who believe that a child has provided personal information to ShortsCap may contact us using the contact information provided in this Privacy Policy.
+
+We encourage parents and guardians to supervise children's use of digital services and to educate them about responsible online privacy practices.
+
+Nothing in this section limits any rights or obligations provided under applicable child privacy laws.
+
+# International Users
+
+ShortsCap may be accessed by users from different countries and regions.
+
+By using ShortsCap, users acknowledge that their information may be processed, stored, or transmitted in locations where our infrastructure or trusted service providers operate.
+
+Regardless of where information is processed, ShortsCap is committed to applying reasonable safeguards designed to protect personal information.
+
+Where applicable, we take appropriate measures to comply with relevant privacy and data protection requirements.
+
+Users are responsible for ensuring that their use of ShortsCap complies with the laws applicable in their country or region.
+
+If local laws provide additional privacy rights, ShortsCap will make reasonable efforts to respect those rights where legally required.
+
+Our commitment to protecting user privacy remains the same regardless of the user's geographic location.
+
+# Policy Updates
+
+Technology, legal requirements, and application features evolve over time. As a result, ShortsCap may update this Privacy Policy whenever necessary.
+
+Updates may occur for reasons including:
+
+• Introduction of new application features.
+• Changes in authentication methods.
+• Improvements to security practices.
+• Updates to cloud infrastructure.
+• Compliance with new legal or regulatory requirements.
+• Improvements to privacy protections.
+
+Whenever significant changes are made, the "Last Updated" date at the beginning of this Privacy Policy will be revised.
+
+Where required by applicable law or platform policies, users may also receive an in-app notification or other appropriate notice before material changes become effective.
+
+Continued use of ShortsCap after updated policies become effective constitutes acceptance of the revised Privacy Policy.
+
+Users are encouraged to review this Privacy Policy periodically to stay informed about how their information is protected.
+
+# Contact Information
+
+If you have questions, concerns, requests, or feedback regarding this Privacy Policy or the way ShortsCap processes personal information, you may contact us using the official support channels provided by ShortsCap.
+
+Examples of inquiries include:
+
+• Privacy-related questions.
+• Data deletion requests.
+• Account-related concerns.
+• Security reports.
+• Accessibility concerns.
+• Permission-related questions.
+• Policy clarification requests.
+
+Official contact details, including support email addresses or website information, may be published within the ShortsCap application or on the official ShortsCap website.
+
+We are committed to responding to legitimate privacy inquiries within a reasonable period of time.
+
+For security reasons, we may verify the identity of the requester before disclosing or modifying account-related information.
+
+# Security Incident Response
+
+ShortsCap continuously works to protect user information using industry-recognized security practices.
+
+Despite our security efforts, no digital system can guarantee absolute protection against every possible security threat.
+
+If ShortsCap becomes aware of a confirmed security incident affecting user information, we will take appropriate actions that may include:
+
+• Investigating the incident.
+• Containing the impact.
+• Protecting affected systems.
+• Restoring service functionality.
+• Improving security measures.
+• Notifying affected users where required by applicable laws.
+
+Our incident response procedures are designed to minimize risk, protect user information, and restore secure operation as quickly as reasonably possible.
+
+Users also play an important role in maintaining account security by protecting their passwords, safeguarding OTP verification codes, and reporting suspicious activity immediately.
+
+Security remains an ongoing priority, and ShortsCap continuously reviews and improves its security practices to address evolving threats.
+
+# Disclaimer
+
+ShortsCap is developed to help users improve focus, manage digital habits, and reduce distractions through productivity-focused tools and features.
+
+While ShortsCap provides application usage insights, reminders, and app-blocking capabilities, it does not guarantee specific productivity outcomes, behavioral changes, academic success, workplace performance, or improvements in mental health.
+
+The effectiveness of ShortsCap depends on various factors, including user participation, device compatibility, Android operating system limitations, and user-configured settings.
+
+Certain features may vary depending on:
+
+• Android version
+• Device manufacturer
+• Permission availability
+• Accessibility Service behavior
+• Usage Access availability
+• System restrictions introduced by the device manufacturer
+
+ShortsCap is not responsible for limitations imposed by Android, third-party applications, hardware manufacturers, mobile carriers, or operating system updates.
+
+Nothing within ShortsCap should be interpreted as medical, psychological, legal, financial, or professional advice.
+
+Users remain responsible for how they use the application and for ensuring that their use complies with applicable laws and platform policies.
+
+Except where prohibited by law, ShortsCap shall not be liable for indirect, incidental, special, consequential, or punitive damages arising from the use of the application.
+
+# Governing Law
+
+This Privacy Policy shall be governed by and interpreted in accordance with the laws applicable in the jurisdiction where ShortsCap is legally operated, unless otherwise required by mandatory local laws.
+
+Any dispute arising out of or relating to this Privacy Policy shall, where legally permitted, be resolved through the appropriate courts or legal authorities having jurisdiction over such matters.
+
+Nothing in this Privacy Policy limits any statutory rights that users may have under applicable consumer protection, privacy, or data protection laws.
+
+If any provision of this Privacy Policy conflicts with mandatory legal requirements, the applicable law shall prevail only to the extent necessary, while the remaining provisions shall continue in full force and effect.
+
+Users are encouraged to seek independent legal advice if they have questions regarding their legal rights under applicable law.
+
+# Severability
+
+If any provision of this Privacy Policy is found to be unlawful, invalid, unenforceable, or otherwise ineffective under applicable law, that provision shall be interpreted or modified only to the minimum extent necessary to make it enforceable.
+
+If modification is not possible, the affected provision shall be deemed severed from this Privacy Policy without affecting the validity, enforceability, or operation of the remaining provisions.
+
+The remaining sections of this Privacy Policy shall continue in full force and effect regardless of the invalidity of any individual provision.
+
+This ensures that the overall intent and purpose of the Privacy Policy remain preserved even if one specific clause becomes unenforceable.
+
+# Acceptance of this Privacy Policy
+
+By creating an account, signing in, using ShortsCap, granting application permissions, or otherwise accessing the services provided by ShortsCap, you acknowledge that you have read, understood, and agreed to this Privacy Policy.
+
+Your continued use of ShortsCap after updates to this Privacy Policy become effective constitutes your acceptance of the revised policy.
+
+If you do not agree with any part of this Privacy Policy, you should discontinue use of the application and, where appropriate, request deletion of your account.
+
+ShortsCap appreciates the trust users place in our services and is committed to protecting personal information through responsible privacy practices, transparent communication, and continuous security improvements.
+
+Thank you for choosing ShortsCap.
+

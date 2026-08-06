@@ -622,3 +622,73 @@ Do NOT modify spacing.
 Only enhance the existing architecture so that every application and website displayed in the UI automatically shows its correct icon now (using mock data) and later (using backend APIs or Android Accessibility data) without requiring any UI redesign.
 
 The ShortsCap design system must remain visually identical while becoming fully dynamic and future-ready.
+
+--------------------------------------------------------
+
+## Dashboard Drawer Enhancements
+
+The Dashboard Navigation Drawer (three-line menu) was upgraded into a production-quality, modern, scalable navigation system while keeping the existing ShortsCap design language, dark theme, and branding consistent.
+
+**Drawer Menu (final order):**
+
+1. Help & Support
+2. Privacy Policy
+3. Terms & Conditions (NEW)
+4. About ShortsCap
+5. Feedback
+6. Share App
+
+**Drawer header (unchanged):** ShortsCap logo, "ShortsCap", "Digital Wellbeing".
+
+**Drawer footer (updated):** Version 1.1.1, Build 2026072801, ©2026 ShortsCap, All Rights Reserved. The footer was moved slightly upward (~24dp) so it no longer touches the bottom navigation area.
+
+### What was added
+
+• Added Help & Support screen
+• Added FAQ accordion (expandable, animated, initially collapsed)
+• Added Contact Support section
+• Added Bug Report page
+• Added Privacy Policy reader
+• Added Terms & Conditions reader
+• Added About ShortsCap page
+• Added Feedback page
+• Added Native Share App integration
+• Updated Footer
+• Version changed to 1.1.1
+• Build number added
+• Prepared modular architecture for backend integration
+• Future APIs planned
+
+### Screens
+
+**Help & Support** — three sections:
+1. Frequently Asked Questions — expandable accordion cards (initially collapsed) covering how ShortsCap works, Accessibility/Usage Access permissions, blocking Shorts, password reset, OTP issues, profile updates, and account deletion.
+2. Contact Support — displays support@shortscap.app.
+3. Report a Bug — Subject and Description fields with a Submit button that shows a success message.
+
+**Privacy Policy / Terms & Conditions** — full-screen, read-only, scrollable document readers that display the local text files with preserved formatting, headings, and chapters. Each includes a Back button and comfortable reading padding.
+
+**About ShortsCap** — logo, name/tagline, Version (1.1.1), Build (2026072801), About (purpose/mission/vision), Features, Technologies (Android, Kotlin, Jetpack Compose, Python Backend (Future), AWS Cloud (Future)), and Copyright.
+
+**Feedback** — 5-star rating selector, feedback text box, and a Submit button that shows "Thank you for your feedback."
+
+**Share App** — launches the native Android share sheet with a ShortsCap message.
+
+### Architecture notes
+
+All drawer sub-screens are full-screen destinations managed through a single `DrawerScreen` enum in the `AppUiState` (`HelpSupportScreen`, `LegalDocumentScreen`, `AboutShortsCapScreen`, `FeedbackScreen`). Each screen is decoupled from data sources behind small seams (e.g. `LegalDocumentLoader` for the local text assets, callback parameters for Bug Report / Feedback submissions), so connecting real backend APIs later requires only swapping the data layer — no UI redesign.
+
+### Future Integration
+
+These screens are intentionally prepared for backend APIs without requiring UI redesign. Planned endpoints:
+
+• Privacy Policy API
+• Terms API
+• Feedback API
+• Support API
+• Bug Report API
+• About API
+• Version API
+• Share API
+
+When the backend is connected, the local text-asset loader for legal documents will be replaced by backend-hosted HTML pages, and Bug Report / Feedback / Support submission callbacks will post to the corresponding APIs — all behind the same UI and navigation already in place.
