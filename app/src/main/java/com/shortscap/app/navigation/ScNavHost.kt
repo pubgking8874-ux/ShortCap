@@ -60,15 +60,7 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
             )
 
             ScScreen.SETTINGS -> SettingsScreen(
-                expandedCategory = state.expandedSettingsCategory,
-                onToggleCategory = viewModel::toggleSettingsCategory,
-                monitoringEnabled = state.monitoringEnabled,
-                onMonitoringChange = viewModel::setMonitoring,
-                notificationsEnabled = state.notificationsEnabled,
-                onNotificationsChange = viewModel::setNotifications,
-                themeMode = state.themeMode,
-                onThemeModeChange = viewModel::setThemeMode,
-                onResetAll = { viewModel.showToast("Settings reset") },
+                onOpenDestination = viewModel::openSettingsScreen,
             )
         }
     }

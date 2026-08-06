@@ -62,16 +62,89 @@ enum class DrawerScreen {
     FEEDBACK,
 }
 
-/** Mirrors profile popover item list */
-data class ProfileMenuItem(val icon: ImageVector, val label: String, val isDanger: Boolean = false)
+/**
+ * Local profile data shown and edited on the Profile screen (opened from the
+ * Dashboard top bar). Load / Update / Upload Picture will come from backend
+ * APIs later — the UI consumes this shape only, so swapping the data source
+ * requires no layout changes.
+ */
+data class ProfileData(
+    val fullName: String = "",
+    val email: String = "",
+    val gender: String? = null,
+    val dateOfBirth: String? = null,
+    val pictureUri: String? = null,
+)
 
-/** Mirrors Settings categories list */
-data class SettingsCategory(
-    val key: String,
+/**
+ * Dedicated settings destinations — every row on the Settings home opens its
+ * own full screen via [com.shortscap.app.navigation.SettingsNavHost]. Never
+ * expands inline, so the back stack behaves like a standard settings app:
+ * Settings -> <item> -> Back -> Settings.
+ */
+enum class SettingsDestination {
+    GENERAL, MONITORING, PERMISSIONS, NOTIFICATIONS, APPEARANCE,
+    PRIVACY, DATA_BACKUP, ABOUT, RESET_ALL,
+}
+
+/** One row on the Settings home — icon + title + chevron only (no subtitles). */
+data class SettingsItem(
+    val destination: SettingsDestination,
     val icon: ImageVector,
     val label: String,
-    val sub: String,
 )
+
+/**
+ * A short-video platform monitored by the app (YouTube Shorts, Instagram
+ * Reels, ...). The list is data-driven in [MonitoringSettings.platforms] so
+ * new platforms can be added dynamically without UI changes.
+ */
+data class ShortVideoPlatform(
+    val id: String,
+    val name: String,
+    val enabled: Boolean,
+)
+
+val DefaultShortVideoPlatforms = listOf(
+    ShortVideoPlatform("youtube_shorts", "YouTube Shorts", true),
+    ShortVideoPlatform("instagram_reels", "Instagram Reels", true),
+    ShortVideoPlatform("facebook_reels", "Facebook Reels", false),
+    ShortVideoPlatform("snapchat_spotlight", "Snapchat Spotlight", false),
+)
+
+/**
+ * All Monitoring settings shown on the Monitoring screen. Single source of
+ * truth for the section toggles, the screen-time limit, break reminder and
+ * the platform switches. Today the ViewModel seeds demo values (stats too);
+ * tomorrow GET / UPDATE Monitoring Settings APIs swap in behind the same
+ * shape — no UI changes required. A SettingsRepository seam is the intended
+ * home for those API calls.
+ */
+data class MonitoringSettings(
+    val enabled: Boolean = true,
+    val appBlockingEnabled: Boolean = true,
+    val screenTimeLimitMinutes: Int = 60,
+    val customScreenTimeLimitMinutes: Int = 90,
+    val strictModeEnabled: Boolean = false,
+    val breakReminderEnabled: Boolean = true,
+    val breakReminderIntervalMinutes: Int = 30,
+    val platforms: List<ShortVideoPlatform> = DefaultShortVideoPlatforms,
+    val schedule: Schedule = Schedule(),
+    // Read-only demo stats (placeholder values until Usage Stats / backend).
+    val todayUsage: String = "2h 45m",
+    val blockedAppsCount: Int = 12,
+) {
+    /**
+     * Future Monitoring Schedule shape — active window (start/end time) and
+     * which days monitoring runs. UI page exists; values plug in later.
+     */
+    data class Schedule(
+        val startTimeMinutes: Int = 9 * 60,
+        val endTimeMinutes: Int = 22 * 60,
+        val weekdaysEnabled: Boolean = true,
+        val weekendsEnabled: Boolean = true,
+    )
+}
 
 /**
  * One page of the Home circular analytics widget.

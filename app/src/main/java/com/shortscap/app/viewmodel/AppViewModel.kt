@@ -6,8 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
 import com.shortscap.app.model.DrawerScreen
+import com.shortscap.app.model.MonitoringSettings
+import com.shortscap.app.model.ProfileData
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
+import com.shortscap.app.model.SettingsDestination
 import com.shortscap.app.model.SiteEntry
 import com.shortscap.app.model.WebTab
 import kotlinx.coroutines.Job
@@ -25,10 +28,10 @@ import kotlinx.coroutines.launch
  * "MVVM Architecture / StateFlow / ViewModel" requirements of the migration.
  */
 data class AppUiState(
-    // Root: useState("home"), drawerOpen, profileOpen, loading, toastMsg
+    // Root: useState("home"), drawerOpen, profileScreenOpen, loading, toastMsg
     val screen: ScScreen = ScScreen.HOME,
     val drawerOpen: Boolean = false,
-    val profileOpen: Boolean = false,
+    val profileScreenOpen: Boolean = false,
     val homeLoading: Boolean = true,
     val toastMessage: String? = null,
 
@@ -62,9 +65,12 @@ data class AppUiState(
         SiteEntry("Coursera", "coursera.org", false),
     ),
 
-    // SettingsScreen: expanded category + toggles
-    val expandedSettingsCategory: String? = null,
-    val monitoringEnabled: Boolean = true,
+    // Settings: dedicated sub-screen currently open (null = none). The
+    // Monitoring settings live in [monitoring] — the single source of truth
+    // for the Monitoring screen (backend GET/UPDATE APIs plug in later via a
+    // repository seam without UI changes).
+    val settingsDestination: SettingsDestination? = null,
+    val monitoring: MonitoringSettings = MonitoringSettings(),
     val notificationsEnabled: Boolean = true,
 
     // Theme preference (persisted via ThemePreferenceStore)
@@ -74,6 +80,10 @@ data class AppUiState(
     // each destination maps to a dedicated UI screen; backend APIs plug in
     // later without redesigning any screen.
     val drawerScreen: DrawerScreen? = null,
+
+    // Local profile shown/edited on the Profile screen. Load / Update / Upload
+    // Picture will come from backend APIs (ProfileRepository seam) later.
+    val profile: ProfileData = ProfileData(),
 
     // Session placeholder — false shows the Auth flow (Splash -> Welcome ->
     // Login/CreateAccount/Guest) on launch. When AWS Cognito / the Python
@@ -100,8 +110,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setScreen(screen: ScScreen) = _uiState.update { it.copy(screen = screen) }
     fun openDrawer() = _uiState.update { it.copy(drawerOpen = true) }
     fun closeDrawer() = _uiState.update { it.copy(drawerOpen = false) }
-    fun toggleProfileMenu() = _uiState.update { it.copy(profileOpen = !it.profileOpen) }
-    fun closeProfileMenu() = _uiState.update { it.copy(profileOpen = false) }
+
+    // ---- Profile screen (opened from the Dashboard top bar) ----
+    fun openProfileScreen() = _uiState.update { it.copy(profileScreenOpen = true) }
+    fun closeProfileScreen() = _uiState.update { it.copy(profileScreenOpen = false) }
+
+    // ---- Profile (local-only today; backend seam: ProfileRepository) ----
+    fun saveProfile(fullName: String, gender: String?, dateOfBirth: String?) {
+        _uiState.update { state ->
+            state.copy(
+                profile = state.profile.copy(
+                    fullName = fullName.trim(),
+                    gender = gender,
+                    dateOfBirth = dateOfBirth,
+                ),
+            )
+        }
+        showToast("Profile saved")
+    }
+
+    // Picked via the Android Photo Picker on the Profile screen. Future: Crop
+    // step + upload through ProfileRepository.uploadProfilePicture.
+    fun updateProfilePicture(uri: String) {
+        _uiState.update { state ->
+            state.copy(profile = state.profile.copy(pictureUri = uri))
+        }
+        showToast("Profile picture updated")
+    }
 
     // ---- Theme (persists; applies instantly, no restart needed) ----
     fun setThemeMode(mode: ThemeMode) {
@@ -160,10 +195,56 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         WebTab.RECENT -> uiState.value.recentSites
     }
 
-    // ---- Settings screen ----
-    fun toggleSettingsCategory(key: String) = _uiState.update {
-        it.copy(expandedSettingsCategory = if (it.expandedSettingsCategory == key) null else key)
+    // ---- Settings sub-screens (dedicated screens; Navigation Compose back
+    //      stack hosted in SettingsNavHost; backend-ready) ----
+    fun openSettingsScreen(destination: SettingsDestination) =
+        _uiState.update { it.copy(settingsDestination = destination) }
+
+    fun closeSettingsScreen() = _uiState.update { it.copy(settingsDestination = null) }
+
+    // ---- Monitoring settings (local today; GET/UPDATE Monitoring Settings
+    //      backend APIs + SettingsRepository seam later) ----
+    fun setMonitoringEnabled(on: Boolean) =
+        _uiState.update { it.copy(monitoring = it.monitoring.copy(enabled = on)) }
+
+    fun setAppBlockingEnabled(on: Boolean) =
+        _uiState.update { it.copy(monitoring = it.monitoring.copy(appBlockingEnabled = on)) }
+
+    fun setScreenTimeLimit(minutes: Int) =
+        _uiState.update { it.copy(monitoring = it.monitoring.copy(screenTimeLimitMinutes = minutes)) }
+
+    fun setStrictMode(on: Boolean) =
+        _uiState.update { it.copy(monitoring = it.monitoring.copy(strictModeEnabled = on)) }
+
+    fun togglePlatform(id: String) = _uiState.update { state ->
+        state.copy(
+            monitoring = state.monitoring.copy(
+                platforms = state.monitoring.platforms.map {
+                    if (it.id == id) it.copy(enabled = !it.enabled) else it
+                },
+            ),
+        )
     }
-    fun setMonitoring(on: Boolean) = _uiState.update { it.copy(monitoringEnabled = on) }
+
+    fun setBreakReminderEnabled(on: Boolean) =
+        _uiState.update { it.copy(monitoring = it.monitoring.copy(breakReminderEnabled = on)) }
+
+    fun setBreakReminderInterval(minutes: Int) =
+        _uiState.update { it.copy(monitoring = it.monitoring.copy(breakReminderIntervalMinutes = minutes)) }
+
     fun setNotifications(on: Boolean) = _uiState.update { it.copy(notificationsEnabled = on) }
+
+    // Restores every setting to its default (theme included). Future: also
+    // clear backend / cloud preferences through the SettingsRepository seam.
+    fun resetAllSettings() {
+        themeStore.saveThemeMode(ThemeMode.DARK)
+        _uiState.update {
+            it.copy(
+                monitoring = MonitoringSettings(),
+                notificationsEnabled = true,
+                themeMode = ThemeMode.DARK,
+            )
+        }
+        showToast("Settings reset")
+    }
 }

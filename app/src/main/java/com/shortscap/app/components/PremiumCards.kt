@@ -49,8 +49,11 @@ private val PremiumIconTileShape: Shape = RoundedCornerShape(18.dp)
  * soft press-scale animation and a soft blue border/glow while pressed.
  *
  * Used for every clickable drill-down row on the drawer pages (Help & Support,
- * About ShortsCap and their sub-menus). Contains ONLY the icon, title and
- * arrow — no subtitle — per the premium menu design.
+ * About ShortsCap and their sub-menus) and the Settings pages. By default it
+ * contains ONLY the icon, title and arrow (no subtitle). Optional [subtitle]
+ * and [trailing] slots let toggle rows (switch) and info rows (value) reuse
+ * the same premium visual language — the chevron is replaced when a custom
+ * trailing is provided.
  */
 @Composable
 fun ScPremiumNavCard(
@@ -58,6 +61,8 @@ fun ScPremiumNavCard(
     title: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    subtitle: String = "",
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalScColors.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -103,18 +108,32 @@ fun ScPremiumNavCard(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         PremiumIconTile(icon)
-        Text(
-            title,
-            color = colors.TextPrimary,
-            style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp),
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            Icons.Filled.ChevronRight,
-            contentDescription = null,
-            tint = colors.TextSecondary,
-            modifier = Modifier.size(20.dp),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                color = colors.TextPrimary,
+                style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp),
+            )
+            if (subtitle.isNotBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    subtitle,
+                    color = colors.TextSecondary,
+                    style = ScTextStyles.Body,
+                    maxLines = 2,
+                )
+            }
+        }
+        if (trailing != null) {
+            trailing()
+        } else {
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = colors.TextSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 

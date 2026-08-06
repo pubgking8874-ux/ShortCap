@@ -692,3 +692,91 @@ These screens are intentionally prepared for backend APIs without requiring UI r
 • Share API
 
 When the backend is connected, the local text-asset loader for legal documents will be replaced by backend-hosted HTML pages, and Bug Report / Feedback / Support submission callbacks will post to the corresponding APIs — all behind the same UI and navigation already in place.
+
+---
+
+# Redesigned Settings Module & Monitoring Settings Screen
+
+## What changed
+
+### 1. Settings home screen — premium redesign *(no more basic settings list)*
+
+- Every row is now a **large premium card**: icon tile (60 dp, 36 dp icon) + title + chevron — **no subtitles** anywhere on the home page.
+- Cards use the shared `ScPremiumNavCard` visual language (22 dp corners, 1 dp border, resting shadow, soft press-scale animation, accent glow/border while pressed) with generous 14 dp spacing between cards.
+- The old **inline expansion** (tap a category to unfold switches inside the Settings page) was removed entirely. Each item now opens its own **dedicated screen**.
+
+Settings list (icon + title + chevron only):
+
+1. General
+2. Monitoring
+3. Permissions
+4. Notifications
+5. Appearance
+6. Privacy
+7. Data Backup
+8. About
+9. Reset All Settings
+
+### 2. New dedicated Monitoring screen
+
+The Monitoring screen (`screens/settings/MonitoringScreen.kt`) is a full page with its own back button and 10 premium sections:
+
+| # | Section | Control |
+| --- | --- | --- |
+| 1 | Monitoring | **Enable Monitoring** master switch ("Master switch for all monitoring features.") |
+| 2 | App Blocking | **Enable App Blocking** switch ("If OFF, all blocking features become disabled.") |
+| 3 | Daily Screen Time Limit | Picker dialog — **15 min / 30 min / 45 min / 1 Hour / 2 Hours / Custom** (custom opens a numeric minutes dialog, 1–720) |
+| 4 | Blocked Apps | Dedicated page (UI only; app list comes later) |
+| 5 | Allowed Apps | Dedicated page (UI only; bypass list comes later) |
+| 6 | Strict Mode | Switch ("Prevent bypassing restrictions.") |
+| 7 | Short Video Platforms | **Data-driven per-platform switches** — YouTube Shorts, Instagram Reels, Facebook Reels, Snapchat Spotlight. Architecture supports unlimited platforms (just append to the list). |
+| 8 | Break Reminder | Switch + Reminder Interval picker (15 / 30 / 45 Minutes / 1 Hour) |
+| 9 | Monitoring Schedule | Dedicated page (UI only; start/end time + weekdays/weekends later) |
+| 10 | Statistics | Read-only demo cards — Today's Usage, Blocked Apps Count, Current Daily Limit, Monitoring Status |
+
+All pickers are clean Material 3 dialogs styled with the ShortsCap dark theme; the current selection is highlighted with a checkmark.
+
+### 3. Other dedicated Settings screens
+
+- **General / Permissions / Privacy / Data Backup** — `SettingsSectionScreen` (generic premium page with icon + description + "Coming soon" placeholder).
+- **Notifications** — premium toggle cards (Daily summary persisted in the ViewModel; Limit reached alerts static).
+- **Appearance** — the existing Theme selector (Dark / Light / System Default) moved intact to its own page.
+- **About** — Version 2.4.1, Build 2026072801, © 2026 ShortsCap.
+- **Reset All Settings** — dedicated confirmation page with a danger button that restores all settings to defaults.
+
+## Navigation flow
+
+All settings sub-screens run inside a new `SettingsNavHost` (Navigation Compose) with a real back stack and a `BackHandler`:
+
+```
+Settings → Monitoring → Blocked Apps
+    Back → Monitoring
+    Back → Settings
+```
+
+- **System Back** pops the settings stack one level at a time; at the root it returns to the Settings tab. **Back never exits the app** from any settings screen.
+- Each Settings row keeps its own route, so deep-linking / predictive back will work later with no restructure.
+- Opening a settings screen sets `AppUiState.settingsDestination`; closing it clears it (same overlay pattern as the dashboard drawer screens).
+
+## Backend-ready architecture
+
+- **No business logic is hardcoded in the UI.** Every setting lives in the `MonitoringSettings` model (`model/Models.kt`) held by `AppViewModel` as the single source of truth (`StateFlow<AppUiState>`). The Monitoring screen is a stateless composable receiving the model + callback lambdas.
+- **Placeholder API seams** (documented, not implemented) — ready for a `SettingsRepository`:
+  - `GET / UPDATE Monitoring Settings` → `MonitoringSettings` fields (master, app blocking, screen-time limit, strict mode, break reminder, platforms)
+  - `GET / UPDATE Blocked Apps` → Blocked Apps page
+  - `GET / UPDATE Allowed Apps` → Allowed Apps page
+  - `GET / UPDATE Monitoring Schedule` → Schedule page (start/end time, weekdays/weekends)
+- **Future cloud integration:** the same seams support Firebase / AWS backend sync and a future local database (e.g. Room) — swapping the data source requires **no UI changes**.
+- Demo statistics are seeded in `MonitoringSettings`; real usage stats (Usage Access / Accessibility Service) will replace them in the ViewModel/repository layer only.
+
+## Files
+
+- `screens/settings/SettingsScreen.kt` — premium home (rewritten)
+- `screens/settings/MonitoringScreen.kt` — **new** Monitoring screen
+- `screens/settings/SettingsSectionScreen.kt`, `NotificationsScreen.kt`, `AppearanceScreen.kt`, `AboutSettingsScreen.kt`, `ResetAllScreen.kt` — **new** dedicated screens
+- `screens/settings/BlockedAppsScreen.kt`, `AllowedAppsScreen.kt`, `MonitoringScheduleScreen.kt` — **new** UI-only pages
+- `navigation/SettingsNavHost.kt` — **new** settings back-stack NavHost
+- `model/Models.kt` — `SettingsDestination`, `SettingsItem`, `MonitoringSettings`, `ShortVideoPlatform`
+- `viewmodel/AppViewModel.kt` — settings navigation + monitoring state & setters, `resetAllSettings()`
+- `components/PremiumCards.kt` — `ScPremiumNavCard` gained optional `subtitle` + `trailing` slots (drawer pages unchanged)
+- `ShortsCapApp.kt`, `navigation/ScNavHost.kt` — wiring

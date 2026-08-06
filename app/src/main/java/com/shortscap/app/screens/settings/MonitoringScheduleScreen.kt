@@ -1,0 +1,34 @@
+package com.shortscap.app.screens.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.shortscap.app.components.ScEmptyState
+import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.theme.LocalScColors
+
+/**
+ * Monitoring Schedule — UI only today. Future: choose a Start Time, End Time,
+ * and which days (Weekdays / Weekends) monitoring is active.
+ */
+@Composable
+fun MonitoringScheduleScreen(onBack: () -> Unit) {
+    val colors = LocalScColors.current
+    Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
+        ScSubScreenTopBar(title = "Monitoring Schedule", onBack = onBack)
+        Column(modifier = Modifier.fillMaxSize().padding(top = 40.dp)) {
+            ScEmptyState(
+                icon = Icons.Filled.CalendarMonth,
+                title = "No schedule set",
+                subtitle = "Start time, end time, weekdays and weekends will be " +
+                    "configured here. UI ready — implementation coming soon.",
+            )
+        }
+    }
+}

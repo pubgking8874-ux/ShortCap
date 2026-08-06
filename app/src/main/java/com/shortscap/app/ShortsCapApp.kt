@@ -1,6 +1,10 @@
 package com.shortscap.app
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -29,15 +33,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shortscap.app.components.NavItemSpec
 import com.shortscap.app.components.ScAppDrawer
 import com.shortscap.app.components.ScBottomNav
-import com.shortscap.app.components.ScProfileMenu
 import com.shortscap.app.components.ScTopBar
 import com.shortscap.app.components.ScToast
 import com.shortscap.app.model.DrawerItem
 import com.shortscap.app.model.DrawerScreen
-import com.shortscap.app.model.ProfileMenuItem
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.navigation.DrawerNavHost
 import com.shortscap.app.navigation.ScNavHost
+import com.shortscap.app.navigation.SettingsNavHost
+import com.shortscap.app.screens.profile.ProfileScreen
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ShortsCapTheme
 import com.shortscap.app.util.ShareUtils
@@ -52,13 +56,6 @@ private val drawerItems = listOf(
     DrawerItem(Icons.Filled.Share, "Share App"),
 )
 
-private val profileItems = listOf(
-    ProfileMenuItem(Icons.Filled.Edit, "Edit Profile"),
-    ProfileMenuItem(Icons.Filled.ManageAccounts, "Account Settings"),
-    ProfileMenuItem(Icons.Filled.Notifications, "Notification Preferences"),
-    ProfileMenuItem(Icons.Filled.Logout, "Logout", isDanger = true),
-)
-
 private val bottomNavItems = listOf(
     NavItemSpec(ScScreen.HOME, Icons.Filled.Home),
     NavItemSpec(ScScreen.ACTIVITY, Icons.Filled.Schedule),
@@ -69,9 +66,9 @@ private val bottomNavItems = listOf(
 /**
  * Mirrors `export default function ShortsCapApp()` — the root composition:
  * a fixed-aspect "device frame" card containing TopBar + scrollable content
- * + floating BottomNav, with Drawer / ProfileMenu / Toast layered on top via
- * a single Box (same layering the RN version achieves with position:absolute
- * inside `.sc-root`).
+ * + floating BottomNav, with Drawer / Profile screen / Toast layered on top
+ * via a single Box (same layering the RN version achieves with
+ * position:absolute inside `.sc-root`).
  *
  * The active theme (Dark / Light / System Default, persisted across restarts)
  * is resolved here so it switches instantly; [ShortsCapTheme] animates the
@@ -100,7 +97,7 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         ScTopBar(
                             onMenu = viewModel::openDrawer,
-                            onProfile = viewModel::toggleProfileMenu,
+                            onProfile = viewModel::openProfileScreen,
                             menuIcon = Icons.Filled.Menu,
                             userIcon = Icons.Filled.Person,
                         )
@@ -162,12 +159,23 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                         },
                     )
 
-                    // Profile popover, top-right, above drawer's z-order visually but non-blocking when closed
-                    ScProfileMenu(
-                        open = state.profileOpen,
-                        onClose = viewModel::closeProfileMenu,
-                        items = profileItems,
-                    )
+                    // Profile screen — opened from the Dashboard top bar. System
+                    // Back returns to the Dashboard (never exits the app).
+                    AnimatedVisibility(
+                        visible = state.profileScreenOpen,
+                        enter = fadeIn(tween(220)),
+                        exit = fadeOut(tween(180)),
+                    ) {
+                        BackHandler(enabled = state.profileScreenOpen) {
+                            viewModel.closeProfileScreen()
+                        }
+                        ProfileScreen(
+                            onBack = viewModel::closeProfileScreen,
+                            profile = state.profile,
+                            onSave = viewModel::saveProfile,
+                            onUpdatePicture = viewModel::updateProfilePicture,
+                        )
+                    }
 
                     // Full-screen drawer sub-screen — on top of everything, shown
                     // while a drawer destination is open. Back-stack navigation:
@@ -183,6 +191,21 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                                 onClose = viewModel::closeDrawerScreen,
                                 onBugSubmitted = { viewModel.showToast("Bug report submitted") },
                                 onFeedbackSubmitted = { viewModel.showToast("Thank you for your feedback.") },
+                            )
+                        }
+                    }
+
+                    // Settings sub-screens (Settings tab → dedicated screens,
+                    // e.g. Monitoring). Own Navigation Compose back stack: Back
+                    // pops the settings stack one level at a time and then
+                    // returns to the Settings tab — it never exits the app.
+                    state.settingsDestination?.let { destination ->
+                        key(destination) {
+                            SettingsNavHost(
+                                startDestination = destination,
+                                state = state,
+                                viewModel = viewModel,
+                                onClose = viewModel::closeSettingsScreen,
                             )
                         }
                     }
