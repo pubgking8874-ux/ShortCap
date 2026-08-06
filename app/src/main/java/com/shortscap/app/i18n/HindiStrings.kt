@@ -244,6 +244,12 @@ object HindiStrings : AppStrings {
     override val appearanceDark = "डार्क"
     override val appearanceLight = "लाइट"
     override val appearanceSystem = "सिस्टम डिफ़ॉल्ट"
+    override val appearanceTextSize = "टेक्स्ट आकार"
+
+    // Text size options
+    override val sizeSmall = "छोटा"
+    override val sizeMediumDefault = "मध्यम (डिफ़ॉल्ट)"
+    override val sizeLarge = "बड़ा"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "गोपनीयता"

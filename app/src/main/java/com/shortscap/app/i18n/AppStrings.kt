@@ -274,6 +274,12 @@ interface AppStrings {
     val appearanceDark: String
     val appearanceLight: String
     val appearanceSystem: String
+    val appearanceTextSize: String
+
+    // Text size options
+    val sizeSmall: String
+    val sizeMediumDefault: String
+    val sizeLarge: String
 
     // ---- Privacy / Data Backup ----
     val privacyTitle: String

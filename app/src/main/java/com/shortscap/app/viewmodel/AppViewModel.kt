@@ -3,6 +3,8 @@ package com.shortscap.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shortscap.app.appearance.AppearanceRepository
+import com.shortscap.app.appearance.TextSizeMode
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
 import com.shortscap.app.i18n.AppLanguage
@@ -93,6 +95,13 @@ data class AppUiState(
     // Theme preference (persisted via ThemePreferenceStore)
     val themeMode: ThemeMode = ThemeMode.DARK,
 
+    // Appearance preference — global text scale, applied app-wide via a root
+    // LocalDensity fontScale override (only typography changes; layouts,
+    // icons, cards and spacing stay untouched). Persisted locally by
+    // AppearanceRepository (backend-ready: maps 1:1 to a future
+    // GET/POST /settings/appearance API).
+    val textSizeMode: TextSizeMode = TextSizeMode.MEDIUM,
+
     // Language preference (persisted via LanguagePreferenceStore and applied
     // to the whole logged-in experience through LocalAppStrings). The Auth
     // flow always stays English and does not read this.
@@ -127,6 +136,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             themeMode = themeStore.loadThemeMode(),
             appLanguage = languageStore.loadLanguage(),
             notificationSettings = NotificationRepository.loadSettings(application),
+            textSizeMode = AppearanceRepository.loadTextSizeMode(application),
         ),
     )
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
@@ -181,6 +191,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setThemeMode(mode: ThemeMode) {
         themeStore.saveThemeMode(mode)
         _uiState.update { it.copy(themeMode = mode) }
+    }
+
+    // ---- Appearance (persists locally; future: AppearanceRepository cloud
+    //      sync / analytics seams) ----
+    fun setTextSizeMode(mode: TextSizeMode) {
+        AppearanceRepository.saveTextSizeMode(getApplication(), mode)
+        _uiState.update { it.copy(textSizeMode = mode) }
+        // Future backend: AppearanceRepository.syncAppearanceToCloud(mode).
     }
 
     // ---- Session (mock seam for the auth flow) ----
@@ -317,11 +335,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun resetAllSettings() {
         themeStore.saveThemeMode(ThemeMode.DARK)
         NotificationRepository.clearSettings(getApplication())
+        AppearanceRepository.clearSettings(getApplication())
         _uiState.update {
             it.copy(
                 monitoring = MonitoringSettings(),
                 notificationSettings = NotificationRepository.seedSettings(),
                 themeMode = ThemeMode.DARK,
+                textSizeMode = TextSizeMode.MEDIUM,
             )
         }
         showToast { it.toastSettingsReset }

@@ -244,6 +244,12 @@ object UrduStrings : AppStrings {
     override val appearanceDark = "ڈارک"
     override val appearanceLight = "لائٹ"
     override val appearanceSystem = "سسٹم ڈیفالٹ"
+    override val appearanceTextSize = "متن کا سائز"
+
+    // Text size options
+    override val sizeSmall = "چھوٹا"
+    override val sizeMediumDefault = "درمیانہ (ڈیفالٹ)"
+    override val sizeLarge = "بڑا"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "رازداری"

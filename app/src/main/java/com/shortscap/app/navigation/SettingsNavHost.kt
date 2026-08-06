@@ -34,6 +34,8 @@ import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
 import com.shortscap.app.screens.settings.ResetAllScreen
 import com.shortscap.app.screens.settings.SettingsSectionScreen
+import com.shortscap.app.screens.settings.TextSizeScreen
+import com.shortscap.app.screens.settings.ThemeScreen
 import com.shortscap.app.viewmodel.AppUiState
 import com.shortscap.app.viewmodel.AppViewModel
 
@@ -46,6 +48,8 @@ object SettingsDestinations {
     const val NOTIFICATIONS = "settings_notifications"
     const val NOTIFICATION_CATEGORY = "settings_notification_category"
     const val APPEARANCE = "settings_appearance"
+    const val APPEARANCE_THEME = "settings_appearance_theme"
+    const val APPEARANCE_TEXT_SIZE = "settings_appearance_text_size"
     const val PRIVACY = "settings_privacy"
     const val DATA_BACKUP = "settings_data_backup"
     const val ABOUT = "settings_about"
@@ -197,8 +201,24 @@ fun SettingsNavHost(
 
         composable(SettingsDestinations.APPEARANCE) {
             AppearanceScreen(
+                onOpenTheme = { navController.navigate(SettingsDestinations.APPEARANCE_THEME) },
+                onOpenTextSize = { navController.navigate(SettingsDestinations.APPEARANCE_TEXT_SIZE) },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.APPEARANCE_THEME) {
+            ThemeScreen(
                 themeMode = state.themeMode,
                 onThemeModeChange = viewModel::setThemeMode,
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.APPEARANCE_TEXT_SIZE) {
+            TextSizeScreen(
+                textSizeMode = state.textSizeMode,
+                onTextSizeChange = viewModel::setTextSizeMode,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

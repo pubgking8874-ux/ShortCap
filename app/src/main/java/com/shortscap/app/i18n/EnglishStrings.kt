@@ -244,6 +244,12 @@ object EnglishStrings : AppStrings {
     override val appearanceDark = "Dark"
     override val appearanceLight = "Light"
     override val appearanceSystem = "System Default"
+    override val appearanceTextSize = "Text Size"
+
+    // Text size options
+    override val sizeSmall = "Small"
+    override val sizeMediumDefault = "Medium (Default)"
+    override val sizeLarge = "Large"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "Privacy"

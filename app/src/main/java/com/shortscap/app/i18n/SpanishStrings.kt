@@ -244,6 +244,12 @@ object SpanishStrings : AppStrings {
     override val appearanceDark = "Oscuro"
     override val appearanceLight = "Claro"
     override val appearanceSystem = "Predeterminado del sistema"
+    override val appearanceTextSize = "Tamaño de texto"
+
+    // Text size options
+    override val sizeSmall = "Pequeño"
+    override val sizeMediumDefault = "Mediano (predeterminado)"
+    override val sizeLarge = "Grande"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "Privacidad"

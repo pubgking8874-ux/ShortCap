@@ -244,6 +244,12 @@ object ChineseStrings : AppStrings {
     override val appearanceDark = "深色"
     override val appearanceLight = "浅色"
     override val appearanceSystem = "系统默认"
+    override val appearanceTextSize = "文字大小"
+
+    // Text size options
+    override val sizeSmall = "小"
+    override val sizeMediumDefault = "中（默认）"
+    override val sizeLarge = "大"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "隐私"

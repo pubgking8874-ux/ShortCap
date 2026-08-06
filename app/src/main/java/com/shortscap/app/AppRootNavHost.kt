@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,6 +41,12 @@ private const val ROUTE_DASHBOARD = "dashboard"
  * use the same design system and follow the persisted Dark / Light / System
  * Default setting as the Dashboard.
  *
+ * Global typography scaling — the entire application reflects the **Text
+ * Size** preference immediately via a single [LocalDensity] override: the
+ * font scale is multiplied by [AppUiState.textSizeMode]'s factor, so every
+ * `sp` text size updates instantly while layouts, icons, cards and spacing
+ * (all `dp`) remain unchanged.
+ *
  * Session placeholder: [AppUiState.sessionActive] defaults to false (always
  * open the auth flow on launch). When AWS Cognito / the Python backend / JWT
  * session state is connected, set it from real session state so the app opens
@@ -49,32 +58,43 @@ fun AppRootNavHost(viewModel: AppViewModel = viewModel()) {
 
     ShortsCapTheme(mode = state.themeMode) {
         val navController = rememberNavController()
-        NavHost(
-            navController = navController,
-            startDestination = if (state.sessionActive) ROUTE_DASHBOARD else ROUTE_AUTH,
+
+        // Global text scale: only sp (typography) is multiplied; the density
+        // stays untouched so layouts, icons, cards and spacing never change.
+        val density = LocalDensity.current
+        CompositionLocalProvider(
+            LocalDensity provides Density(
+                density = density.density,
+                fontScale = density.fontScale * state.textSizeMode.scale,
+            ),
         ) {
-            composable(ROUTE_AUTH) {
-                // Full-bleed theme background + safe-area insets so auth content
-                // clears the status/navigation bars (screens themselves untouched).
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
-                        .statusBarsPadding()
-                        .navigationBarsPadding(),
-                ) {
-                    AuthNavGraph(
-                        onExitToDashboard = {
-                            viewModel.setSessionActive(true)
-                            navController.navigate(ROUTE_DASHBOARD) {
-                                popUpTo(ROUTE_AUTH) { inclusive = true }
-                            }
-                        },
-                    )
+            NavHost(
+                navController = navController,
+                startDestination = if (state.sessionActive) ROUTE_DASHBOARD else ROUTE_AUTH,
+            ) {
+                composable(ROUTE_AUTH) {
+                    // Full-bleed theme background + safe-area insets so auth content
+                    // clears the status/navigation bars (screens themselves untouched).
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                            .statusBarsPadding()
+                            .navigationBarsPadding(),
+                    ) {
+                        AuthNavGraph(
+                            onExitToDashboard = {
+                                viewModel.setSessionActive(true)
+                                navController.navigate(ROUTE_DASHBOARD) {
+                                    popUpTo(ROUTE_AUTH) { inclusive = true }
+                                }
+                            },
+                        )
+                    }
                 }
-            }
-            composable(ROUTE_DASHBOARD) {
-                ShortsCapApp(viewModel = viewModel)
+                composable(ROUTE_DASHBOARD) {
+                    ShortsCapApp(viewModel = viewModel)
+                }
             }
         }
     }

@@ -28,7 +28,7 @@ This document explains everything from scratch: what the app does, the tech stac
 - **Home dashboard**: greeting, a large animated **circular analytics widget** (swipeable metric pages — "Today's Shorts Watch Time" and "Today's Shorts Watched" — with page indicators), Quick Stats cards, and Recent Activity.
 - **Activity**: usage timeline bar chart, most-used-apps donut chart, unlock/session stat cards, and expandable reports.
 - **Web**: searchable Blocked / Allowed / Recent site lists with per-site toggles and a website count summary.
-- **Settings**: expandable category list with switches, and a **Theme selector** (Dark / Light / System Default) under *Appearance*.
+- **Settings**: dedicated screens for every section (Monitoring, Permissions, Notifications, Appearance, …) with global **Theme** and **Text Size** preferences under *Appearance*.
 - **App chrome**: navigation drawer (slide-in with scrim), profile popover menu, and toast feedback.
 - **Complete theme system**: dark + light palettes, system-follow mode, persisted selection, smooth animated switching, and automatic system-bar icon adaptation.
 - **Authentication (mock, backend-ready)**: Splash → Welcome → Sign In / Create Account / Continue as Guest. Sign In offers **Email + Password**, **Continue with Google**, and **Continue with Mobile Number**; the mobile flow uses a country-code + phone-number field and reuses the shared **OTP Verification** screen (Forgot Password shares it too).
@@ -804,7 +804,7 @@ All pickers are clean Material 3 dialogs styled with the ShortsCap dark theme; t
 
 - **General / Permissions / Privacy / Data Backup** — dedicated screens; Privacy / Data Backup use the generic `SettingsSectionScreen` placeholder page ("Coming soon").
 - **Notifications** — premium hub: 6 category rows, each opening its own dedicated option page with toggles.
-- **Appearance** — the Theme selector (Dark / Light / System Default) on its own page.
+- **Appearance** — hub with **Theme / Text Size**, each on its own dedicated page.
 - **About** — Version 2.4.1, Build 2026072801, © 2026 ShortsCap.
 - **Reset All Settings** — confirmation page with a danger button that restores all settings to defaults.
 
@@ -956,3 +956,52 @@ The local SharedPreferences store is deliberately shaped like the future remote 
 - `navigation/SettingsNavHost.kt` — `NotificationsScreen` + `settings_notification_category/{category}` route
 - `viewmodel/AppViewModel.kt` — `AppUiState.notificationSettings` + `toggleNotificationSetting()` + reset
 - `i18n/` — full catalog (EN / HI / UR / ZH / ES) for the hub, categories and options
+
+---
+
+# Appearance Module
+
+## What changed
+
+Settings → **Appearance** is a premium hub with **2 rows** (icon · title · chevron, no subtitles, no intro cards), each opening its **own dedicated page**:
+
+| # | Row | Dedicated page |
+| --- | --- | --- |
+| 1 | **Theme** | Dark / Light / System Default radio rows — selecting applies the theme immediately (persisted), **no Apply button** |
+| 2 | **Text Size** | Small / Medium (Default) / Large radio rows — global **typography scale** for the entire application |
+
+## Removed Icon Size feature
+
+The **Icon Size** feature has been **completely removed** from the application: no `IconSizeMode`, no icon-size state or persistence, no `IconSizeScreen`, no route and no i18n keys. The global density override is gone — only typography is scaled now. The Appearance page contains only **Theme** and **Text Size**.
+
+## Appearance module simplified
+
+The module is now a single-concern page: Theme (visual identity) + Text Size (global typography). One shared generic `SizeOptionScreen` + `RadioOptionRow` power the Text Size page; no duplicated option UI.
+
+## Theme
+
+Options: ○ Dark, ○ Light, ○ System Default. Selecting any option immediately applies the theme app-wide (palette colors animate smoothly) and persists it across restarts via `ThemePreferenceStore`. No Apply button.
+
+## Text Size (global typography scaling architecture) — remains globally supported
+
+- **`appearance/AppearanceModels.kt`** — `TextSizeMode` (SMALL `0.9×`, MEDIUM `1.0×` default, LARGE `1.1×`).
+- **How it works** — the root (`AppRootNavHost`) wraps the whole composition in a single `LocalDensity` override that multiplies only the **font scale** by the text-size factor, so every `sp` text size updates instantly — Dashboard, Settings, Profile, Monitoring, Notifications, Permissions, Help & Support, About ShortsCap, Privacy Policy, Terms & Conditions, the Web section and all future screens.
+- **Only text changes** — the density itself is untouched, so **layouts, icons, cards and spacing remain unchanged**.
+- Persisted locally via `AppearanceRepository` (SharedPreferences).
+
+## Backend-ready
+
+- **`appearance/AppearanceRepository.kt`** — the single data seam: `load/saveTextSizeMode` (local today), plus documented **future cloud-sync** (`syncAppearanceToCloud`) and **future analytics** (`trackAppearanceAnalytics`) placeholders. Stored as a **global user preference**; swapping to backend APIs requires **no UI changes**.
+- `AppUiState` carries `textSizeMode`; it loads at startup and is restored by `resetAllSettings`.
+- i18n catalog (EN / HI / UR / ZH / ES) covers the hub rows and the text-size labels.
+
+## Files
+
+- `appearance/AppearanceModels.kt`, `appearance/AppearanceRepository.kt` — Appearance module (`TextSizeMode`, local storage + backend seams)
+- `screens/settings/AppearanceScreen.kt` — hub with the 2 rows
+- `screens/settings/ThemeScreen.kt`, `TextSizeScreen.kt` — dedicated pages
+- `screens/settings/AppearanceUi.kt` — shared `RadioOptionRow` + generic `SizeOptionScreen`
+- `AppRootNavHost.kt` — the single global `LocalDensity` fontScale override (text only)
+- `navigation/SettingsNavHost.kt` — routes: `settings_appearance_theme` / `_text_size`
+- `viewmodel/AppViewModel.kt` — `textSizeMode` + setter + reset
+- `i18n/` — full catalog for the module
