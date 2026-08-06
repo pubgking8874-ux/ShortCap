@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -30,13 +31,14 @@ fun AboutInfoScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "About", onBack = onBack)
+        ScSubScreenTopBar(title = strings.aboutTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -49,23 +51,23 @@ fun AboutInfoScreen(
         ) {
             ScPremiumInfoCard(
                 icon = Icons.Filled.Flag,
-                title = "Mission",
-                subtitle = "To help people reclaim their attention by making digital wellbeing simple, transparent and effective for everyone.",
+                title = strings.aboutMission,
+                subtitle = strings.aboutMissionText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Visibility,
-                title = "Vision",
-                subtitle = "A world where technology works for you — giving you clarity over your time and the freedom to build healthier habits.",
+                title = strings.aboutVision,
+                subtitle = strings.aboutVisionText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.TrackChanges,
-                title = "Purpose",
-                subtitle = "To turn screen time from an unconscious habit into a deliberate choice — one focused day at a time.",
+                title = strings.aboutPurpose,
+                subtitle = strings.aboutPurposeText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Info,
-                title = "ShortsCap Introduction",
-                subtitle = "ShortsCap is a digital wellbeing companion that helps you take control of your screen time. It tracks app usage, blocks distracting apps and sites, and supports healthier digital habits — so you can focus on what matters.",
+                title = strings.aboutIntro,
+                subtitle = strings.aboutIntroText,
             )
         }
     }

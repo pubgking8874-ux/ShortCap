@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -32,13 +33,14 @@ fun HelpSupportScreen(
     onOpenReportBug: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Help & Support", onBack = onBack)
+        ScSubScreenTopBar(title = strings.helpTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -51,17 +53,17 @@ fun HelpSupportScreen(
         ) {
             ScPremiumNavCard(
                 icon = Icons.Filled.HelpOutline,
-                title = "Frequently Asked Questions",
+                title = strings.helpFaq,
                 onClick = onOpenFaq,
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.SupportAgent,
-                title = "Contact Support",
+                title = strings.helpContact,
                 onClick = onOpenContactSupport,
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.BugReport,
-                title = "Report a Bug",
+                title = strings.helpReportBug,
                 onClick = onOpenReportBug,
             )
         }

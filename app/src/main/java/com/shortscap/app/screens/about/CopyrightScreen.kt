@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -38,13 +39,14 @@ fun CopyrightScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Copyright", onBack = onBack)
+        ScSubScreenTopBar(title = strings.copyrightTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -76,13 +78,13 @@ fun CopyrightScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "©2026 ShortsCap",
+                        strings.copyrightLine,
                         color = colors.TextPrimary,
                         style = ScTextStyles.H1,
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        "All Rights Reserved.",
+                        strings.allRightsReserved,
                         color = colors.TextSecondary,
                         style = ScTextStyles.Body,
                         textAlign = TextAlign.Center,

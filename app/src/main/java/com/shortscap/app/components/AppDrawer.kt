@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.DrawerItem
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -38,6 +39,7 @@ fun ScAppDrawer(
     onItemClick: (DrawerItem) -> Unit = { onClose() },
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     val scrimAlpha by animateFloatAsState(if (open) 0.45f else 0f, animationSpec = tween(250), label = "scrim")
     val drawerWidth = 300.dp
     val offsetX by animateDpAsState(
@@ -75,7 +77,7 @@ fun ScAppDrawer(
                 logoIcon()
                 Column {
                     Text("ShortsCap", color = colors.TextPrimary, style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp))
-                    Text("Digital Wellbeing", color = colors.TextSecondary, style = ScTextStyles.Caption)
+                    Text(strings.digitalWellbeing, color = colors.TextSecondary, style = ScTextStyles.Caption)
                 }
             }
             ScDivider(modifier = Modifier.padding(horizontal = 0.dp))
@@ -111,7 +113,7 @@ fun ScAppDrawer(
             ) {
                 ScDivider()
                 Text(
-                    "Version 1.1.1\nBuild 2026072801\n©2026 ShortsCap\nAll Rights Reserved.",
+                    "${strings.drawerFooterVersion}\n${strings.drawerFooterBuild}\n${strings.copyrightLine}\n${strings.allRightsReserved}",
                     color = colors.TextDisabled,
                     style = ScTextStyles.Caption.copy(fontSize = 11.sp),
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),

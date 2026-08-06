@@ -46,8 +46,11 @@ data class SiteEntry(val name: String, val url: String, val on: Boolean)
 
 enum class WebTab { BLOCKED, ALLOWED, RECENT }
 
-/** Mirrors drawer item list */
-data class DrawerItem(val icon: ImageVector, val label: String)
+/**
+ * Drawer item — [id] is a stable key for click routing (labels are
+ * localized, so matching on label text would break across languages).
+ */
+data class DrawerItem(val id: String, val icon: ImageVector, val label: String)
 
 /**
  * Full-screen destinations opened from the Dashboard drawer. Each maps to a

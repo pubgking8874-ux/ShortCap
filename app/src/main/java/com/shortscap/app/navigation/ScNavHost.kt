@@ -56,7 +56,7 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                 onQueryChange = viewModel::setWebQuery,
                 sites = viewModel.sitesFor(state.webTab),
                 onToggleSite = { name -> viewModel.toggleSite(state.webTab, name) },
-                onAddWebsite = { viewModel.showToast("Add website") },
+                onAddWebsite = { viewModel.showToast { it.toastAddWebsite } },
             )
 
             ScScreen.SETTINGS -> SettingsScreen(

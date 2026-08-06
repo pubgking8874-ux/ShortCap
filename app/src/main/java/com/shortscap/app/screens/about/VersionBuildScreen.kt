@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -29,13 +30,14 @@ fun VersionBuildScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Version & Build", onBack = onBack)
+        ScSubScreenTopBar(title = strings.versionBuildTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -48,12 +50,12 @@ fun VersionBuildScreen(
         ) {
             ScPremiumInfoCard(
                 icon = Icons.Filled.Info,
-                title = "Version",
+                title = strings.versionLabel,
                 subtitle = "1.1.1",
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Build,
-                title = "Build",
+                title = strings.buildLabel,
                 subtitle = "2026072801",
             )
         }

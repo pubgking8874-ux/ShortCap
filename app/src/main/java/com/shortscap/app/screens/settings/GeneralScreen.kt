@@ -9,27 +9,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.shortscap.app.components.ScCard
-import com.shortscap.app.components.ScInfoRow
-import com.shortscap.app.components.ScPremiumInfoCard
+import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
- * About (Settings) — dedicated screen with the app version and build info.
- * Keeps the existing About content, moved from the old inline expansion.
+ * General — dedicated screen. Currently contains a single option:
+ * Language (opens the full-screen Language picker). More general options
+ * slot in here later without changing the navigation.
  */
 @Composable
-fun AboutSettingsScreen(onBack: () -> Unit) {
+fun GeneralScreen(
+    onOpenLanguage: () -> Unit,
+    onBack: () -> Unit,
+) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
+
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = strings.settingsAbout, onBack = onBack)
+        ScSubScreenTopBar(title = strings.settingsGeneral, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -38,17 +41,11 @@ fun AboutSettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ScPremiumInfoCard(
-                icon = Icons.Filled.Info,
-                title = "ShortsCap",
-                subtitle = strings.aboutSettingsDesc,
-                modifier = Modifier.fillMaxWidth(),
+            ScPremiumNavCard(
+                icon = Icons.Filled.Language,
+                title = strings.languageTitle,
+                onClick = onOpenLanguage,
             )
-            ScCard(modifier = Modifier.fillMaxWidth()) {
-                ScInfoRow(label = strings.versionLabel, value = "2.4.1")
-                ScInfoRow(label = strings.buildLabel, value = "2026072801")
-                ScInfoRow(label = strings.copyrightLine, value = strings.allRightsReserved)
-            }
         }
     }
 }

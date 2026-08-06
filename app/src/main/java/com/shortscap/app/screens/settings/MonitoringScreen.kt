@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -37,39 +38,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.components.ScSwitch
+import com.shortscap.app.i18n.AppStrings
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
-
-/** Preset daily screen-time limits (minutes) offered by the picker dialog. */
-private val ScreenTimePresets = listOf(
-    15 to "15 min",
-    30 to "30 min",
-    45 to "45 min",
-    60 to "1 Hour",
-    120 to "2 Hours",
-)
-
-/** Break-reminder interval options (minutes). */
-private val BreakReminderIntervals = listOf(
-    15 to "15 Minutes",
-    30 to "30 Minutes",
-    45 to "45 Minutes",
-    60 to "1 Hour",
-)
-
-/** Looks up a label for [value] in [options], falling back to [fallback]. */
-private fun labelFor(value: Int, options: List<Pair<Int, String>>, fallback: (Int) -> String): String =
-    options.firstOrNull { it.first == value }?.second ?: fallback(value)
-
-/** Formats the current limit — preset label, or "Custom · N min" for custom. */
-private fun formatLimit(minutes: Int): String =
-    labelFor(minutes, ScreenTimePresets) { "Custom · ${it} min" }
 
 /**
  * Monitoring Settings — the dedicated screen for every monitoring feature.
@@ -80,9 +59,9 @@ private fun formatLimit(minutes: Int): String =
  * Monitoring Schedule, and read-only Statistics.
  *
  * All state is driven by [MonitoringSettings] passed from the ViewModel; the
- * screen never hardcodes business logic, so GET / UPDATE Monitoring Settings
- * backend APIs (or a local DB) can be swapped in behind the same shape with
- * no UI changes.
+ * screen never hardcodes business logic or text (all labels come from the
+ * active language catalog), so GET / UPDATE Monitoring Settings backend APIs
+ * and new languages plug in without UI changes.
  */
 @Composable
 fun MonitoringScreen(
@@ -100,12 +79,34 @@ fun MonitoringScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     var limitDialogOpen by remember { mutableStateOf(false) }
     var customLimitDialogOpen by remember { mutableStateOf(false) }
     var intervalDialogOpen by remember { mutableStateOf(false) }
 
+    // Option lists and labels follow the active language catalog.
+    val screenTimePresets = listOf(
+        15 to strings.time15Min,
+        30 to strings.time30Min,
+        45 to strings.time45Min,
+        60 to strings.time1Hour,
+        120 to strings.time2Hours,
+    )
+    val breakIntervals = listOf(
+        15 to strings.time15Minutes,
+        30 to strings.time30Minutes,
+        45 to strings.time45Minutes,
+        60 to strings.time1Hour,
+    )
+    fun formatLimit(minutes: Int): String =
+        screenTimePresets.firstOrNull { it.first == minutes }?.second
+            ?: "${strings.timeCustom} · $minutes ${strings.minutesLabel}"
+    fun intervalLabel(minutes: Int): String =
+        breakIntervals.firstOrNull { it.first == minutes }?.second
+            ?: "$minutes ${strings.minutesLabel}"
+
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = "Monitoring", onBack = onBack)
+        ScSubScreenTopBar(title = strings.monitoringTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -115,11 +116,11 @@ fun MonitoringScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // ---- Section 1 — Monitoring (master switch) ----
-            SectionTitle("Monitoring")
+            SectionTitle(strings.monitoringSection)
             ScPremiumNavCard(
                 icon = Icons.Filled.Insights,
-                title = "Enable Monitoring",
-                subtitle = "Master switch for all monitoring features.",
+                title = strings.monitoringEnable,
+                subtitle = strings.monitoringEnableDesc,
                 onClick = { onToggleMonitoring(!settings.enabled) },
                 trailing = {
                     ScSwitch(on = settings.enabled, onToggle = { onToggleMonitoring(!settings.enabled) })
@@ -127,11 +128,11 @@ fun MonitoringScreen(
             )
 
             // ---- Section 2 — App Blocking ----
-            SectionTitle("App Blocking")
+            SectionTitle(strings.monitoringAppBlocking)
             ScPremiumNavCard(
                 icon = Icons.Filled.Block,
-                title = "Enable App Blocking",
-                subtitle = "If OFF, all blocking features become disabled.",
+                title = strings.monitoringEnableAppBlocking,
+                subtitle = strings.monitoringEnableAppBlockingDesc,
                 onClick = { onToggleAppBlocking(!settings.appBlockingEnabled) },
                 trailing = {
                     ScSwitch(on = settings.appBlockingEnabled, onToggle = { onToggleAppBlocking(!settings.appBlockingEnabled) })
@@ -139,36 +140,36 @@ fun MonitoringScreen(
             )
 
             // ---- Section 3 — Daily Screen Time Limit (picker dialog) ----
-            SectionTitle("Daily Screen Time Limit")
+            SectionTitle(strings.monitoringDailyLimit)
             ScPremiumNavCard(
                 icon = Icons.Filled.Timer,
-                title = "Daily Screen Time Limit",
+                title = strings.monitoringDailyLimit,
                 onClick = { limitDialogOpen = true },
                 trailing = { TrailingValue(formatLimit(settings.screenTimeLimitMinutes)) },
             )
 
             // ---- Section 4 — Blocked Apps (dedicated page, UI only) ----
-            SectionTitle("Blocked Apps")
+            SectionTitle(strings.monitoringBlockedApps)
             ScPremiumNavCard(
                 icon = Icons.Filled.DoNotDisturbOn,
-                title = "Blocked Apps",
+                title = strings.monitoringBlockedApps,
                 onClick = onOpenBlockedApps,
             )
 
             // ---- Section 5 — Allowed Apps (dedicated page, UI only) ----
-            SectionTitle("Allowed Apps")
+            SectionTitle(strings.monitoringAllowedApps)
             ScPremiumNavCard(
                 icon = Icons.Filled.CheckCircle,
-                title = "Allowed Apps",
+                title = strings.monitoringAllowedApps,
                 onClick = onOpenAllowedApps,
             )
 
             // ---- Section 6 — Strict Mode ----
-            SectionTitle("Strict Mode")
+            SectionTitle(strings.monitoringStrictMode)
             ScPremiumNavCard(
                 icon = Icons.Filled.GppMaybe,
-                title = "Strict Mode",
-                subtitle = "Prevent bypassing restrictions.",
+                title = strings.monitoringStrictMode,
+                subtitle = strings.monitoringStrictModeDesc,
                 onClick = { onToggleStrictMode(!settings.strictModeEnabled) },
                 trailing = {
                     ScSwitch(on = settings.strictModeEnabled, onToggle = { onToggleStrictMode(!settings.strictModeEnabled) })
@@ -176,7 +177,7 @@ fun MonitoringScreen(
             )
 
             // ---- Section 7 — Short Video Platforms (data-driven switches) ----
-            SectionTitle("Short Video Platforms")
+            SectionTitle(strings.monitoringShortVideoPlatforms)
             settings.platforms.forEach { platform ->
                 ScPremiumNavCard(
                     icon = Icons.Filled.SmartDisplay,
@@ -189,10 +190,10 @@ fun MonitoringScreen(
             }
 
             // ---- Section 8 — Break Reminder ----
-            SectionTitle("Break Reminder")
+            SectionTitle(strings.monitoringBreakReminder)
             ScPremiumNavCard(
                 icon = Icons.Filled.SelfImprovement,
-                title = "Break Reminder",
+                title = strings.monitoringBreakReminder,
                 onClick = { onToggleBreakReminder(!settings.breakReminderEnabled) },
                 trailing = {
                     ScSwitch(on = settings.breakReminderEnabled, onToggle = { onToggleBreakReminder(!settings.breakReminderEnabled) })
@@ -200,32 +201,32 @@ fun MonitoringScreen(
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.Alarm,
-                title = "Reminder Interval",
+                title = strings.monitoringReminderInterval,
                 onClick = { intervalDialogOpen = true },
                 trailing = { TrailingValue(intervalLabel(settings.breakReminderIntervalMinutes)) },
             )
 
             // ---- Section 9 — Monitoring Schedule (dedicated page, UI only) ----
-            SectionTitle("Monitoring Schedule")
+            SectionTitle(strings.monitoringSchedule)
             ScPremiumNavCard(
                 icon = Icons.Filled.CalendarMonth,
-                title = "Monitoring Schedule",
+                title = strings.monitoringSchedule,
                 onClick = onOpenSchedule,
             )
 
             // ---- Section 10 — Statistics (read-only demo values) ----
-            SectionTitle("Statistics")
+            SectionTitle(strings.monitoringStatistics)
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     StatTile(
                         icon = Icons.Filled.Schedule,
-                        label = "Today's Usage",
+                        label = strings.monitoringTodayUsage,
                         value = settings.todayUsage,
                         modifier = Modifier.weight(1f),
                     )
                     StatTile(
                         icon = Icons.Filled.Block,
-                        label = "Blocked Apps Count",
+                        label = strings.monitoringBlockedAppsCount,
                         value = settings.blockedAppsCount.toString(),
                         modifier = Modifier.weight(1f),
                     )
@@ -233,14 +234,14 @@ fun MonitoringScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     StatTile(
                         icon = Icons.Filled.Timer,
-                        label = "Current Daily Limit",
+                        label = strings.monitoringCurrentDailyLimit,
                         value = formatLimit(settings.screenTimeLimitMinutes),
                         modifier = Modifier.weight(1f),
                     )
                     StatTile(
                         icon = Icons.Filled.MonitorHeart,
-                        label = "Monitoring Status",
-                        value = if (settings.enabled) "Active" else "Paused",
+                        label = strings.monitoringStatus,
+                        value = if (settings.enabled) strings.monitoringActive else strings.monitoringPaused,
                         valueColor = if (settings.enabled) colors.Success else colors.Warning,
                         modifier = Modifier.weight(1f),
                     )
@@ -256,10 +257,10 @@ fun MonitoringScreen(
             containerColor = colors.Card,
             titleContentColor = colors.TextPrimary,
             textContentColor = colors.TextSecondary,
-            title = { Text("Daily Screen Time Limit") },
+            title = { Text(strings.monitoringDailyLimit) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ScreenTimePresets.forEach { (minutes, label) ->
+                    screenTimePresets.forEach { (minutes, label) ->
                         DialogOption(
                             label = label,
                             selected = settings.screenTimeLimitMinutes == minutes,
@@ -270,8 +271,8 @@ fun MonitoringScreen(
                         )
                     }
                     DialogOption(
-                        label = "Custom",
-                        selected = ScreenTimePresets.none { it.first == settings.screenTimeLimitMinutes },
+                        label = strings.timeCustom,
+                        selected = screenTimePresets.none { it.first == settings.screenTimeLimitMinutes },
                         onClick = {
                             limitDialogOpen = false
                             customLimitDialogOpen = true
@@ -281,7 +282,7 @@ fun MonitoringScreen(
             },
             confirmButton = {
                 TextButton(onClick = { limitDialogOpen = false }) {
-                    Text("Cancel", color = colors.TextSecondary)
+                    Text(strings.cancel, color = colors.TextSecondary)
                 }
             },
         )
@@ -290,7 +291,7 @@ fun MonitoringScreen(
     if (customLimitDialogOpen) {
         var input by remember {
             mutableStateOf(
-                if (ScreenTimePresets.none { it.first == settings.screenTimeLimitMinutes }) {
+                if (screenTimePresets.none { it.first == settings.screenTimeLimitMinutes }) {
                     settings.screenTimeLimitMinutes.toString()
                 } else {
                     ""
@@ -303,15 +304,15 @@ fun MonitoringScreen(
             containerColor = colors.Card,
             titleContentColor = colors.TextPrimary,
             textContentColor = colors.TextSecondary,
-            title = { Text("Custom Limit") },
+            title = { Text(strings.customLimitTitle) },
             text = {
                 Column {
-                    Text("Set a daily screen time limit in minutes.", style = ScTextStyles.Body)
+                    Text(strings.customLimitDesc, style = ScTextStyles.Body)
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it.filter(Char::isDigit).take(3) },
-                        label = { Text("Minutes", color = colors.TextSecondary) },
+                        label = { Text(strings.minutesLabel, color = colors.TextSecondary) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -336,14 +337,14 @@ fun MonitoringScreen(
                     enabled = minutes != null && minutes > 0,
                 ) {
                     Text(
-                        "Set",
+                        strings.setLabel,
                         color = if (minutes != null && minutes > 0) colors.Accent else colors.TextDisabled,
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { customLimitDialogOpen = false }) {
-                    Text("Cancel", color = colors.TextSecondary)
+                    Text(strings.cancel, color = colors.TextSecondary)
                 }
             },
         )
@@ -355,10 +356,10 @@ fun MonitoringScreen(
             containerColor = colors.Card,
             titleContentColor = colors.TextPrimary,
             textContentColor = colors.TextSecondary,
-            title = { Text("Reminder Interval") },
+            title = { Text(strings.monitoringReminderInterval) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    BreakReminderIntervals.forEach { (minutes, label) ->
+                    breakIntervals.forEach { (minutes, label) ->
                         DialogOption(
                             label = label,
                             selected = settings.breakReminderIntervalMinutes == minutes,
@@ -372,15 +373,12 @@ fun MonitoringScreen(
             },
             confirmButton = {
                 TextButton(onClick = { intervalDialogOpen = false }) {
-                    Text("Cancel", color = colors.TextSecondary)
+                    Text(strings.cancel, color = colors.TextSecondary)
                 }
             },
         )
     }
 }
-
-private fun intervalLabel(minutes: Int): String =
-    labelFor(minutes, BreakReminderIntervals) { "${it} Minutes" }
 
 /** Uppercased section heading, matching the app's section-title style. */
 @Composable
@@ -425,7 +423,7 @@ private fun StatTile(
             color = valueColor,
             style = ScTextStyles.StatValue.copy(fontSize = 17.sp),
             maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(label, color = colors.TextSecondary, style = ScTextStyles.Caption)
     }
@@ -438,7 +436,7 @@ private fun TrailingValue(value: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(value, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
         Icon(
-            Icons.Filled.ChevronRight,
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = colors.TextSecondary,
             modifier = Modifier.size(20.dp),

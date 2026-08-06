@@ -20,6 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.AppLanguage
+import com.shortscap.app.i18n.LocalAppLanguage
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 import kotlinx.coroutines.Dispatchers
@@ -31,25 +34,38 @@ import java.io.BufferedReader
  *
  * DEV-PHASE ONLY: each entry points at a local text asset checked into the
  * app. Later these will be replaced by backend-hosted HTML pages — swap the
- * [assetPath] source in [LegalDocumentLoader] without touching [LegalDocumentScreen]
- * or the drawer navigation.
+ * [assetPath] source in [LegalDocumentLoader] without touching
+ * [LegalDocumentScreen] or the drawer navigation.
  */
-enum class LegalDocument(
-    val title: String,
-    val assetPath: String,
-) {
-    PRIVACY_POLICY("Privacy Policy", "privacy/PrivacyPolicy.txt"),
-    TERMS_CONDITIONS("Terms & Conditions", "terms/TermsConditions.txt"),
+enum class LegalDocument(val assetPath: String) {
+    PRIVACY_POLICY("privacy/PrivacyPolicy.txt"),
+    TERMS_CONDITIONS("terms/TermsConditions.txt"),
 }
 
-/** Reads a [LegalDocument]'s local text asset; modular seam for a future backend fetch. */
+/**
+ * Reads a [LegalDocument]'s local text asset; modular seam for a future
+ * backend fetch. When the app language changes, a language-specific asset
+ * (e.g. `privacy/PrivacyPolicy_hi.txt`) is used if present, otherwise the
+ * English source — so adding translated legal documents is a pure asset drop
+ * with no code changes.
+ */
 object LegalDocumentLoader {
-    suspend fun load(document: LegalDocument, app: android.content.Context): String =
+    suspend fun load(document: LegalDocument, app: android.content.Context, language: AppLanguage): String =
         withContext(Dispatchers.IO) {
-            app.assets.open(document.assetPath).use { input ->
+            val localizedPath = localizedPath(document.assetPath, language)
+            val stream = try {
+                app.assets.open(localizedPath)
+            } catch (_: java.io.FileNotFoundException) {
+                app.assets.open(document.assetPath)
+            }
+            stream.use { input ->
                 BufferedReader(input.reader()).use { it.readText() }
             }
         }
+
+    private fun localizedPath(assetPath: String, language: AppLanguage): String =
+        if (language == AppLanguage.ENGLISH) assetPath
+        else assetPath.removeSuffix(".txt") + "_${language.code}.txt"
 }
 
 /**
@@ -67,21 +83,27 @@ fun LegalDocumentScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    val language = LocalAppLanguage.current
     val context = LocalContext.current
     var content by remember(document) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(document) {
-        content = LegalDocumentLoader.load(document, context.applicationContext)
+    LaunchedEffect(document, language) {
+        content = LegalDocumentLoader.load(document, context.applicationContext, language)
     }
 
-    val body = content ?: "Loading..."
+    val title = when (document) {
+        LegalDocument.PRIVACY_POLICY -> strings.legalPrivacy
+        LegalDocument.TERMS_CONDITIONS -> strings.legalTerms
+    }
+    val body = content ?: strings.legalLoading
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = document.title, onBack = onBack)
+        ScSubScreenTopBar(title = title, onBack = onBack)
 
         Column(
             modifier = Modifier

@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -259,7 +259,7 @@ fun ScSettingsListItem(
             Icon(icon, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(17.dp))
         }
         Text(label, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold, modifier = Modifier.weight(1f))
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(16.dp))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(16.dp))
     }
 }
 

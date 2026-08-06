@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.components.ScSwitch
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -30,8 +31,9 @@ fun NotificationsScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = "Notifications", onBack = onBack)
+        ScSubScreenTopBar(title = strings.notificationsTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -42,7 +44,7 @@ fun NotificationsScreen(
         ) {
             ScPremiumNavCard(
                 icon = Icons.Filled.NotificationsActive,
-                title = "Daily summary",
+                title = strings.notifDailySummary,
                 onClick = { onToggleNotifications(!notificationsEnabled) },
                 trailing = {
                     ScSwitch(on = notificationsEnabled, onToggle = { onToggleNotifications(!notificationsEnabled) })
@@ -50,7 +52,7 @@ fun NotificationsScreen(
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.Timelapse,
-                title = "Limit reached alerts",
+                title = strings.notifLimitAlerts,
                 onClick = { /* static until backend notification prefs land */ },
                 trailing = { ScSwitch(on = true, onToggle = {}) },
             )

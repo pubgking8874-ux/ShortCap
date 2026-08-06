@@ -17,6 +17,7 @@ import com.shortscap.app.components.ScButton
 import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -30,8 +31,9 @@ fun ResetAllScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = "Reset All Settings", onBack = onBack)
+        ScSubScreenTopBar(title = strings.settingsResetAll, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -42,13 +44,12 @@ fun ResetAllScreen(
         ) {
             ScPremiumInfoCard(
                 icon = Icons.Filled.RestartAlt,
-                title = "Reset All Settings",
-                subtitle = "Restore monitoring, notifications and every other " +
-                    "setting to their default values. This cannot be undone.",
+                title = strings.settingsResetAll,
+                subtitle = strings.resetAllDesc,
                 modifier = Modifier.fillMaxWidth(),
             )
             ScButton(
-                label = "Reset All Settings",
+                label = strings.settingsResetAll,
                 variant = ScButtonVariant.DANGER,
                 onClick = onResetAll,
                 modifier = Modifier.fillMaxWidth(),

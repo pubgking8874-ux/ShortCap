@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -36,13 +37,14 @@ fun TechnologiesScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Technologies", onBack = onBack)
+        ScSubScreenTopBar(title = strings.techTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -55,37 +57,37 @@ fun TechnologiesScreen(
         ) {
             ScPremiumInfoCard(
                 icon = Icons.Filled.Android,
-                title = "Android",
-                subtitle = "Native Android platform",
+                title = strings.techAndroid,
+                subtitle = strings.techAndroidText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Code,
-                title = "Kotlin",
-                subtitle = "Modern, concise programming language",
+                title = strings.techKotlin,
+                subtitle = strings.techKotlinText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Widgets,
-                title = "Jetpack Compose",
-                subtitle = "Declarative UI toolkit",
+                title = strings.techCompose,
+                subtitle = strings.techComposeText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Storage,
-                title = "Python Backend",
-                subtitle = "Backend services",
-                trailing = { FuturePill() },
+                title = strings.techPython,
+                subtitle = strings.techPythonText,
+                trailing = { FuturePill(strings.future) },
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Cloud,
-                title = "AWS Cloud",
-                subtitle = "Scalable cloud infrastructure",
-                trailing = { FuturePill() },
+                title = strings.techAws,
+                subtitle = strings.techAwsText,
+                trailing = { FuturePill(strings.future) },
             )
         }
     }
 }
 
 @Composable
-private fun FuturePill() {
+private fun FuturePill(label: String) {
     val colors = LocalScColors.current
     Box(
         modifier = Modifier
@@ -93,6 +95,6 @@ private fun FuturePill() {
             .background(colors.ChipActiveBg)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
-        Text("Future", color = colors.ChipActiveText, style = ScTextStyles.Caption)
+        Text(label, color = colors.ChipActiveText, style = ScTextStyles.Caption)
     }
 }

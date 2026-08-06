@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScEmptyState
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -20,14 +21,14 @@ import com.shortscap.app.theme.LocalScColors
 @Composable
 fun AllowedAppsScreen(onBack: () -> Unit) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = "Allowed Apps", onBack = onBack)
+        ScSubScreenTopBar(title = strings.monitoringAllowedApps, onBack = onBack)
         Column(modifier = Modifier.fillMaxSize().padding(top = 40.dp)) {
             ScEmptyState(
                 icon = Icons.Filled.CheckCircle,
-                title = "No allowed apps yet",
-                subtitle = "Apps that bypass restrictions will appear here. " +
-                    "UI ready — app list coming soon.",
+                title = strings.allowedAppsEmptyTitle,
+                subtitle = strings.allowedAppsEmptyDesc,
             )
         }
     }

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -31,13 +32,14 @@ fun ContactSupportScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Contact Support", onBack = onBack)
+        ScSubScreenTopBar(title = strings.contactTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -48,22 +50,22 @@ fun ContactSupportScreen(
                 .padding(top = 22.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Need Help?", color = colors.TextPrimary, style = ScTextStyles.H1)
+            Text(strings.contactNeedHelp, color = colors.TextPrimary, style = ScTextStyles.H1)
 
             ScPremiumInfoCard(
                 icon = Icons.Filled.Email,
-                title = "Email",
+                title = strings.contactEmail,
                 subtitle = "support@shortscap.app",
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Call,
-                title = "Phone",
+                title = strings.contactPhone,
                 subtitle = "+91 91234 56789",
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Schedule,
-                title = "Support Hours",
-                subtitle = "Monday – Saturday\n9:00 AM – 6:00 PM IST",
+                title = strings.contactHours,
+                subtitle = strings.contactHoursValue,
             )
         }
     }

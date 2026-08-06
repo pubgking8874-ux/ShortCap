@@ -6,7 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -26,14 +26,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScChip
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.AppUsageSlice
 import com.shortscap.app.model.WeekData
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 import kotlin.math.min
 
-private val reportSummary = "Screen time trended down 12% this period, with the biggest drop on weekday " +
-    "evenings. Social apps still account for the largest share of usage."
+
 
 /** Mirrors function ActivityScreen() { ... } */
 @Composable
@@ -44,22 +44,24 @@ fun ActivityScreen(
     onToggleReport: (String) -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     val slices = listOf(
         AppUsageSlice("Instagram", 42, colors.PieInstagram),
         AppUsageSlice("YouTube", 27, colors.PieYouTube),
         AppUsageSlice("Chrome", 18, colors.PieChrome),
-        AppUsageSlice("Other", 13, colors.PieOther),
+        AppUsageSlice(strings.activityOther, 13, colors.PieOther),
     )
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        Text("Activity", color = colors.TextPrimary, style = ScTextStyles.H1)
+        Text(strings.activityTitle, color = colors.TextPrimary, style = ScTextStyles.H1)
 
+        val rangeOptions = listOf(strings.activityDaily to "Daily", strings.activityWeekly to "Weekly", strings.activityMonthly to "Monthly")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Daily", "Weekly", "Monthly").forEach { r ->
-                ScChip(label = r, active = range == r, onClick = { onRangeChange(r) })
+            rangeOptions.forEach { (label, key) ->
+                ScChip(label = label, active = range == key, onClick = { onRangeChange(key) })
             }
         }
 
@@ -69,7 +71,7 @@ fun ActivityScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
             ) {
-                Text("Usage Timeline", color = colors.TextSecondary, style = ScTextStyles.SectionTitle)
+                Text(strings.activityUsageTimeline, color = colors.TextSecondary, style = ScTextStyles.SectionTitle)
                 Text(range, color = colors.TextSecondary, fontSize = 12.sp)
             }
             Text("21h 15m", color = colors.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
@@ -78,7 +80,7 @@ fun ActivityScreen(
         }
 
         ScCard(modifier = Modifier.fillMaxWidth()) {
-            Text("Most Used Apps", color = colors.TextSecondary, style = ScTextStyles.SectionTitle, modifier = Modifier.padding(bottom = 14.dp))
+            Text(strings.activityMostUsedApps, color = colors.TextSecondary, style = ScTextStyles.SectionTitle, modifier = Modifier.padding(bottom = 14.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 UsagePieChart(slices = slices, modifier = Modifier.size(100.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
@@ -96,22 +98,23 @@ fun ActivityScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ScCard(modifier = Modifier.weight(1f)) {
                 Text("38", color = colors.TextPrimary, style = ScTextStyles.StatValue)
-                Text("Unlock Count", color = colors.TextSecondary, style = ScTextStyles.Label)
+                Text(strings.activityUnlockCount, color = colors.TextSecondary, style = ScTextStyles.Label)
             }
             ScCard(modifier = Modifier.weight(1f)) {
                 Text("6m 40s", color = colors.TextPrimary, style = ScTextStyles.StatValue)
-                Text("Avg. Session", color = colors.TextSecondary, style = ScTextStyles.Label)
+                Text(strings.activityAvgSession, color = colors.TextSecondary, style = ScTextStyles.Label)
             }
         }
 
         Column {
-            Text("Reports", color = colors.TextSecondary, style = ScTextStyles.SectionTitle, modifier = Modifier.padding(bottom = 12.dp))
-            listOf("Weekly Report", "Monthly Report").forEach { r ->
-                val expanded = expandedReport == r
+            Text(strings.activityReports, color = colors.TextSecondary, style = ScTextStyles.SectionTitle, modifier = Modifier.padding(bottom = 12.dp))
+            val reportOptions = listOf(strings.activityWeeklyReport to "Weekly Report", strings.activityMonthlyReport to "Monthly Report")
+            reportOptions.forEach { (label, key) ->
+                val expanded = expandedReport == key
                 val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chev")
                 ScCard(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                    onClick = { onToggleReport(r) },
+                    onClick = { onToggleReport(key) },
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -120,10 +123,10 @@ fun ActivityScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Icon(Icons.Filled.TrendingUp, contentDescription = null, tint = colors.Accent, modifier = Modifier.size(17.dp))
-                            Text(r, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
+                            Text(label, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
                         }
                         Icon(
-                            Icons.Filled.ChevronRight,
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = null,
                             tint = colors.TextSecondary,
                             modifier = Modifier.size(16.dp).rotate(rotation),
@@ -133,7 +136,7 @@ fun ActivityScreen(
             }
             if (expandedReport != null) {
                 ScCard(modifier = Modifier.fillMaxWidth()) {
-                    Text(reportSummary, color = colors.TextSecondary, fontSize = 12.5.sp, lineHeight = 19.sp)
+                    Text(strings.activityReportSummary, color = colors.TextSecondary, fontSize = 12.5.sp, lineHeight = 19.sp)
                 }
             }
         }

@@ -27,6 +27,7 @@ import com.shortscap.app.components.ScDivider
 import com.shortscap.app.components.ScEmptyState
 import com.shortscap.app.components.ScEntityRow
 import com.shortscap.app.components.ScSwitch
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.ScEntity
 import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.model.SiteEntry
@@ -46,11 +47,12 @@ fun WebScreen(
     onAddWebsite: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text("Web", color = colors.TextPrimary, style = ScTextStyles.H1)
+        Text(strings.webTitle, color = colors.TextPrimary, style = ScTextStyles.H1)
 
         Row(
             modifier = Modifier
@@ -69,7 +71,7 @@ fun WebScreen(
                 modifier = Modifier.weight(1f),
                 decorationBox = { inner ->
                     if (query.isEmpty()) {
-                        Text("Search websites", color = colors.TextSecondary, fontSize = 13.5.sp)
+                        Text(strings.webSearchPlaceholder, color = colors.TextSecondary, fontSize = 13.5.sp)
                     }
                     inner()
                 },
@@ -78,18 +80,18 @@ fun WebScreen(
 
         ScCard(modifier = Modifier.fillMaxWidth()) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                WebStat(value = "9", label = "Blocked")
+                WebStat(value = "9", label = strings.webBlocked)
                 Box(modifier = Modifier.width(1.dp).height(28.dp).background(colors.Divider))
-                WebStat(value = "24", label = "Allowed")
+                WebStat(value = "24", label = strings.webAllowed)
                 Box(modifier = Modifier.width(1.dp).height(28.dp).background(colors.Divider))
-                WebStat(value = "1h 05m", label = "Web Today")
+                WebStat(value = "1h 05m", label = strings.webWebToday)
             }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ScChip(label = "Blocked", active = tab == WebTab.BLOCKED, onClick = { onTabChange(WebTab.BLOCKED) })
-            ScChip(label = "Allowed", active = tab == WebTab.ALLOWED, onClick = { onTabChange(WebTab.ALLOWED) })
-            ScChip(label = "Recent", active = tab == WebTab.RECENT, onClick = { onTabChange(WebTab.RECENT) })
+            ScChip(label = strings.webBlocked, active = tab == WebTab.BLOCKED, onClick = { onTabChange(WebTab.BLOCKED) })
+            ScChip(label = strings.webAllowed, active = tab == WebTab.ALLOWED, onClick = { onTabChange(WebTab.ALLOWED) })
+            ScChip(label = strings.webRecent, active = tab == WebTab.RECENT, onClick = { onTabChange(WebTab.RECENT) })
             Spacer(Modifier.weight(1f))
             Box(
                 modifier = Modifier
@@ -106,8 +108,8 @@ fun WebScreen(
             if (filtered.isEmpty()) {
                 ScEmptyState(
                     icon = Icons.Filled.Language,
-                    title = "No sites here",
-                    subtitle = "Try a different search or add a website.",
+                    title = strings.webNoSites,
+                    subtitle = strings.webNoSitesSubtitle,
                 )
             } else {
                 filtered.forEachIndexed { index, site ->
@@ -128,7 +130,7 @@ fun WebScreen(
         }
 
         ScButton(
-            label = "Add Website",
+            label = strings.webAddWebsite,
             variant = ScButtonVariant.PRIMARY,
             icon = Icons.Filled.Add,
             onClick = onAddWebsite,

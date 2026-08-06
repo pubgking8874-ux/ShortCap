@@ -40,6 +40,7 @@ import com.shortscap.app.components.ScButton
 import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -50,6 +51,7 @@ fun FeedbackScreen(
     onFeedbackSubmitted: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     var rating by remember { mutableStateOf(0) }
     var feedback by remember { mutableStateOf("") }
     var submitted by remember { mutableStateOf(false) }
@@ -59,7 +61,7 @@ fun FeedbackScreen(
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Feedback", onBack = onBack)
+        ScSubScreenTopBar(title = strings.feedbackTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -70,10 +72,10 @@ fun FeedbackScreen(
                 .padding(vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text("How was your experience?", color = colors.TextPrimary, style = ScTextStyles.H1)
+            Text(strings.feedbackQuestion, color = colors.TextPrimary, style = ScTextStyles.H1)
 
             ScCard(modifier = Modifier.fillMaxWidth()) {
-                Text("Rate ShortsCap", color = colors.TextPrimary, style = ScTextStyles.SectionTitle)
+                Text(strings.feedbackRate, color = colors.TextPrimary, style = ScTextStyles.SectionTitle)
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -105,10 +107,10 @@ fun FeedbackScreen(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     when {
-                        rating == 0 -> "Tap a star to rate"
-                        rating <= 2 -> "Sorry to hear that."
-                        rating <= 4 -> "Thanks — we're glad you're with us."
-                        else -> "Excellent! Thank you."
+                        rating == 0 -> strings.feedbackTapToRate
+                        rating <= 2 -> strings.feedbackSorry
+                        rating <= 4 -> strings.feedbackThanks
+                        else -> strings.feedbackExcellent
                     },
                     color = colors.TextSecondary,
                     style = ScTextStyles.Caption,
@@ -116,7 +118,7 @@ fun FeedbackScreen(
             }
 
             ScCard(modifier = Modifier.fillMaxWidth()) {
-                Text("Your Feedback", color = colors.TextPrimary, style = ScTextStyles.SectionTitle)
+                Text(strings.feedbackYourFeedback, color = colors.TextPrimary, style = ScTextStyles.SectionTitle)
                 Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
@@ -135,7 +137,7 @@ fun FeedbackScreen(
                             Box(contentAlignment = Alignment.TopStart) {
                                 if (feedback.isEmpty()) {
                                     Text(
-                                        "Write your feedback...",
+                                        strings.feedbackPlaceholder,
                                         color = colors.TextDisabled,
                                         fontSize = 13.5.sp,
                                     )
@@ -148,7 +150,7 @@ fun FeedbackScreen(
             }
 
             ScButton(
-                label = "Submit",
+                label = strings.feedbackSubmit,
                 variant = ScButtonVariant.PRIMARY,
                 enabled = rating > 0 && feedback.isNotBlank(),
                 onClick = {
@@ -160,7 +162,7 @@ fun FeedbackScreen(
 
             if (submitted) {
                 Text(
-                    "Thank you for your feedback.",
+                    strings.feedbackThankYou,
                     color = colors.Success,
                     style = ScTextStyles.BodySemiBold,
                     textAlign = TextAlign.Center,

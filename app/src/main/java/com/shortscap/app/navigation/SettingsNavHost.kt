@@ -6,27 +6,30 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.shortscap.app.components.ScPremiumInfoCard
+import androidx.navigation.navArgument
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.SettingsDestination
+import com.shortscap.app.permissions.PermissionId
+import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.screens.settings.AboutSettingsScreen
 import com.shortscap.app.screens.settings.AllowedAppsScreen
 import com.shortscap.app.screens.settings.AppearanceScreen
 import com.shortscap.app.screens.settings.BlockedAppsScreen
+import com.shortscap.app.screens.settings.GeneralScreen
+import com.shortscap.app.screens.settings.LanguageScreen
 import com.shortscap.app.screens.settings.MonitoringScheduleScreen
 import com.shortscap.app.screens.settings.MonitoringScreen
 import com.shortscap.app.screens.settings.NotificationsScreen
+import com.shortscap.app.screens.settings.PermissionDetailScreen
+import com.shortscap.app.screens.settings.PermissionsScreen
 import com.shortscap.app.screens.settings.ResetAllScreen
 import com.shortscap.app.screens.settings.SettingsSectionScreen
 import com.shortscap.app.viewmodel.AppUiState
@@ -37,16 +40,22 @@ object SettingsDestinations {
     const val GENERAL = "settings_general"
     const val MONITORING = "settings_monitoring"
     const val PERMISSIONS = "settings_permissions"
+    const val PERMISSION_DETAIL = "settings_permission_detail"
     const val NOTIFICATIONS = "settings_notifications"
     const val APPEARANCE = "settings_appearance"
     const val PRIVACY = "settings_privacy"
     const val DATA_BACKUP = "settings_data_backup"
     const val ABOUT = "settings_about"
     const val RESET_ALL = "settings_reset_all"
+    const val LANGUAGE = "settings_language"
 
     const val BLOCKED_APPS = "settings_blocked_apps"
     const val ALLOWED_APPS = "settings_allowed_apps"
     const val SCHEDULE = "settings_schedule"
+
+    /** Route with the [PermissionId] name appended, e.g. settings_permission_detail/USAGE_ACCESS. */
+    fun permissionDetailRoute(permissionId: PermissionId): String =
+        "$PERMISSION_DETAIL/${permissionId.name}"
 }
 
 private fun SettingsDestination.startRoute(): String = when (this) {
@@ -87,6 +96,7 @@ fun SettingsNavHost(
     onClose: () -> Unit,
 ) {
     val navController = rememberNavController()
+    val strings = LocalAppStrings.current
 
     NavHost(
         navController = navController,
@@ -98,10 +108,16 @@ fun SettingsNavHost(
     ) {
         // ---- Settings home destinations (each its own dedicated screen) ----
         composable(SettingsDestinations.GENERAL) {
-            SettingsSectionScreen(
-                icon = Icons.Filled.Tune,
-                title = "General",
-                description = "Language, sync and app defaults.",
+            GeneralScreen(
+                onOpenLanguage = { navController.navigate(SettingsDestinations.LANGUAGE) },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.LANGUAGE) {
+            LanguageScreen(
+                currentLanguage = state.appLanguage,
+                onApplyLanguage = viewModel::applyLanguage,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -124,28 +140,27 @@ fun SettingsNavHost(
         }
 
         composable(SettingsDestinations.PERMISSIONS) {
-            SettingsSectionScreen(
-                icon = Icons.Filled.VerifiedUser,
-                title = "Permissions",
-                description = "Accessibility Service and Usage Access are required " +
-                    "to monitor and block apps.",
+            PermissionsScreen(
+                permissions = state.permissions,
+                onRefreshPermissions = viewModel::refreshPermissions,
+                onOpenDetail = { id -> navController.navigate(SettingsDestinations.permissionDetailRoute(id)) },
                 onBack = { navController.backOrClose(onClose) },
-                extra = {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        ScPremiumInfoCard(
-                            icon = Icons.Filled.AccessibilityNew,
-                            title = "Accessibility Service",
-                            subtitle = "Required to detect and block short-video apps.",
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        ScPremiumInfoCard(
-                            icon = Icons.Filled.DonutLarge,
-                            title = "Usage Access",
-                            subtitle = "Required to read screen-time statistics.",
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                },
+            )
+        }
+
+        composable(
+            route = "${SettingsDestinations.PERMISSION_DETAIL}/{permissionId}",
+            arguments = listOf(navArgument("permissionId") { type = NavType.StringType }),
+        ) { entry ->
+            val id = entry.arguments?.getString("permissionId")
+                ?.let { name -> PermissionId.entries.firstOrNull { it.name == name } }
+                ?: PermissionId.USAGE_ACCESS
+            PermissionDetailScreen(
+                permissionId = id,
+                permission = state.permissions.firstOrNull { it.id == id }
+                    ?: PermissionRepository.seedPermissions().first { it.id == id },
+                onRefreshPermissions = viewModel::refreshPermissions,
+                onBack = { navController.backOrClose(onClose) },
             )
         }
 
@@ -168,8 +183,8 @@ fun SettingsNavHost(
         composable(SettingsDestinations.PRIVACY) {
             SettingsSectionScreen(
                 icon = Icons.Filled.Lock,
-                title = "Privacy",
-                description = "Data sharing and visibility preferences.",
+                title = strings.privacyTitle,
+                description = strings.privacyDesc,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -177,8 +192,8 @@ fun SettingsNavHost(
         composable(SettingsDestinations.DATA_BACKUP) {
             SettingsSectionScreen(
                 icon = Icons.Filled.Storage,
-                title = "Data Backup",
-                description = "Cloud sync and export of your settings and data.",
+                title = strings.dataBackupTitle,
+                description = strings.dataBackupDesc,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

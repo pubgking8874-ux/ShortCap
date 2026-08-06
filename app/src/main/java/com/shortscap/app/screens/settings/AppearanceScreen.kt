@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 import com.shortscap.app.theme.ThemeMode
@@ -43,8 +44,9 @@ fun AppearanceScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = "Appearance", onBack = onBack)
+        ScSubScreenTopBar(title = strings.appearanceTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -55,11 +57,11 @@ fun AppearanceScreen(
         ) {
             ScPremiumInfoCard(
                 icon = Icons.Filled.Palette,
-                title = "Theme",
-                subtitle = "Choose how ShortsCap looks. Your selection is saved automatically.",
+                title = strings.appearanceTheme,
+                subtitle = strings.appearanceThemeDesc,
                 modifier = Modifier.fillMaxWidth(),
             )
-            ThemeSelector(themeMode = themeMode, onThemeModeChange = onThemeModeChange)
+            ThemeSelector(strings = strings, themeMode = themeMode, onThemeModeChange = onThemeModeChange)
         }
     }
 }
@@ -71,6 +73,7 @@ fun AppearanceScreen(
  */
 @Composable
 private fun ThemeSelector(
+    strings: com.shortscap.app.i18n.AppStrings,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
@@ -94,7 +97,7 @@ private fun ThemeSelector(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(mode.displayName, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
+                Text(mode.displayName(strings), color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
                 RadioButton(
                     selected = selected,
                     onClick = null,
@@ -105,9 +108,8 @@ private fun ThemeSelector(
     }
 }
 
-private val ThemeMode.displayName: String
-    get() = when (this) {
-        ThemeMode.DARK -> "Dark"
-        ThemeMode.LIGHT -> "Light"
-        ThemeMode.SYSTEM -> "System Default"
-    }
+private fun ThemeMode.displayName(strings: com.shortscap.app.i18n.AppStrings): String = when (this) {
+    ThemeMode.DARK -> strings.appearanceDark
+    ThemeMode.LIGHT -> strings.appearanceLight
+    ThemeMode.SYSTEM -> strings.appearanceSystem
+}

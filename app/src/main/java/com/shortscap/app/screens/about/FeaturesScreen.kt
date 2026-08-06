@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -31,13 +32,14 @@ fun FeaturesScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Features", onBack = onBack)
+        ScSubScreenTopBar(title = strings.featuresTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -50,28 +52,28 @@ fun FeaturesScreen(
         ) {
             ScPremiumInfoCard(
                 icon = Icons.Filled.Block,
-                title = "App Blocking",
-                subtitle = "Block distracting apps and websites to keep your focus intact.",
+                title = strings.featureAppBlocking,
+                subtitle = strings.featureAppBlockingText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.BarChart,
-                title = "Usage Tracking",
-                subtitle = "See exactly where your time goes with clear daily usage insights.",
+                title = strings.featureUsageTracking,
+                subtitle = strings.featureUsageTrackingText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.CenterFocusStrong,
-                title = "Focus Mode",
-                subtitle = "Pause distractions during dedicated focus sessions.",
+                title = strings.featureFocusMode,
+                subtitle = strings.featureFocusModeText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Spa,
-                title = "Digital Wellbeing",
-                subtitle = "Build balanced screen-time habits with supportive, actionable feedback.",
+                title = strings.featureDigitalWellbeing,
+                subtitle = strings.featureDigitalWellbeingText,
             )
             ScPremiumInfoCard(
                 icon = Icons.Filled.Lock,
-                title = "Secure Authentication",
-                subtitle = "Your account and data stay protected with secure sign-in.",
+                title = strings.featureSecureAuth,
+                subtitle = strings.featureSecureAuthText,
             )
         }
     }

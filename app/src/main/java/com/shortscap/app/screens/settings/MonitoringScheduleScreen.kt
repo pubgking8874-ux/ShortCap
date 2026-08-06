@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScEmptyState
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -20,14 +21,14 @@ import com.shortscap.app.theme.LocalScColors
 @Composable
 fun MonitoringScheduleScreen(onBack: () -> Unit) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = "Monitoring Schedule", onBack = onBack)
+        ScSubScreenTopBar(title = strings.monitoringSchedule, onBack = onBack)
         Column(modifier = Modifier.fillMaxSize().padding(top = 40.dp)) {
             ScEmptyState(
                 icon = Icons.Filled.CalendarMonth,
-                title = "No schedule set",
-                subtitle = "Start time, end time, weekdays and weekends will be " +
-                    "configured here. UI ready — implementation coming soon.",
+                title = strings.scheduleEmptyTitle,
+                subtitle = strings.scheduleEmptyDesc,
             )
         }
     }

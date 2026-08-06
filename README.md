@@ -327,6 +327,70 @@ Splash → Welcome → Sign In
 
 ---
 
+# Permissions Module
+
+## What was added
+
+Settings → **Permissions** is a clean, minimal **permission status overview** — it is **not** a permission-request page (permissions are requested during first-time onboarding/setup). Each permission appears as a compact **settings row** (icon · name · colored status · chevron) — no oversized cards, no big "Grant Permission" buttons. Rows are auto-refreshed whenever the screen resumes (first open AND returning from Android Settings), so statuses are always current with **no manual refresh button**. Uses the ShortsCap Premium Dark theme and mirrors modern Android settings screens.
+
+## Supported Permissions
+
+| # | Permission | Purpose | Status when granted |
+| --- | --- | --- | --- |
+| 1 | **Usage Access** | Monitor application usage time | Granted |
+| 2 | **Accessibility Service** | App blocking & restriction enforcement | Enabled |
+| 3 | **Display Over Other Apps** | Show blocking screens when restricted apps open | Granted |
+| 4 | **Notification Permission** | Reminders & monitoring alerts | Allowed |
+| 5 | **Ignore Battery Optimization** | Reliable background operation | Ignored |
+| 6 | **Auto Start** *(Future Ready)* | Start automatically after reboot — manufacturer-specific guide later | Future Feature |
+| 7 | **Storage / Media Access** | Profile image selection & future backups | Allowed |
+| 8 | **Root Access** *(Future)* | Reserved for future advanced enforcement | Not Available |
+
+## Tap behavior
+
+- **Granted** (or a future entry) → opens a simple **detail page** showing the permission's status and purpose (no actions there).
+- **Not granted / disabled** → opens the **corresponding Android Settings screen directly** so the user can enable it (`PermissionActions`): Usage Access, Accessibility, Overlay, Notification, Battery Optimization, and App-details (storage) pages.
+
+## Permission Status System
+
+- **Status colors** — 🟢 green = Granted, 🟠 orange = Needs Attention (not granted), 🔴 red = Denied (disabled), ⚪ gray = Future Feature / Not Available.
+- **Live OS checks** — `permissions/PermissionRepository.kt` resolves every status from the Android OS: Usage Access via `AppOpsManager`, Accessibility via `ENABLED_ACCESSIBILITY_SERVICES`, overlay via `Settings.canDrawOverlays`, notifications via `NotificationManagerCompat`, battery via `PowerManager`, storage via `ContextCompat.checkSelfPermission`.
+- **Automatic refresh** — `RefreshPermissionsOnResume` (a `LifecycleEventObserver`) re-checks all permissions every time a Permissions screen reaches `ON_RESUME`; returning from Android Settings updates the UI instantly.
+- **Last checked time** — every `PermissionInfo` stamps `lastCheckedAt`; the detail page shows it (or "Never").
+
+## Permission Detail Page
+
+A simple read-only page (opened only from an already-granted row) showing: permission icon + title, **current status** (colored), **why this permission is required** (purpose), and **last checked** time. No action buttons, no inline expansion.
+
+## Future Root Support
+
+`PermissionId.ROOT` is modeled (icon, title, description, status "Not Available") but intentionally has **no implementation**. Tapping it opens the simple detail page; when advanced enforcement ships, only the repository check changes — no UI redesign.
+
+## Future Auto Start Support
+
+`PermissionId.AUTO_START` renders with status "Future Feature". A manufacturer-specific guide (Xiaomi/MIUI, Oppo, Vivo, OnePlus, Samsung auto-start settings) will be added to the detail page later, behind the same row/detail architecture.
+
+## Backend Integration Ready
+
+- **Models** (`permissions/PermissionModels.kt`): every permission has `id`, `status`, `lastCheckedAt`, plus **future cloud-sync placeholder** (`cloudSyncEnabled`) and **future analytics placeholder** (`analyticsEvent`).
+- **Repository seam** (`permissions/PermissionRepository.kt`): `checkAll`/`checkStatus` are the only data touch-points; documented `syncPermissionsToCloud(...)` and `trackPermissionAnalytics(...)` placeholders mark the future API/analytics calls.
+- **Actions seam** (`permissions/PermissionActions.kt`): centralizes every system-settings intent.
+- **No UI changes required later** — screens consume `List<PermissionInfo>`; swapping the OS checks for backend data only replaces the repository body.
+- Manifest declares the permissions surfaced by the module (`POST_NOTIFICATIONS`, `SYSTEM_ALERT_WINDOW`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `PACKAGE_USAGE_STATS`, storage/media).
+
+## Files
+
+- `permissions/PermissionModels.kt`, `permissions/PermissionRepository.kt`, `permissions/PermissionActions.kt` — Permissions module (models, OS checks, settings intents)
+- `screens/settings/PermissionsScreen.kt` — minimal settings-row status list
+- `screens/settings/PermissionDetailScreen.kt` — simple status + purpose detail page
+- `screens/settings/PermissionUi.kt` — shared helpers (icons, labels, status colors, auto-refresh)
+- `navigation/SettingsNavHost.kt` — `PermissionsScreen` + `settings_permission_detail/{id}` route
+- `viewmodel/AppViewModel.kt` — `AppUiState.permissions` + `refreshPermissions()`
+- `i18n/` — full catalog (EN / HI / UR / ZH / ES) for the status list + detail pages
+- `AndroidManifest.xml` — permission declarations
+
+---
+
 *ShortsCap v2.4.1 · Build 2026072801 · © 2026 ShortsCap*
 
 ---
@@ -771,8 +835,63 @@ Settings → Monitoring → Blocked Apps
 
 ## Files
 
-- `screens/settings/SettingsScreen.kt` — premium home (rewritten)
-- `screens/settings/MonitoringScreen.kt` — **new** Monitoring screen
+---
+
+# General Settings — Language Module (Internationalization)
+
+## What was added
+
+- **General → Language**: the General settings screen now contains a single **🌐 Language** option that opens a dedicated full-screen Language picker (no dialog/bottom-sheet for the list). Flow: `Settings → General → Language`.
+- **Language screen**: flag + native name (with English name, or “(Default)” for English) per language, a checkmark on the current selection, single-select only, and a confirmation dialog on selection — **Current / New / Cancel / Apply**.
+- **Apply** instantly switches the language across the **entire logged-in experience** and pops back to General.
+
+## Supported languages
+
+| Flag | Language | Direction |
+| --- | --- | --- |
+| 🇬🇧 | English (Default) | LTR |
+| 🇮🇳 | हिन्दी (Hindi) | LTR |
+| 🇵🇰 | اردو (Urdu) | **RTL** |
+| 🇨🇳 | 中文 (Simplified Chinese) | LTR |
+| 🇪🇸 | Español (Spanish) | LTR |
+
+Urdu also flips the app’s **layout direction to RTL** (`LocalLayoutDirection`). The **Auth flow** (Splash, Welcome, Sign In, Sign Up, Forgot Password, OTP, Reset Password) intentionally stays in English.
+
+## Internationalization (i18n) architecture
+
+- **Centralized catalog**: `i18n/AppStrings.kt` defines the `AppStrings` interface — every user-visible string in the logged-in experience (Dashboard, Profile, Settings + all sub-pages, Monitoring, Drawer + all sub-pages, Help & Support, FAQ, Contact, Report a Bug, Feedback, About pages, Privacy Policy / Terms readers, all dialogs, toasts, and content descriptions).
+- **One file per language**: `EnglishStrings.kt`, `HindiStrings.kt`, `UrduStrings.kt`, `ChineseStrings.kt`, `SpanishStrings.kt`. The interface is the contract: **adding a string breaks compilation until all five languages translate it**, so nothing can silently fall back.
+- **No hardcoded translated text in UI**: every screen reads `LocalAppStrings.current` (a `staticCompositionLocalOf`) — swapping the language recomposes all screens instantly.
+- **Adding a new language** = one `AppLanguage` entry + one new catalog file. **No UI code changes required.**
+- The `AppStrings` interface is a plain Kotlin contract, so the ViewModel resolves toast text via `AppStrings.forLanguage(...)` without Compose dependencies.
+
+## Language persistence
+
+- `i18n/LanguagePreferenceStore.kt` persists the selection in SharedPreferences; the language is restored automatically on the next launch (`AppUiState.appLanguage`).
+- Applying a language shows a **smooth transition overlay** (spinner + “Applying language…” fade, ~650 ms) instead of an abrupt reload.
+
+## Future backend synchronization
+
+- `i18n/LanguageRepository.kt` documents the cloud seams: `syncLanguageToCloud(language)` (PUT the preference on the user’s cloud profile) and `loadLanguageFromCloud()` (pull on login). Placeholders only — swap the bodies when AWS / Firebase / the Python backend connects; no UI changes required.
+- Legal documents support **localized assets**: the reader loads `privacy/PrivacyPolicy_{lang}.txt` / `terms/TermsConditions_{lang}.txt` when present and falls back to the English source — translated legal text can be dropped into `assets/` with no code changes.
+
+## Files
+
+- `i18n/AppLanguage.kt`, `i18n/AppStrings.kt`, `i18n/EnglishStrings.kt`, `i18n/HindiStrings.kt`, `i18n/UrduStrings.kt`, `i18n/ChineseStrings.kt`, `i18n/SpanishStrings.kt` — **new** i18n core
+- `i18n/LanguagePreferenceStore.kt`, `i18n/LanguageRepository.kt` — **new** persistence + cloud seam
+- `screens/settings/LanguageScreen.kt`, `screens/settings/GeneralScreen.kt` — **new** screens
+- `navigation/SettingsNavHost.kt` — **new** `settings_language` route
+- `viewmodel/AppViewModel.kt` — `appLanguage`, `languageApplying`, `applyLanguage()`
+- `ShortsCapApp.kt` — string + RTL providers, localized drawer/toasts/share, applying overlay
+- Every logged-in screen — literals replaced with catalog lookups
+
+---
+
+# Redesigned Settings Module & Monitoring Settings Screen
+
+## What changed
+
+### 1. Settings home screen — premium redesign *(no more basic settings list)*
 - `screens/settings/SettingsSectionScreen.kt`, `NotificationsScreen.kt`, `AppearanceScreen.kt`, `AboutSettingsScreen.kt`, `ResetAllScreen.kt` — **new** dedicated screens
 - `screens/settings/BlockedAppsScreen.kt`, `AllowedAppsScreen.kt`, `MonitoringScheduleScreen.kt` — **new** UI-only pages
 - `navigation/SettingsNavHost.kt` — **new** settings back-stack NavHost

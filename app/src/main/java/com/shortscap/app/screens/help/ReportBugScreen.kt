@@ -36,6 +36,7 @@ import com.shortscap.app.components.ScButton
 import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -51,6 +52,7 @@ fun ReportBugScreen(
     onSubmitted: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     var subject by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var submitted by remember { mutableStateOf(false) }
@@ -60,7 +62,7 @@ fun ReportBugScreen(
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Report a Bug", onBack = onBack)
+        ScSubScreenTopBar(title = strings.bugTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -91,27 +93,27 @@ fun ReportBugScreen(
                             )
                         }
                         Text(
-                            "Report an issue",
+                            strings.bugReportIssue,
                             color = colors.TextPrimary,
                             style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp),
                         )
                     }
                     BugField(
-                        label = "Subject",
+                        label = strings.bugSubject,
                         value = subject,
                         onValueChange = { subject = it },
-                        placeholder = "Briefly describe the issue",
+                        placeholder = strings.bugSubjectPlaceholder,
                         minHeight = 54.dp,
                     )
                     BugField(
-                        label = "Describe your issue",
+                        label = strings.bugDescribe,
                         value = description,
                         onValueChange = { description = it },
-                        placeholder = "Steps to reproduce, expected vs actual behaviour…",
+                        placeholder = strings.bugDescribePlaceholder,
                         minHeight = 140.dp,
                     )
                     ScButton(
-                        label = "Submit",
+                        label = strings.bugSubmit,
                         variant = ScButtonVariant.PRIMARY,
                         enabled = subject.isNotBlank() && description.isNotBlank(),
                         onClick = {
@@ -122,7 +124,7 @@ fun ReportBugScreen(
                     )
                     if (submitted) {
                         Text(
-                            "Bug report submitted. Thank you!",
+                            strings.bugSuccess,
                             color = colors.Success,
                             style = ScTextStyles.BodySemiBold,
                             textAlign = TextAlign.Center,

@@ -5,9 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
+import com.shortscap.app.i18n.AppLanguage
+import com.shortscap.app.i18n.AppStrings
+import com.shortscap.app.i18n.LanguagePreferenceStore
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.model.ProfileData
+import com.shortscap.app.permissions.PermissionInfo
+import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
@@ -73,8 +78,22 @@ data class AppUiState(
     val monitoring: MonitoringSettings = MonitoringSettings(),
     val notificationsEnabled: Boolean = true,
 
+    // Permissions management center — live statuses resolved from the Android
+    // OS by [PermissionRepository]; refreshed automatically whenever a
+    // Permissions screen resumes (e.g. after returning from Android Settings).
+    val permissions: List<PermissionInfo> = PermissionRepository.seedPermissions(),
+
     // Theme preference (persisted via ThemePreferenceStore)
     val themeMode: ThemeMode = ThemeMode.DARK,
+
+    // Language preference (persisted via LanguagePreferenceStore and applied
+    // to the whole logged-in experience through LocalAppStrings). The Auth
+    // flow always stays English and does not read this.
+    val appLanguage: AppLanguage = AppLanguage.ENGLISH,
+
+    // True while a language change is being applied — ShortsCapApp shows a
+    // smooth transition overlay instead of an abrupt screen reload.
+    val languageApplying: Boolean = false,
 
     // Full-screen drawer sub-screen currently open (null = none). Modular:
     // each destination maps to a dedicated UI screen; backend APIs plug in
@@ -95,7 +114,13 @@ data class AppUiState(
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val themeStore = ThemePreferenceStore(application)
-    private val _uiState = MutableStateFlow(AppUiState(themeMode = themeStore.loadThemeMode()))
+    private val languageStore = LanguagePreferenceStore(application)
+    private val _uiState = MutableStateFlow(
+        AppUiState(
+            themeMode = themeStore.loadThemeMode(),
+            appLanguage = languageStore.loadLanguage(),
+        ),
+    )
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
     init {
@@ -115,6 +140,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun openProfileScreen() = _uiState.update { it.copy(profileScreenOpen = true) }
     fun closeProfileScreen() = _uiState.update { it.copy(profileScreenOpen = false) }
 
+    // Localized toast — resolves the message through the active language's
+    // catalog so every toast follows the selected language.
+    fun showToast(message: (AppStrings) -> String) {
+        showToast(message(AppStrings.forLanguage(uiState.value.appLanguage)))
+    }
+
     // ---- Profile (local-only today; backend seam: ProfileRepository) ----
     fun saveProfile(fullName: String, gender: String?, dateOfBirth: String?) {
         _uiState.update { state ->
@@ -126,7 +157,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 ),
             )
         }
-        showToast("Profile saved")
+        showToast { it.toastProfileSaved }
     }
 
     // Picked via the Android Photo Picker on the Profile screen. Future: Crop
@@ -135,7 +166,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             state.copy(profile = state.profile.copy(pictureUri = uri))
         }
-        showToast("Profile picture updated")
+        showToast { it.toastProfilePictureUpdated }
     }
 
     // ---- Theme (persists; applies instantly, no restart needed) ----
@@ -155,6 +186,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(drawerOpen = false, drawerScreen = screen) }
 
     fun closeDrawerScreen() = _uiState.update { it.copy(drawerScreen = null) }
+
+    // ---- Language (persists locally; future: LanguageRepository cloud sync) ----
+    private var languageJob: Job? = null
+
+    // Applies a new language across the entire logged-in experience. The
+    // language is persisted and swapped immediately; a brief applying overlay
+    // covers the transition so the UI refresh feels smooth, not abrupt.
+    fun applyLanguage(language: AppLanguage) {
+        if (language == uiState.value.appLanguage) return
+        languageStore.saveLanguage(language)
+        _uiState.update { it.copy(appLanguage = language, languageApplying = true) }
+        languageJob?.cancel()
+        languageJob = viewModelScope.launch {
+            delay(650)
+            _uiState.update { it.copy(languageApplying = false) }
+        }
+        // Future backend: LanguageRepository.syncLanguageToCloud(language)
+    }
 
     // ---- Toast (mirrors showToast + clearTimeout/setTimeout dance) ----
     private var toastJob: Job? = null
@@ -186,7 +235,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 WebTab.RECENT -> state.copy(recentSites = flip(state.recentSites))
             }
         }
-        showToast(if (tab == WebTab.BLOCKED) "Website updated" else "Preference saved")
+        showToast {
+            if (tab == WebTab.BLOCKED) it.toastWebsiteUpdated else it.toastPreferenceSaved
+        }
     }
 
     fun sitesFor(tab: WebTab): List<SiteEntry> = when (tab) {
@@ -234,6 +285,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNotifications(on: Boolean) = _uiState.update { it.copy(notificationsEnabled = on) }
 
+    // ---- Permissions (live OS checks; backend-ready via PermissionRepository)
+    //      Called on every Permissions-screen resume so statuses stay fresh
+    //      after the user returns from Android Settings — no manual refresh. ----
+    fun refreshPermissions() {
+        _uiState.update { state ->
+            state.copy(permissions = PermissionRepository.checkAll(getApplication(), state.permissions))
+        }
+    }
+
     // Restores every setting to its default (theme included). Future: also
     // clear backend / cloud preferences through the SettingsRepository seam.
     fun resetAllSettings() {
@@ -245,6 +305,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 themeMode = ThemeMode.DARK,
             )
         }
-        showToast("Settings reset")
+        showToast { it.toastSettingsReset }
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -36,13 +37,14 @@ fun AboutShortsCapScreen(
     onOpenCopyright: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "About ShortsCap", onBack = onBack)
+        ScSubScreenTopBar(title = strings.aboutHubTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -55,27 +57,27 @@ fun AboutShortsCapScreen(
         ) {
             ScPremiumNavCard(
                 icon = Icons.Filled.Info,
-                title = "About",
+                title = strings.aboutHubAbout,
                 onClick = onOpenAbout,
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.Star,
-                title = "Features",
+                title = strings.aboutHubFeatures,
                 onClick = onOpenFeatures,
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.Tune,
-                title = "Technologies",
+                title = strings.aboutHubTechnologies,
                 onClick = onOpenTechnologies,
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.Build,
-                title = "Version & Build",
+                title = strings.aboutHubVersionBuild,
                 onClick = onOpenVersionBuild,
             )
             ScPremiumNavCard(
                 icon = Icons.Filled.Copyright,
-                title = "Copyright",
+                title = strings.aboutHubCopyright,
                 onClick = onOpenCopyright,
             )
         }

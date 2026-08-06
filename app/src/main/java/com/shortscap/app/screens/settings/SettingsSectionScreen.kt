@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScEmptyState
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -35,6 +36,7 @@ fun SettingsSectionScreen(
     extra: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
         ScSubScreenTopBar(title = title, onBack = onBack)
 
@@ -54,10 +56,8 @@ fun SettingsSectionScreen(
             extra?.invoke()
             ScEmptyState(
                 icon = Icons.Filled.Build,
-                title = "Coming soon",
-                subtitle = "This section is backend-ready. The UI and navigation " +
-                    "are in place — implementation will connect here without any " +
-                    "redesign.",
+                title = strings.comingSoon,
+                subtitle = strings.comingSoonDesc,
             )
         }
     }

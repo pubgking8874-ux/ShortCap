@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScButton
 import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.ProfileData
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -86,7 +87,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val genderOptions = listOf("Male", "Female", "Prefer not to say")
 
 /** Formats a UTC millis timestamp as DD/MM/YYYY in the device's time zone. */
 private fun formatDate(millis: Long): String {
@@ -138,6 +138,8 @@ fun ProfileScreen(
     onUpdatePicture: (uri: String) -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    val genderOptions = listOf(strings.profileMale, strings.profileFemale, strings.profilePreferNot)
     val context = LocalContext.current
     var fullName by remember { mutableStateOf(profile.fullName) }
     var gender by remember { mutableStateOf(profile.gender) }
@@ -201,7 +203,7 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Profile", onBack = onBack)
+        ScSubScreenTopBar(title = strings.profileTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -219,7 +221,7 @@ fun ProfileScreen(
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "Tap to change photo",
+                strings.profileTapToChange,
                 color = colors.TextDisabled,
                 style = ScTextStyles.Caption,
                 textAlign = TextAlign.Center,
@@ -228,31 +230,31 @@ fun ProfileScreen(
             Spacer(Modifier.height(24.dp))
 
             ProfileField(
-                label = "Full Name",
+                label = strings.profileFullName,
                 value = fullName,
                 onValueChange = { fullName = it },
-                placeholder = "Enter your full name",
+                placeholder = strings.profileNamePlaceholder,
                 leadingIcon = Icons.Filled.Person,
             )
             Spacer(Modifier.height(14.dp))
 
             ProfileField(
-                label = "Email",
+                label = strings.profileEmail,
                 value = profile.email,
                 onValueChange = {},
-                placeholder = "No email set",
+                placeholder = strings.profileEmailPlaceholder,
                 readOnly = true,
                 leadingIcon = Icons.Filled.Email,
                 trailingIcon = Icons.Filled.Lock,
-                trailingIconContentDescription = "Read only",
+                trailingIconContentDescription = strings.profileReadOnly,
             )
             Spacer(Modifier.height(14.dp))
 
             Box {
                 ProfilePickerField(
-                    label = "Gender",
+                    label = strings.profileGender,
                     value = gender,
-                    placeholder = "Select gender",
+                    placeholder = strings.profileGenderPlaceholder,
                     onClick = { openPicker { genderMenuOpen = true } },
                 )
                 DropdownMenu(
@@ -287,18 +289,18 @@ fun ProfileScreen(
             Spacer(Modifier.height(14.dp))
 
             ProfilePickerField(
-                label = "Date of Birth",
+                label = strings.profileDob,
                 value = dobText,
-                placeholder = "Select date of birth",
+                placeholder = strings.profileDobPlaceholder,
                 onClick = { openPicker { showDatePicker = true } },
                 trailingIcon = Icons.Filled.CalendarMonth,
-                trailingIconContentDescription = "Pick date of birth",
+                trailingIconContentDescription = strings.profileDob,
             )
 
             Spacer(Modifier.height(28.dp))
 
             ScButton(
-                label = "Save Changes",
+                label = strings.profileSaveChanges,
                 variant = ScButtonVariant.PRIMARY,
                 enabled = fullName.isNotBlank(),
                 onClick = { onSave(fullName, gender, dobText) },
@@ -318,12 +320,12 @@ fun ProfileScreen(
                         showDatePicker = false
                     },
                 ) {
-                    Text("OK")
+                    Text(strings.ok)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text(strings.cancel)
                 }
             },
         ) {
@@ -344,6 +346,7 @@ private fun ProfileAvatar(
     onChoosePicture: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     // ---- Avatar circle press state (ripple via default indication) ----
     val avatarSource = remember { MutableInteractionSource() }
@@ -449,7 +452,7 @@ private fun ProfileAvatar(
         ) {
             Icon(
                 Icons.Filled.Edit,
-                contentDescription = "Change profile picture",
+                contentDescription = strings.profileChangePicture,
                 tint = Color.White,
                 modifier = Modifier.size(18.dp),
             )

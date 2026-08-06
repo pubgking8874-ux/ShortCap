@@ -7,6 +7,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,17 +20,23 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shortscap.app.components.NavItemSpec
@@ -35,6 +44,9 @@ import com.shortscap.app.components.ScAppDrawer
 import com.shortscap.app.components.ScBottomNav
 import com.shortscap.app.components.ScTopBar
 import com.shortscap.app.components.ScToast
+import com.shortscap.app.i18n.AppStrings
+import com.shortscap.app.i18n.LocalAppLanguage
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.DrawerItem
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.ScScreen
@@ -43,18 +55,10 @@ import com.shortscap.app.navigation.ScNavHost
 import com.shortscap.app.navigation.SettingsNavHost
 import com.shortscap.app.screens.profile.ProfileScreen
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScTextStyles
 import com.shortscap.app.theme.ShortsCapTheme
 import com.shortscap.app.util.ShareUtils
 import com.shortscap.app.viewmodel.AppViewModel
-
-private val drawerItems = listOf(
-    DrawerItem(Icons.Filled.HelpOutline, "Help & Support"),
-    DrawerItem(Icons.Filled.Description, "Privacy Policy"),
-    DrawerItem(Icons.Filled.Gavel, "Terms & Conditions"),
-    DrawerItem(Icons.Filled.Info, "About ShortsCap"),
-    DrawerItem(Icons.Filled.Message, "Feedback"),
-    DrawerItem(Icons.Filled.Share, "Share App"),
-)
 
 private val bottomNavItems = listOf(
     NavItemSpec(ScScreen.HOME, Icons.Filled.Home),
@@ -80,8 +84,26 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
 
     ShortsCapTheme(mode = state.themeMode) {
-        val colors = LocalScColors.current
-        Surface(modifier = Modifier.fillMaxSize(), color = colors.Bg) {
+        // The whole logged-in experience reads text from the active language
+        // catalog; RTL languages (Urdu) also flip the layout direction. The
+        // Auth flow lives outside this composable and stays English/LTR.
+        val layoutDirection = if (state.appLanguage.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+        CompositionLocalProvider(
+            LocalAppStrings provides AppStrings.forLanguage(state.appLanguage),
+            LocalAppLanguage provides state.appLanguage,
+            LocalLayoutDirection provides layoutDirection,
+        ) {
+            val colors = LocalScColors.current
+            val strings = LocalAppStrings.current
+            val drawerItems = listOf(
+                DrawerItem("help", Icons.Filled.HelpOutline, strings.drawerHelp),
+                DrawerItem("privacy", Icons.Filled.Description, strings.drawerPrivacy),
+                DrawerItem("terms", Icons.Filled.Gavel, strings.drawerTerms),
+                DrawerItem("about", Icons.Filled.Info, strings.drawerAbout),
+                DrawerItem("feedback", Icons.Filled.Message, strings.drawerFeedback),
+                DrawerItem("share", Icons.Filled.Share, strings.drawerShare),
+            )
+            Surface(modifier = Modifier.fillMaxSize(), color = colors.Bg) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -134,15 +156,15 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                         onClose = viewModel::closeDrawer,
                         items = drawerItems,
                         onItemClick = { item ->
-                            when (item.label) {
-                                "Help & Support" -> viewModel.openDrawerScreen(DrawerScreen.HELP_SUPPORT)
-                                "Privacy Policy" -> viewModel.openDrawerScreen(DrawerScreen.PRIVACY_POLICY)
-                                "Terms & Conditions" -> viewModel.openDrawerScreen(DrawerScreen.TERMS_CONDITIONS)
-                                "About ShortsCap" -> viewModel.openDrawerScreen(DrawerScreen.ABOUT_SHORTSCAP)
-                                "Feedback" -> viewModel.openDrawerScreen(DrawerScreen.FEEDBACK)
-                                "Share App" -> {
+                            when (item.id) {
+                                "help" -> viewModel.openDrawerScreen(DrawerScreen.HELP_SUPPORT)
+                                "privacy" -> viewModel.openDrawerScreen(DrawerScreen.PRIVACY_POLICY)
+                                "terms" -> viewModel.openDrawerScreen(DrawerScreen.TERMS_CONDITIONS)
+                                "about" -> viewModel.openDrawerScreen(DrawerScreen.ABOUT_SHORTSCAP)
+                                "feedback" -> viewModel.openDrawerScreen(DrawerScreen.FEEDBACK)
+                                "share" -> {
                                     viewModel.closeDrawer()
-                                    ShareUtils.shareApp(context)
+                                    ShareUtils.shareApp(context, strings.shareMessage, strings.shareChooser)
                                 }
                                 else -> viewModel.closeDrawer()
                             }
@@ -189,8 +211,8 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                             DrawerNavHost(
                                 screen = screen,
                                 onClose = viewModel::closeDrawerScreen,
-                                onBugSubmitted = { viewModel.showToast("Bug report submitted") },
-                                onFeedbackSubmitted = { viewModel.showToast("Thank you for your feedback.") },
+                                onBugSubmitted = { viewModel.showToast { it.toastBugSubmitted } },
+                                onFeedbackSubmitted = { viewModel.showToast { it.toastFeedbackThanks } },
                             )
                         }
                     }
@@ -209,7 +231,45 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                             )
                         }
                     }
+
+                    // Smooth language-switch transition: a brief full-surface
+                    // overlay while the UI re-renders in the newly applied
+                    // language — no abrupt screen reload.
+                    AnimatedVisibility(
+                        visible = state.languageApplying,
+                        enter = fadeIn(tween(220)),
+                        exit = fadeOut(tween(320)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(colors.Bg)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {},
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                CircularProgressIndicator(
+                                    color = colors.Accent,
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.size(34.dp),
+                                )
+                                Text(
+                                    strings.languageApplying,
+                                    color = colors.TextSecondary,
+                                    style = ScTextStyles.Body,
+                                )
+                            }
+                        }
+                    }
                 }
+            }
             }
         }
     }

@@ -27,7 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -43,26 +43,21 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScSubScreenTopBar
+import com.shortscap.app.i18n.AppStrings
+import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
-private val faqItems = listOf(
-    "How does ShortsCap work?" to
-        "ShortsCap monitors your app usage and helps you build healthier digital habits. It tracks screen time, shows usage analytics on your dashboard, and lets you block distracting apps or enter Focus Mode to stay productive.",
-    "Why is Accessibility Permission required?" to
-        "Accessibility permission lets ShortsCap power App Blocking and Focus Mode on your Android device. It is used only for features you intentionally enable and never to read messages, passwords, or other personal content.",
-    "Why is Usage Access Permission required?" to
-        "Usage Access permission gives ShortsCap read access to your device's app-usage statistics so it can show accurate screen-time and usage reports on the dashboard. You can revoke it anytime from Android Settings.",
-    "How do I block Shorts?" to
-        "Open the Web screen from the bottom navigation, select the Blocked tab, and add the app or site you want to restrict. Blocking applies based on the preferences and permissions you grant.",
-    "How do I reset my password?" to
-        "On the Sign In screen, tap 'Forgot Password?', enter your registered email, and use the verification code we send to you to create a new password.",
-    "Why am I not receiving OTP?" to
-        "Check that you entered the correct registered email or mobile number, that you have a stable internet connection, and that our message did not land in spam. If it still does not arrive, contact support.",
-    "How do I update my profile?" to
-        "Tap your profile avatar in the top bar, open Edit Profile, and update your name, email, or other details. Changes are saved to your account.",
-    "How do I delete my account?" to
-        "Account deletion is available from your profile/account settings. After confirmation, your account and associated data will be removed in line with our Privacy Policy.",
+/** FAQ content comes from the language catalog — no hardcoded text here. */
+private fun faqItems(strings: AppStrings) = listOf(
+    strings.faqQ1 to strings.faqA1,
+    strings.faqQ2 to strings.faqA2,
+    strings.faqQ3 to strings.faqA3,
+    strings.faqQ4 to strings.faqA4,
+    strings.faqQ5 to strings.faqA5,
+    strings.faqQ6 to strings.faqA6,
+    strings.faqQ7 to strings.faqA7,
+    strings.faqQ8 to strings.faqA8,
 )
 
 /**
@@ -75,6 +70,7 @@ fun FaqScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     var expandedIndex by remember { mutableStateOf<Int?>(null) }
 
     Column(
@@ -82,7 +78,7 @@ fun FaqScreen(
             .fillMaxSize()
             .background(colors.Bg),
     ) {
-        ScSubScreenTopBar(title = "Frequently Asked Questions", onBack = onBack)
+        ScSubScreenTopBar(title = strings.faqTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
@@ -93,7 +89,7 @@ fun FaqScreen(
                 .padding(top = 22.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            faqItems.forEachIndexed { index, (question, answer) ->
+            faqItems(strings).forEachIndexed { index, (question, answer) ->
                 FaqAccordionCard(
                     question = question,
                     answer = answer,
@@ -171,7 +167,7 @@ private fun FaqAccordionCard(
                 modifier = Modifier.weight(1f),
             )
             Icon(
-                Icons.Filled.ChevronRight,
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = if (expanded) colors.Accent else colors.TextSecondary,
                 modifier = Modifier
