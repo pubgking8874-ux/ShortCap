@@ -128,6 +128,11 @@ fun AuthNavGraph(
         composable(AuthScreen.ForgotPassword.route) {
             ForgotPasswordScreen(
                 onBack = { navController.popBackStack() },
+                onCreateAccount = {
+                    navController.navigate(AuthScreen.CreateAccount.route) {
+                        popUpTo(AuthScreen.Login.route) { inclusive = true }
+                    }
+                },
                 onSendOtp = { email ->
                     navController.navigate(
                         AuthScreen.OtpVerification.createRoute(destination = email)
