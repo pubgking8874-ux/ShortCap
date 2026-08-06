@@ -11,6 +11,9 @@ import com.shortscap.app.i18n.LanguagePreferenceStore
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.model.ProfileData
+import com.shortscap.app.notifications.NotificationRepository
+import com.shortscap.app.notifications.NotificationSetting
+import com.shortscap.app.notifications.NotificationSettingId
 import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.model.ScCircularMetric
@@ -76,7 +79,11 @@ data class AppUiState(
     // repository seam without UI changes).
     val settingsDestination: SettingsDestination? = null,
     val monitoring: MonitoringSettings = MonitoringSettings(),
-    val notificationsEnabled: Boolean = true,
+
+    // Notifications module — every option's on/off state, persisted locally
+    // by [NotificationRepository] (backend-ready: same shape maps 1:1 to a
+    // future GET/POST /notifications/settings API).
+    val notificationSettings: List<NotificationSetting> = NotificationRepository.seedSettings(),
 
     // Permissions management center — live statuses resolved from the Android
     // OS by [PermissionRepository]; refreshed automatically whenever a
@@ -119,6 +126,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         AppUiState(
             themeMode = themeStore.loadThemeMode(),
             appLanguage = languageStore.loadLanguage(),
+            notificationSettings = NotificationRepository.loadSettings(application),
         ),
     )
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
@@ -283,7 +291,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setBreakReminderInterval(minutes: Int) =
         _uiState.update { it.copy(monitoring = it.monitoring.copy(breakReminderIntervalMinutes = minutes)) }
 
-    fun setNotifications(on: Boolean) = _uiState.update { it.copy(notificationsEnabled = on) }
+    // ---- Notifications (local persistence today; future: NotificationRepository
+    //      cloud sync / analytics seams) ----
+    fun toggleNotificationSetting(id: NotificationSettingId, enabled: Boolean) {
+        val updated = uiState.value.notificationSettings.map {
+            if (it.id == id) it.copy(enabled = enabled) else it
+        }
+        NotificationRepository.saveSettings(getApplication(), updated)
+        _uiState.update { it.copy(notificationSettings = updated) }
+        // Future backend: NotificationRepository.syncSettingsToCloud(updated);
+        // Future analytics: NotificationRepository.trackNotificationAnalytics(id, enabled).
+    }
 
     // ---- Permissions (live OS checks; backend-ready via PermissionRepository)
     //      Called on every Permissions-screen resume so statuses stay fresh
@@ -298,10 +316,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // clear backend / cloud preferences through the SettingsRepository seam.
     fun resetAllSettings() {
         themeStore.saveThemeMode(ThemeMode.DARK)
+        NotificationRepository.clearSettings(getApplication())
         _uiState.update {
             it.copy(
                 monitoring = MonitoringSettings(),
-                notificationsEnabled = true,
+                notificationSettings = NotificationRepository.seedSettings(),
                 themeMode = ThemeMode.DARK,
             )
         }

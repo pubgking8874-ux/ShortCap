@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +36,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScDivider
-import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.permissions.PermissionActions
@@ -85,13 +83,6 @@ fun PermissionsScreen(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ScPremiumInfoCard(
-                icon = Icons.Filled.VerifiedUser,
-                title = strings.permissionsTitle,
-                subtitle = strings.permissionsDesc,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
             // One grouped settings container (like modern Android settings)
             // with thin dividers between the rows — not individual cards.
             Column(

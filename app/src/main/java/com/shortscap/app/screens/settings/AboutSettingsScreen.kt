@@ -8,14 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScInfoRow
-import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
@@ -38,12 +35,6 @@ fun AboutSettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ScPremiumInfoCard(
-                icon = Icons.Filled.Info,
-                title = "ShortsCap",
-                subtitle = strings.aboutSettingsDesc,
-                modifier = Modifier.fillMaxWidth(),
-            )
             ScCard(modifier = Modifier.fillMaxWidth()) {
                 ScInfoRow(label = strings.versionLabel, value = "2.4.1")
                 ScInfoRow(label = strings.buildLabel, value = "2026072801")

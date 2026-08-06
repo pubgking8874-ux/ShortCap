@@ -113,7 +113,6 @@ interface AppStrings {
     val settingsDataBackup: String
     val settingsAbout: String
     val settingsResetAll: String
-    val settingsGeneralDesc: String
 
     // ---- Language ----
     val languageTitle: String
@@ -181,7 +180,6 @@ interface AppStrings {
 
     // ---- Permissions (status overview) ----
     val permissionsTitle: String
-    val permissionsDesc: String
 
     // Permission statuses
     val permStatusGranted: String
@@ -219,26 +217,67 @@ interface AppStrings {
 
     // ---- Notifications ----
     val notificationsTitle: String
-    val notifDailySummary: String
+
+    // Notification categories (main page rows — icon + title + chevron only)
+    val notifReminders: String
     val notifLimitAlerts: String
+    val notifBlockNotifications: String
+    val notifWeeklyInsights: String
+    val notifSystemNotifications: String
+    val notifSoundVibration: String
+
+    // Reminder Notifications
+    val notifDailyUsageReminder: String
+    val notifDailyUsageReminderDesc: String
+    val notifDailyScreenTimeSummary: String
+    val notifDailyScreenTimeSummaryDesc: String
+    val notifGoalAchievement: String
+    val notifGoalAchievementDesc: String
+
+    // Limit Alerts
+    val notifLimit50: String
+    val notifLimit50Desc: String
+    val notifLimit80: String
+    val notifLimit80Desc: String
+    val notifLimit100: String
+    val notifLimit100Desc: String
+
+    // Block Notifications
+    val notifAppBlockedAlert: String
+    val notifAppBlockedAlertDesc: String
+    val notifRestrictionMessage: String
+    val notifRestrictionMessageDesc: String
+
+    // Weekly Insights
+    val notifWeeklyProgressReport: String
+    val notifWeeklyProgressReportDesc: String
+    val notifWeeklyAchievement: String
+    val notifWeeklyAchievementDesc: String
+
+    // System Notifications
+    val notifPermissionReminder: String
+    val notifPermissionReminderDesc: String
+    val notifMonitoringStopped: String
+    val notifMonitoringStoppedDesc: String
+    val notifBackgroundServiceStatus: String
+    val notifBackgroundServiceStatusDesc: String
+
+    // Sound & Vibration
+    val notifNotificationSound: String
+    val notifNotificationSoundDesc: String
+    val notifVibration: String
+    val notifVibrationDesc: String
 
     // ---- Appearance ----
     val appearanceTitle: String
     val appearanceTheme: String
-    val appearanceThemeDesc: String
     val appearanceDark: String
     val appearanceLight: String
     val appearanceSystem: String
 
     // ---- Privacy / Data Backup ----
     val privacyTitle: String
-    val privacyDesc: String
     val dataBackupTitle: String
-    val dataBackupDesc: String
-
-    // ---- About (Settings) / Reset ----
-    val aboutSettingsDesc: String
-    val resetAllDesc: String
 
     // ---- Monitoring placeholder pages ----
     val blockedAppsEmptyTitle: String

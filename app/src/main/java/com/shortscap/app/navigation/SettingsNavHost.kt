@@ -17,6 +17,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.SettingsDestination
+import com.shortscap.app.notifications.NotificationCategory
 import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.screens.settings.AboutSettingsScreen
@@ -27,6 +28,7 @@ import com.shortscap.app.screens.settings.GeneralScreen
 import com.shortscap.app.screens.settings.LanguageScreen
 import com.shortscap.app.screens.settings.MonitoringScheduleScreen
 import com.shortscap.app.screens.settings.MonitoringScreen
+import com.shortscap.app.screens.settings.NotificationCategoryScreen
 import com.shortscap.app.screens.settings.NotificationsScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
@@ -42,6 +44,7 @@ object SettingsDestinations {
     const val PERMISSIONS = "settings_permissions"
     const val PERMISSION_DETAIL = "settings_permission_detail"
     const val NOTIFICATIONS = "settings_notifications"
+    const val NOTIFICATION_CATEGORY = "settings_notification_category"
     const val APPEARANCE = "settings_appearance"
     const val PRIVACY = "settings_privacy"
     const val DATA_BACKUP = "settings_data_backup"
@@ -56,6 +59,10 @@ object SettingsDestinations {
     /** Route with the [PermissionId] name appended, e.g. settings_permission_detail/USAGE_ACCESS. */
     fun permissionDetailRoute(permissionId: PermissionId): String =
         "$PERMISSION_DETAIL/${permissionId.name}"
+
+    /** Route with the [NotificationCategory] name appended, e.g. settings_notification_category/REMINDERS. */
+    fun notificationCategoryRoute(category: NotificationCategory): String =
+        "$NOTIFICATION_CATEGORY/${category.name}"
 }
 
 private fun SettingsDestination.startRoute(): String = when (this) {
@@ -166,8 +173,24 @@ fun SettingsNavHost(
 
         composable(SettingsDestinations.NOTIFICATIONS) {
             NotificationsScreen(
-                notificationsEnabled = state.notificationsEnabled,
-                onToggleNotifications = viewModel::setNotifications,
+                onOpenCategory = { category ->
+                    navController.navigate(SettingsDestinations.notificationCategoryRoute(category))
+                },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(
+            route = "${SettingsDestinations.NOTIFICATION_CATEGORY}/{category}",
+            arguments = listOf(navArgument("category") { type = NavType.StringType }),
+        ) { entry ->
+            val category = entry.arguments?.getString("category")
+                ?.let { name -> NotificationCategory.entries.firstOrNull { it.name == name } }
+                ?: NotificationCategory.REMINDERS
+            NotificationCategoryScreen(
+                category = category,
+                settings = state.notificationSettings.filter { it.id.category == category },
+                onToggleSetting = viewModel::toggleNotificationSetting,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -182,18 +205,14 @@ fun SettingsNavHost(
 
         composable(SettingsDestinations.PRIVACY) {
             SettingsSectionScreen(
-                icon = Icons.Filled.Lock,
                 title = strings.privacyTitle,
-                description = strings.privacyDesc,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
 
         composable(SettingsDestinations.DATA_BACKUP) {
             SettingsSectionScreen(
-                icon = Icons.Filled.Storage,
                 title = strings.dataBackupTitle,
-                description = strings.dataBackupDesc,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

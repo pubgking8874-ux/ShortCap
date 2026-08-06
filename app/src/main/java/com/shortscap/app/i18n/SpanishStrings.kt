@@ -93,7 +93,6 @@ object SpanishStrings : AppStrings {
     override val settingsDataBackup = "Copia de seguridad"
     override val settingsAbout = "Acerca de"
     override val settingsResetAll = "Restablecer todos los ajustes"
-    override val settingsGeneralDesc = "Idioma, sincronización y valores predeterminados."
 
     // ---- Language ----
     override val languageTitle = "Idioma"
@@ -157,7 +156,6 @@ object SpanishStrings : AppStrings {
 
     // ---- Permissions ----
     override val permissionsTitle = "Permisos"
-    override val permissionsDesc = "Gestiona los permisos que impulsan el monitoreo, el bloqueo de apps y las alertas. El estado se detecta automáticamente."
     override val permStatusGranted = "Otorgado"
     override val permStatusEnabled = "Habilitado"
     override val permStatusAllowed = "Permitido"
@@ -189,26 +187,67 @@ object SpanishStrings : AppStrings {
 
     // ---- Notifications ----
     override val notificationsTitle = "Notificaciones"
-    override val notifDailySummary = "Resumen diario"
-    override val notifLimitAlerts = "Alertas de límite alcanzado"
+
+    // Notification categories (main page rows — icon + title + chevron only)
+    override val notifReminders = "Notificaciones de recordatorios"
+    override val notifLimitAlerts = "Alertas de límite"
+    override val notifBlockNotifications = "Notificaciones de bloqueo"
+    override val notifWeeklyInsights = "Información semanal"
+    override val notifSystemNotifications = "Notificaciones del sistema"
+    override val notifSoundVibration = "Sonido y vibración"
+
+    // Reminder Notifications
+    override val notifDailyUsageReminder = "Recordatorio de uso diario"
+    override val notifDailyUsageReminderDesc = "Te recuerda reducir el uso de Shorts durante el día."
+    override val notifDailyScreenTimeSummary = "Resumen diario de tiempo de pantalla"
+    override val notifDailyScreenTimeSummaryDesc = "Envía el resumen del uso total monitoreado de hoy."
+    override val notifGoalAchievement = "Logro de objetivos"
+    override val notifGoalAchievementDesc = "Notifica cuando se alcanza el objetivo diario."
+
+    // Limit Alerts
+    override val notifLimit50 = "Notificar al 50%"
+    override val notifLimit50Desc = "Alerta cuando llegues al 50% del límite de uso de hoy."
+    override val notifLimit80 = "Notificar al 80%"
+    override val notifLimit80Desc = "Alerta cuando llegues al 80% del límite de uso de hoy."
+    override val notifLimit100 = "Notificar al 100%"
+    override val notifLimit100Desc = "Alerta cuando se alcance el límite de uso de hoy."
+
+    // Block Notifications
+    override val notifAppBlockedAlert = "Alerta de app bloqueada"
+    override val notifAppBlockedAlertDesc = "Notifica cada vez que ShortsCap bloquee una aplicación."
+    override val notifRestrictionMessage = "Mensaje de restricción"
+    override val notifRestrictionMessageDesc = "Muestra mensajes motivadores de restricción como «Es hora de tomar un descanso»."
+
+    // Weekly Insights
+    override val notifWeeklyProgressReport = "Informe de progreso semanal"
+    override val notifWeeklyProgressReportDesc = "Muestra el resumen de monitoreo semanal."
+    override val notifWeeklyAchievement = "Logro semanal"
+    override val notifWeeklyAchievementDesc = "Notifica las mejoras, como «Redujiste el uso de Shorts en 3 horas esta semana»."
+
+    // System Notifications
+    override val notifPermissionReminder = "Recordatorio de permisos"
+    override val notifPermissionReminderDesc = "Notifica si un permiso requerido está deshabilitado."
+    override val notifMonitoringStopped = "Monitoreo detenido"
+    override val notifMonitoringStoppedDesc = "Alerta cuando el monitoreo se detiene inesperadamente."
+    override val notifBackgroundServiceStatus = "Estado del servicio en segundo plano"
+    override val notifBackgroundServiceStatusDesc = "Notifica si el servicio de monitoreo se interrumpe."
+
+    // Sound & Vibration
+    override val notifNotificationSound = "Sonido de notificación"
+    override val notifNotificationSoundDesc = "Reproduce un sonido cuando llega una notificación."
+    override val notifVibration = "Vibración"
+    override val notifVibrationDesc = "Activa o desactiva la vibración de las notificaciones."
 
     // ---- Appearance ----
     override val appearanceTitle = "Apariencia"
     override val appearanceTheme = "Tema"
-    override val appearanceThemeDesc = "Elige cómo se ve ShortsCap. Tu selección se guarda automáticamente."
     override val appearanceDark = "Oscuro"
     override val appearanceLight = "Claro"
     override val appearanceSystem = "Predeterminado del sistema"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "Privacidad"
-    override val privacyDesc = "Preferencias de intercambio de datos y visibilidad."
     override val dataBackupTitle = "Copia de seguridad"
-    override val dataBackupDesc = "Sincronización en la nube y exportación de tus ajustes y datos."
-
-    // ---- About (Settings) / Reset ----
-    override val aboutSettingsDesc = "Compañero de bienestar digital para vídeos de formato corto."
-    override val resetAllDesc = "Restaura el monitoreo, las notificaciones y cualquier otro ajuste a sus valores predeterminados. Esta acción no se puede deshacer."
 
     // ---- Monitoring placeholder pages ----
     override val blockedAppsEmptyTitle = "Aún no hay apps bloqueadas"

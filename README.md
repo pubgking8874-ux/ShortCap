@@ -802,11 +802,19 @@ All pickers are clean Material 3 dialogs styled with the ShortsCap dark theme; t
 
 ### 3. Other dedicated Settings screens
 
-- **General / Permissions / Privacy / Data Backup** — `SettingsSectionScreen` (generic premium page with icon + description + "Coming soon" placeholder).
-- **Notifications** — premium toggle cards (Daily summary persisted in the ViewModel; Limit reached alerts static).
-- **Appearance** — the existing Theme selector (Dark / Light / System Default) moved intact to its own page.
+- **General / Permissions / Privacy / Data Backup** — dedicated screens; Privacy / Data Backup use the generic `SettingsSectionScreen` placeholder page ("Coming soon").
+- **Notifications** — premium hub: 6 category rows, each opening its own dedicated option page with toggles.
+- **Appearance** — the Theme selector (Dark / Light / System Default) on its own page.
 - **About** — Version 2.4.1, Build 2026072801, © 2026 ShortsCap.
-- **Reset All Settings** — dedicated confirmation page with a danger button that restores all settings to defaults.
+- **Reset All Settings** — confirmation page with a danger button that restores all settings to defaults.
+
+### 4. Design rule — no introduction cards (applies to every Settings page, now and future)
+
+Every Settings sub-page follows one strict design language:
+
+- **No introductory information card** at the top of any sub-page — no "Manage the permissions…", no "Choose which notifications…", and no similar repeated description cards.
+- Each page contains only a **top app bar** (back button + page title) and the **settings list / options**.
+- **Future rule:** any new Settings page added later must follow the same design — no introduction cards, no repeated descriptions, only clean navigation and settings options.
 
 ## Navigation flow
 
@@ -899,3 +907,52 @@ Urdu also flips the app’s **layout direction to RTL** (`LocalLayoutDirection`)
 - `viewmodel/AppViewModel.kt` — settings navigation + monitoring state & setters, `resetAllSettings()`
 - `components/PremiumCards.kt` — `ScPremiumNavCard` gained optional `subtitle` + `trailing` slots (drawer pages unchanged)
 - `ShortsCapApp.kt`, `navigation/ScNavHost.kt` — wiring
+
+---
+
+# Notifications Module
+
+## What was added
+
+Settings → **Notifications** is now a premium, scalable notification center. It is **not** a flat list of toggles: the main page shows the **6 notification categories** as premium rows (icon · title · chevron — **no subtitles**), and each category opens its **own dedicated page** where its options live as premium toggle cards (icon · title · description · switch). No expandable cards anywhere; every category is one tap deep from the hub.
+
+## Notification Categories
+
+| # | Category | Options |
+| --- | --- | --- |
+| 1 | **Reminder Notifications** | Daily Usage Reminder · Daily Screen Time Summary · Goal Achievement |
+| 2 | **Limit Alerts** | Notify at 50% · Notify at 80% · Notify at 100% (e.g. "You've reached 80% of today's usage limit.") |
+| 3 | **Block Notifications** | App Blocked Alert · Restriction Message (e.g. "Time to take a break.") |
+| 4 | **Weekly Insights** | Weekly Progress Report · Weekly Achievement (e.g. "You reduced Shorts usage by 3 hours this week.") |
+| 5 | **System Notifications** | Permission Reminder · Monitoring Stopped · Background Service Status |
+| 6 | **Sound & Vibration** | Notification Sound · Vibration |
+
+## Local Notification Architecture
+
+- **Models** (`notifications/NotificationModels.kt`): `NotificationCategory` (6) and `NotificationSettingId` (15 options, each grouped to a category via its `category` field). Every option maps 1:1 to a future backend `GET /notifications/settings` entry.
+- **State** (`AppViewModel`): `AppUiState.notificationSettings: List<NotificationSetting>` is the single source of truth; `toggleNotificationSetting(id, enabled)` updates it and persists immediately.
+- **Local persistence** (`notifications/NotificationRepository.kt`): every option's on/off state is saved to SharedPreferences (`loadSettings` / `saveSettings` / `clearSettings`), matching the Theme/Language store pattern. Missing keys fall back to defaults, so new options added in a future release need **no migration**.
+- **Defaults**: the three limit alerts and both weekly insights are opt-in (start disabled); everything else starts enabled.
+- **Screens**: `NotificationsScreen` (hub) → `NotificationCategoryScreen` (dedicated page per category, rendered from the same enum — adding a category only touches the enum + i18n catalog).
+- **i18n**: all titles/descriptions/examples live in the `AppStrings` catalog (EN / HI / UR / ZH / ES) — no hardcoded text.
+
+## Backend Integration Ready
+
+- Every `NotificationSetting` carries `id` (unique setting ID), `enabled` (current state), plus **future cloud-sync placeholder** (`cloudSyncEnabled`) and **future analytics placeholder** (`analyticsEvent`).
+- **Repository seam**: `syncSettingsToCloud(...)` (POST /notifications/settings) and `trackNotificationAnalytics(...)` are documented placeholders — swapping SharedPreferences for backend APIs or a local Room cache requires **no UI changes**.
+- **Navigation**: `settings_notification_category/{category}` route with typed `NotificationCategory` arg — deep-linking/predictive back works later with no restructure.
+- `Reset All Settings` clears the notification prefs and restores defaults.
+
+## Cloud Sync Ready
+
+The local SharedPreferences store is deliberately shaped like the future remote model: one key per `NotificationSettingId` with a boolean state. When the backend connects, `NotificationRepository.loadSettings`/`saveSettings` are replaced by the API calls behind the identical `NotificationSetting` shape — the UI, navigation and state management stay untouched.
+
+## Files
+
+- `notifications/NotificationModels.kt`, `notifications/NotificationRepository.kt` — Notifications module (models + local storage + backend seams)
+- `screens/settings/NotificationsScreen.kt` — hub with the 6 category rows
+- `screens/settings/NotificationCategoryScreen.kt` — dedicated option page per category
+- `screens/settings/NotificationUi.kt` — shared helpers (icons, titles, descriptions)
+- `navigation/SettingsNavHost.kt` — `NotificationsScreen` + `settings_notification_category/{category}` route
+- `viewmodel/AppViewModel.kt` — `AppUiState.notificationSettings` + `toggleNotificationSetting()` + reset
+- `i18n/` — full catalog (EN / HI / UR / ZH / ES) for the hub, categories and options

@@ -93,7 +93,6 @@ object ChineseStrings : AppStrings {
     override val settingsDataBackup = "数据备份"
     override val settingsAbout = "关于"
     override val settingsResetAll = "重置所有设置"
-    override val settingsGeneralDesc = "语言、同步和默认设置。"
 
     // ---- Language ----
     override val languageTitle = "语言"
@@ -157,7 +156,6 @@ object ChineseStrings : AppStrings {
 
     // ---- Permissions ----
     override val permissionsTitle = "权限"
-    override val permissionsDesc = "管理监控、应用阻止和提醒所需的权限。状态会自动检测。"
     override val permStatusGranted = "已授予"
     override val permStatusEnabled = "已启用"
     override val permStatusAllowed = "已允许"
@@ -189,26 +187,67 @@ object ChineseStrings : AppStrings {
 
     // ---- Notifications ----
     override val notificationsTitle = "通知"
-    override val notifDailySummary = "每日摘要"
-    override val notifLimitAlerts = "达到限制提醒"
+
+    // Notification categories (main page rows — icon + title + chevron only)
+    override val notifReminders = "提醒通知"
+    override val notifLimitAlerts = "限额提醒"
+    override val notifBlockNotifications = "屏蔽通知"
+    override val notifWeeklyInsights = "每周洞察"
+    override val notifSystemNotifications = "系统通知"
+    override val notifSoundVibration = "声音与振动"
+
+    // Reminder Notifications
+    override val notifDailyUsageReminder = "每日使用提醒"
+    override val notifDailyUsageReminderDesc = "提醒您在一天中减少刷短视频的时间。"
+    override val notifDailyScreenTimeSummary = "每日屏幕时间摘要"
+    override val notifDailyScreenTimeSummaryDesc = "发送今日监控总使用量摘要。"
+    override val notifGoalAchievement = "目标达成"
+    override val notifGoalAchievementDesc = "每日目标达成时通知您。"
+
+    // Limit Alerts
+    override val notifLimit50 = "达到 50% 时提醒"
+    override val notifLimit50Desc = "当今日使用限额达到 50% 时提醒。"
+    override val notifLimit80 = "达到 80% 时提醒"
+    override val notifLimit80Desc = "当今日使用限额达到 80% 时提醒。"
+    override val notifLimit100 = "达到 100% 时提醒"
+    override val notifLimit100Desc = "当今日使用限额用完时提醒。"
+
+    // Block Notifications
+    override val notifAppBlockedAlert = "应用屏蔽提醒"
+    override val notifAppBlockedAlertDesc = "每当 ShortsCap 屏蔽应用时通知您。"
+    override val notifRestrictionMessage = "限制提示语"
+    override val notifRestrictionMessageDesc = "显示激励性限制提示，例如“该休息一下了。”"
+
+    // Weekly Insights
+    override val notifWeeklyProgressReport = "每周进度报告"
+    override val notifWeeklyProgressReportDesc = "显示每周监控摘要。"
+    override val notifWeeklyAchievement = "每周成就"
+    override val notifWeeklyAchievementDesc = "通知改进情况，例如“本周您减少了 3 小时的短视频使用时间。”"
+
+    // System Notifications
+    override val notifPermissionReminder = "权限提醒"
+    override val notifPermissionReminderDesc = "当必需权限被禁用时通知您。"
+    override val notifMonitoringStopped = "监控已停止"
+    override val notifMonitoringStoppedDesc = "当监控意外停止时提醒。"
+    override val notifBackgroundServiceStatus = "后台服务状态"
+    override val notifBackgroundServiceStatusDesc = "当监控服务中断时通知您。"
+
+    // Sound & Vibration
+    override val notifNotificationSound = "通知声音"
+    override val notifNotificationSoundDesc = "收到通知时播放声音。"
+    override val notifVibration = "振动"
+    override val notifVibrationDesc = "启用或禁用通知振动。"
 
     // ---- Appearance ----
     override val appearanceTitle = "外观"
     override val appearanceTheme = "主题"
-    override val appearanceThemeDesc = "选择 ShortsCap 的外观。您的选择会自动保存。"
     override val appearanceDark = "深色"
     override val appearanceLight = "浅色"
     override val appearanceSystem = "系统默认"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "隐私"
-    override val privacyDesc = "数据共享和可见性偏好。"
     override val dataBackupTitle = "数据备份"
-    override val dataBackupDesc = "设置和数据的云同步与导出。"
-
-    // ---- About (Settings) / Reset ----
-    override val aboutSettingsDesc = "短视频的数字健康伴侣。"
-    override val resetAllDesc = "将监控、通知和所有其他设置恢复为默认值。此操作无法撤销。"
 
     // ---- Monitoring placeholder pages ----
     override val blockedAppsEmptyTitle = "还没有已屏蔽的应用"

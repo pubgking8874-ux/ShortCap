@@ -93,7 +93,6 @@ object HindiStrings : AppStrings {
     override val settingsDataBackup = "डेटा बैकअप"
     override val settingsAbout = "जानकारी"
     override val settingsResetAll = "सभी सेटिंग्स रीसेट करें"
-    override val settingsGeneralDesc = "भाषा, सिंक और डिफ़ॉल्ट सेटिंग्स।"
 
     // ---- Language ----
     override val languageTitle = "भाषा"
@@ -157,7 +156,6 @@ object HindiStrings : AppStrings {
 
     // ---- Permissions ----
     override val permissionsTitle = "अनुमतियाँ"
-    override val permissionsDesc = "मॉनिटरिंग, ऐप ब्लॉकिंग और अलर्ट को संचालित करने वाली अनुमतियाँ प्रबंधित करें। स्थिति स्वचालित रूप से जाँची जाती है।"
     override val permStatusGranted = "दी गई"
     override val permStatusEnabled = "सक्षम"
     override val permStatusAllowed = "अनुमत"
@@ -189,26 +187,67 @@ object HindiStrings : AppStrings {
 
     // ---- Notifications ----
     override val notificationsTitle = "सूचनाएँ"
-    override val notifDailySummary = "दैनिक सारांश"
-    override val notifLimitAlerts = "सीमा पूरी होने की सूचनाएँ"
+
+    // Notification categories (main page rows — icon + title + chevron only)
+    override val notifReminders = "रिमाइंडर सूचनाएँ"
+    override val notifLimitAlerts = "सीमा अलर्ट"
+    override val notifBlockNotifications = "ब्लॉक सूचनाएँ"
+    override val notifWeeklyInsights = "साप्ताहिक अंतर्दृष्टि"
+    override val notifSystemNotifications = "सिस्टम सूचनाएँ"
+    override val notifSoundVibration = "ध्वनि और कंपन"
+
+    // Reminder Notifications
+    override val notifDailyUsageReminder = "दैनिक उपयोग रिमाइंडर"
+    override val notifDailyUsageReminderDesc = "दिन के दौरान शॉर्ट्स का उपयोग कम करने की याद दिलाता है।"
+    override val notifDailyScreenTimeSummary = "दैनिक स्क्रीन समय सारांश"
+    override val notifDailyScreenTimeSummaryDesc = "आज की कुल निगरानी उपयोग राशि भेजता है।"
+    override val notifGoalAchievement = "लक्ष्य प्राप्ति"
+    override val notifGoalAchievementDesc = "दैनिक लक्ष्य पूरा होने पर सूचित करें।"
+
+    // Limit Alerts
+    override val notifLimit50 = "50% पर सूचित करें"
+    override val notifLimit50Desc = "आज की उपयोग सीमा के 50% तक पहुँचने पर अलर्ट करें।"
+    override val notifLimit80 = "80% पर सूचित करें"
+    override val notifLimit80Desc = "आज की उपयोग सीमा के 80% तक पहुँचने पर अलर्ट करें।"
+    override val notifLimit100 = "100% पर सूचित करें"
+    override val notifLimit100Desc = "आज की उपयोग सीमा पूरी होने पर अलर्ट करें।"
+
+    // Block Notifications
+    override val notifAppBlockedAlert = "ऐप ब्लॉक अलर्ट"
+    override val notifAppBlockedAlertDesc = "जब भी ShortsCap किसी ऐप को ब्लॉक करता है, सूचित करें।"
+    override val notifRestrictionMessage = "प्रतिबंध संदेश"
+    override val notifRestrictionMessageDesc = "\"ब्रेक लेने का समय है।\" जैसे प्रेरक प्रतिबंध संदेश दिखाएँ।"
+
+    // Weekly Insights
+    override val notifWeeklyProgressReport = "साप्ताहिक प्रगति रिपोर्ट"
+    override val notifWeeklyProgressReportDesc = "साप्ताहिक निगरानी सारांश दिखाएँ।"
+    override val notifWeeklyAchievement = "साप्ताहिक उपलब्धि"
+    override val notifWeeklyAchievementDesc = "सुधारों के बारे में सूचित करें, जैसे \"इस सप्ताह आपने शॉर्ट्स उपयोग 3 घंटे घटाया।\""
+
+    // System Notifications
+    override val notifPermissionReminder = "अनुमति रिमाइंडर"
+    override val notifPermissionReminderDesc = "आवश्यक अनुमति बंद होने पर सूचित करें।"
+    override val notifMonitoringStopped = "निगरानी रुक गई"
+    override val notifMonitoringStoppedDesc = "निगरानी अचानक रुकने पर अलर्ट करें।"
+    override val notifBackgroundServiceStatus = "बैकग्राउंड सेवा स्थिति"
+    override val notifBackgroundServiceStatusDesc = "निगरानी सेवा बाधित होने पर सूचित करें।"
+
+    // Sound & Vibration
+    override val notifNotificationSound = "सूचना ध्वनि"
+    override val notifNotificationSoundDesc = "सूचना आने पर ध्वनि बजाएँ।"
+    override val notifVibration = "कंपन"
+    override val notifVibrationDesc = "सूचनाओं के लिए कंपन सक्षम या अक्षम करें।"
 
     // ---- Appearance ----
     override val appearanceTitle = "दिखावट"
     override val appearanceTheme = "थीम"
-    override val appearanceThemeDesc = "चुनें कि ShortsCap कैसा दिखे। आपकी पसंद अपने आप सहेजी जाती है।"
     override val appearanceDark = "डार्क"
     override val appearanceLight = "लाइट"
     override val appearanceSystem = "सिस्टम डिफ़ॉल्ट"
 
     // ---- Privacy / Data Backup ----
     override val privacyTitle = "गोपनीयता"
-    override val privacyDesc = "डेटा साझाकरण और दृश्यता प्राथमिकताएँ।"
     override val dataBackupTitle = "डेटा बैकअप"
-    override val dataBackupDesc = "अपनी सेटिंग्स और डेटा का क्लाउड सिंक और निर्यात।"
-
-    // ---- About (Settings) / Reset ----
-    override val aboutSettingsDesc = "शॉर्ट-फ़ॉर्म वीडियो के लिए डिजिटल वेलबीइंग साथी।"
-    override val resetAllDesc = "मॉनिटरिंग, सूचनाएँ और बाकी सभी सेटिंग्स को डिफ़ॉल्ट मानों पर लौटाएँ। इसे पूर्ववत नहीं किया जा सकता।"
 
     // ---- Monitoring placeholder pages ----
     override val blockedAppsEmptyTitle = "अभी तक कोई ब्लॉक किया गया ऐप नहीं"

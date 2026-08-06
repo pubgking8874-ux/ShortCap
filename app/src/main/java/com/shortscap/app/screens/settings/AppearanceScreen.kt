@@ -12,8 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
-import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
@@ -55,12 +52,6 @@ fun AppearanceScreen(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ScPremiumInfoCard(
-                icon = Icons.Filled.Palette,
-                title = strings.appearanceTheme,
-                subtitle = strings.appearanceThemeDesc,
-                modifier = Modifier.fillMaxWidth(),
-            )
             ThemeSelector(strings = strings, themeMode = themeMode, onThemeModeChange = onThemeModeChange)
         }
     }
