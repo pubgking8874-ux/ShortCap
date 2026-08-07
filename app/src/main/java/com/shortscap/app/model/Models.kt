@@ -41,11 +41,6 @@ data class ScEntity(
     val timestamp: String? = null,
 )
 
-/** Mirrors Web screen site rows, keyed by tab (Blocked / Allowed / Recent) */
-data class SiteEntry(val name: String, val url: String, val on: Boolean)
-
-enum class WebTab { BLOCKED, ALLOWED, RECENT }
-
 /**
  * Drawer item — [id] is a stable key for click routing (labels are
  * localized, so matching on label text would break across languages).

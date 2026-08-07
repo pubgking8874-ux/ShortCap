@@ -102,6 +102,62 @@ interface AppStrings {
     val webNoSitesSubtitle: String
     val webAddWebsite: String
 
+    // Web — analytics + dedicated rule screens
+    val webAnalyticsTitle: String
+    val webBlockedTitle: String
+    val webAllowedTitle: String
+    val webPeriodToday: String
+    val webPeriodWeek: String
+    val webPeriodMonth: String
+    val webUsageTotal: String
+    val webBreakdownTitle: String
+    val webTrendTitle: String
+    val webRulesTitle: String
+    val webEmptyBlockedTitle: String
+    val webEmptyBlockedDesc: String
+    val webEmptyAllowedTitle: String
+    val webEmptyAllowedDesc: String
+    val webNoSearchResults: String
+    val webUnblock: String
+    val webBlockAction: String
+    val webAllow: String
+    val webRemove: String
+    val webDelete: String
+    val webAddDialogTitle: String
+    val webAddDialogDomainLabel: String
+    val webAddDialogPlaceholder: String
+    val webAddDialogAdd: String
+    val webAddInvalid: String
+    val webAddDuplicate: String
+    val webRemoveDialogTitle: String
+    val webConfirmRemove: String
+    val webHoursShort: String
+    val webMinutesShort: String
+    val webNoDataTitle: String
+    val webNoDataDesc: String
+    val webToastBlocked: String
+    val webToastUnblocked: String
+    val webToastAllowed: String
+    val webToastRemoved: String
+
+    /** Confirmation copy for removing a website, e.g. "\"youtube.com\" will be removed…" */
+    fun webRemoveMessage(domain: String): String
+
+    // Web — main blocking screen + recent + analytics entry
+    val webBlockingTitle: String
+    val webBlockWebsite: String
+    val webEnterUrlLabel: String
+    val webUrlPlaceholder: String
+    val webWebTime: String
+    val webRecentTitle: String
+    val webEmptyRecentTitle: String
+    val webEmptyRecentDesc: String
+    val webSearchBlocked: String
+    val webSearchAllowed: String
+    val webTodayUsageTitle: String
+    val webWeeklyUsageTitle: String
+    val webMonthlyUsageTitle: String
+
     // ---- Settings home ----
     val settingsTitle: String
     val settingsGeneral: String

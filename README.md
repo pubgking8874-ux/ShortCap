@@ -1290,3 +1290,97 @@ Android launchers can cache app icons. If the old default icon still appears aft
 - Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
 
 *Feature removals August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## Web Section Redesign — Dedicated Analytics + Website Rule Screens (NEW)
+
+> Implementation completed **August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801**.
+
+### What changed
+
+The old inline Web screen (tabs + switch list inside one page) was replaced with a **dedicated three-screen Web section** driven by a clean **data / model / repository** architecture. Only the Web section was touched — navigation, auth, monitoring, settings and all other features are unchanged.
+
+- **Web tab → Web Usage Analytics** (`WebAnalyticsScreen`) — exclusively website usage (no app/Android usage):
+  - Large **donut chart** with one proportional segment per website (animated sweep), the **total usage in the center**
+  - **Today / Week / Month** period selector — Today = today's usage, Week = 7-day summary, Month = monthly summary
+  - A **trend bar chart** below the donut (last-7-days bars for Today/Week, four weekly buckets for Month)
+  - **Website-wise breakdown** list: website icon, name, domain, duration and percentage
+  - **Website rules** cards at the bottom open the dedicated Blocked / Allowed screens
+- **Blocked Websites** (`WebBlockedScreen`) — full blocked list (icon + name + domain), **Unblock** and **Delete** actions, **search**, **Add Website** (with Block/Allow choice and inline domain validation), and a polished **empty state**
+- **Allowed Websites** (`WebAllowedScreen`) — full allowed list with **Block** and **Remove** actions (easy Blocked ⇄ Allowed switching), search, Add Website, empty state
+- **Navigation** — the Web tab is now a small NavHost (`navigation/WebNavHost.kt`): analytics root + Blocked/Allowed sub-screens with proper back-stack behavior (system Back pops sub-screens; at the analytics root it behaves like every other tab)
+
+### Future-ready architecture
+
+- **No hardcoded data in the UI.** New `web/WebModels.kt` + `web/WebRepository.kt` own all data:
+  - **Website rules** — `WebRule` (domain, display name, status `BLOCKED`/`ALLOWED`, created time, updated time)
+  - **Analytics** — `WebUsageRecord` (domain, display name, usage duration, date) + `WebAnalyticsSummary` (period, total, per-website items with percentage, trend points)
+- `WebRepository.analyticsSummary()` is a **pure aggregation function** — it works identically with today's deterministic seed data and future backend/database records; documented seams (`fetchRulesFromBackend`, `syncRuleToCloud`, `fetchUsageFromBackend`, `trackWebsiteVisit`) are ready but not implemented.
+- **No fake detection is claimed** — Shorts/website usage is demo data; a future browser / VPN / accessibility-based tracking mechanism will insert real records of the same shape without any UI changes.
+- All state flows through `AppViewModel` (`webRules`, `webUsageRecords`, `webPeriod` + `addWebRule` / `setWebRuleStatus` / `removeWebRule` / `setWebPeriod`), fully backend-ready.
+- New screens use the **centralized icon system** (`IconKey.WEB_ANALYTICS / WEB_BLOCKED / WEB_ALLOWED`), the **5-language string catalog** (35 new keys), and the shared premium components; dark/light/system themes, responsive sizing and navigation safe areas are respected (Web content inherits the tab container's navigation-bar padding).
+
+### Files
+
+- New: `web/WebModels.kt`, `web/WebRepository.kt`, `navigation/WebNavHost.kt`, `screens/web/{WebAnalyticsScreen,WebBlockedScreen,WebAllowedScreen,WebComponents}.kt`
+- Modified: `viewmodel/AppViewModel.kt`, `navigation/ScNavHost.kt`, `model/Models.kt` (removed obsolete `SiteEntry`/`WebTab`), `icons/IconModels.kt` + `icons/IconTheme.kt` (3 new keys), `i18n/*` (35 new keys × 5 languages)
+- Removed: `screens/web/WebScreen.kt` (old inline implementation)
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Web section redesign completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## UPDATE — Web Section Restructured: Website Blocking is the Primary Feature (August 7, 2026)
+
+Following review, the Web tab was restructured to preserve its **original purpose**: **website blocking is the primary feature**, and web usage analytics is now a **secondary screen** that opens only from the Web Time card.
+
+### New hierarchy
+
+```
+MAIN WEB PAGE  (Website Blocking & Management)
+├─ URL input + Block Website        ← primary action, at the top
+├─ Overview cards: Blocked / Allowed / Web Time (all tappable)
+└─ Nav chips: Blocked / Allowed / Recent
+        ↓
+Web Time card → WEB USAGE ANALYTICS (dedicated screen)
+Blocked       → Blocked Websites screen
+Allowed       → Allowed Websites screen
+Recent        → Recent Websites screen
+Add Website   → dialog with Block/Allow choice
+```
+
+### Main Web screen — Website Blocking hub (`screens/web/WebBlockingScreen.kt`)
+
+- **URL input + Block Website** remains the primary, prominent action at the top of the tab (validates domains; `normalizeWebDomain` strips scheme / `www.` / paths, rejects invalid input inline).
+- Blocking an **allowed** website flips it to blocked (upsert — no duplicate row); already-blocked domains are reported inline.
+- **Three compact overview cards** near the top: Blocked count, Allowed count, and **Web Time** (today's total usage, clickable → opens analytics). All three cards are tappable and navigate.
+- **Blocked / Allowed / Recent** chips open their own dedicated screens — nothing expands inline on the main page.
+
+### Dedicated secondary screens
+
+- **Blocked Websites** — icon + name + domain rows with status pill, **Unblock** + **Delete** (confirm dialog), **search**, **Add Website**, polished empty state.
+- **Allowed Websites** — same layout with **Block** + **Remove**, so websites switch between Allowed ⇄ Blocked easily.
+- **Recent Websites** — most recently added/modified rules (sorted by `updatedAt`), **no usage time** shown.
+- **Web Usage Analytics** (`WebAnalyticsScreen.kt`) — opens **only** from the Web Time card: back bar, "Today's Web Usage" headline, large proportional **donut chart** with total + period in the center, website-wise breakdown (icon, name, domain, duration, percentage), and **Today / Week / Month** periods with a trend bar chart for Week/Month. No Android app activity is shown — website usage only.
+
+### Navigation & back behavior
+
+- `WebNavHost` now routes: `BLOCKING` (root) → `BLOCKED` / `ALLOWED` / `RECENT` / `ANALYTICS`, with slide/fade transitions.
+- System Back pops every secondary screen back to the main Web page; at the blocking root it behaves like every other bottom tab.
+- The URL input survives back-stack trips (`rememberSaveable`) so a partially typed URL is not lost.
+
+### Rules & analytics stay separated (backend-ready)
+
+- **Website rules** — `WebRule` (domain, display name, status `BLOCKED`/`ALLOWED`, created/updated time)
+- **Analytics** — `WebUsageRecord` (domain, display name, duration, date) + `WebAnalyticsSummary` (period, total, per-website items, trend) — all consumed from `WebRepository` via `AppViewModel`; no hardcoded UI data, no fake Shorts detection claimed.
+
+### Files
+
+- New: `screens/web/WebBlockingScreen.kt`, `screens/web/WebRecentScreen.kt`
+- Reworked: `screens/web/WebAnalyticsScreen.kt` (secondary page — back bar, headline, period chips, conditional trend chart; rule cards removed), `navigation/WebNavHost.kt` (blocking root + 4 routes), `screens/web/WebComponents.kt` (`normalizeWebDomain` / `isValidWebDomain`, `WebOverviewStat`, status pill in `WebRuleRow`), `viewmodel/AppViewModel.kt` (upsert-style `blockWebsite`)
+- Updated: `screens/web/WebBlockedScreen.kt` + `WebAllowedScreen.kt` (status pill + screen-specific search placeholders), `i18n/*` (13 new keys + retitled analytics title and dialog action across all 5 languages)
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Web section restructure completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*

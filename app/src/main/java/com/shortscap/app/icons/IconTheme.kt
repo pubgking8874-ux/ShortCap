@@ -65,6 +65,11 @@ object IconTheme {
         IconKey.WEB -> Icons.Filled.Language
         IconKey.SETTINGS -> Icons.Filled.Settings
 
+        // Web (analytics + website rules)
+        IconKey.WEB_ANALYTICS -> Icons.Filled.DonutLarge
+        IconKey.WEB_BLOCKED -> Icons.Filled.Block
+        IconKey.WEB_ALLOWED -> Icons.Filled.CheckCircle
+
         // Settings home
         IconKey.GENERAL -> Icons.Filled.Tune
         IconKey.MONITORING -> Icons.Filled.Visibility
@@ -182,6 +187,7 @@ object IconTheme {
         IconKey.FAQ -> Icons.Filled.QuestionAnswer
         IconKey.ACTIVITY -> Icons.Filled.BarChart
         IconKey.WEB -> Icons.Filled.Public
+        IconKey.WEB_ANALYTICS -> Icons.Filled.Insights
         IconKey.THEME -> Icons.Filled.DarkMode
         IconKey.ABOUT_FEATURES -> Icons.Filled.EmojiEvents
         else -> originalIcon(key)
@@ -218,6 +224,11 @@ private object VibrantPalette {
         IconKey.ACTIVITY -> cyan
         IconKey.WEB -> teal
         IconKey.SETTINGS -> purple
+
+        // Web (analytics + website rules)
+        IconKey.WEB_ANALYTICS -> cyan
+        IconKey.WEB_BLOCKED -> red
+        IconKey.WEB_ALLOWED -> green
 
         // Settings home
         IconKey.GENERAL -> purple

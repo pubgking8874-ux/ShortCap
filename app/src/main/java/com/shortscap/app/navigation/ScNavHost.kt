@@ -12,7 +12,6 @@ import com.shortscap.app.model.ScScreen
 import com.shortscap.app.screens.activity.ActivityScreen
 import com.shortscap.app.screens.home.HomeScreen
 import com.shortscap.app.screens.settings.SettingsScreen
-import com.shortscap.app.screens.web.WebScreen
 import com.shortscap.app.viewmodel.AppUiState
 import com.shortscap.app.viewmodel.AppViewModel
 
@@ -49,15 +48,9 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                 onToggleReport = viewModel::toggleReport,
             )
 
-            ScScreen.WEB -> WebScreen(
-                tab = state.webTab,
-                onTabChange = viewModel::setWebTab,
-                query = state.webQuery,
-                onQueryChange = viewModel::setWebQuery,
-                sites = viewModel.sitesFor(state.webTab),
-                onToggleSite = { name -> viewModel.toggleSite(state.webTab, name) },
-                onAddWebsite = { viewModel.showToast { it.toastAddWebsite } },
-            )
+            // The Web tab is a dedicated nav stack: analytics root + Blocked /
+            // Allowed rule screens (WebNavHost), all data via WebRepository.
+            ScScreen.WEB -> WebNavHost(state = state, viewModel = viewModel)
 
             ScScreen.SETTINGS -> SettingsScreen(
                 onOpenDestination = viewModel::openSettingsScreen,

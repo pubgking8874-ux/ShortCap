@@ -24,8 +24,11 @@ import com.shortscap.app.settings.SettingsManager
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
-import com.shortscap.app.model.SiteEntry
-import com.shortscap.app.model.WebTab
+import com.shortscap.app.web.WebAnalyticsPeriod
+import com.shortscap.app.web.WebRepository
+import com.shortscap.app.web.WebRule
+import com.shortscap.app.web.WebRuleStatus
+import com.shortscap.app.web.WebUsageRecord
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,23 +63,13 @@ data class AppUiState(
     val activityRange: String = "Weekly",
     val expandedReport: String? = null,
 
-    // WebScreen: active tab, search query, per-tab site lists
-    val webTab: WebTab = WebTab.BLOCKED,
-    val webQuery: String = "",
-    val blockedSites: List<SiteEntry> = listOf(
-        SiteEntry("Reddit", "reddit.com", true),
-        SiteEntry("Twitter / X", "x.com", true),
-        SiteEntry("TikTok Web", "tiktok.com", true),
-    ),
-    val allowedSites: List<SiteEntry> = listOf(
-        SiteEntry("Google Docs", "docs.google.com", true),
-        SiteEntry("Khan Academy", "khanacademy.org", true),
-    ),
-    val recentSites: List<SiteEntry> = listOf(
-        SiteEntry("YouTube", "youtube.com", false),
-        SiteEntry("Wikipedia", "wikipedia.org", false),
-        SiteEntry("Coursera", "coursera.org", false),
-    ),
+    // Web section: analytics period + website rules + raw usage records. All
+    // data flows from WebRepository (seeds today; backend/database later) —
+    // never hardcoded in the UI. Analytics summaries are derived from
+    // [webUsageRecords] via WebRepository.analyticsSummary().
+    val webPeriod: WebAnalyticsPeriod = WebAnalyticsPeriod.TODAY,
+    val webRules: List<WebRule> = WebRepository.seedRules(),
+    val webUsageRecords: List<WebUsageRecord> = WebRepository.seedUsageRecords(),
 
     // Settings: dedicated sub-screen currently open (null = none). The
     // Monitoring settings live in [monitoring] — the single source of truth
@@ -269,29 +262,79 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         it.copy(expandedReport = if (it.expandedReport == report) null else report)
     }
 
-    // ---- Web screen ----
-    fun setWebTab(tab: WebTab) = _uiState.update { it.copy(webTab = tab) }
-    fun setWebQuery(q: String) = _uiState.update { it.copy(webQuery = q) }
+    // ---- Web section (rules + analytics; backend-ready via WebRepository) ----
+    fun setWebPeriod(period: WebAnalyticsPeriod) =
+        _uiState.update { it.copy(webPeriod = period) }
 
-    fun toggleSite(tab: WebTab, name: String) {
+    /**
+     * Adds a website rule (display name derived from the domain). Returns
+     * false when the domain is invalid or a rule already exists — the UI
+     * validates first, this is a defensive guard.
+     */
+    fun addWebRule(domain: String, status: WebRuleStatus): Boolean {
+        val d = domain.trim()
+        if (d.isBlank() || !d.contains(".")) return false
+        if (uiState.value.webRules.any { it.domain.equals(d, ignoreCase = true) }) return false
+        val now = System.currentTimeMillis()
         _uiState.update { state ->
-            fun flip(list: List<SiteEntry>) = list.map { if (it.name == name) it.copy(on = !it.on) else it }
-            when (tab) {
-                WebTab.BLOCKED -> state.copy(blockedSites = flip(state.blockedSites))
-                WebTab.ALLOWED -> state.copy(allowedSites = flip(state.allowedSites))
-                WebTab.RECENT -> state.copy(recentSites = flip(state.recentSites))
-            }
+            state.copy(
+                webRules = state.webRules + WebRule(
+                    id = d.lowercase(),
+                    domain = d,
+                    displayName = deriveWebDisplayName(d),
+                    status = status,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
         }
-        showToast {
-            if (tab == WebTab.BLOCKED) it.toastWebsiteUpdated else it.toastPreferenceSaved
-        }
+        showToast { if (status == WebRuleStatus.BLOCKED) it.webToastBlocked else it.webToastAllowed }
+        return true
     }
 
-    fun sitesFor(tab: WebTab): List<SiteEntry> = when (tab) {
-        WebTab.BLOCKED -> uiState.value.blockedSites
-        WebTab.ALLOWED -> uiState.value.allowedSites
-        WebTab.RECENT -> uiState.value.recentSites
+    /**
+     * Primary blocking action (main Web screen): blocks [domain], creating a
+     * BLOCKED rule when it is new, or flipping an existing ALLOWED rule to
+     * BLOCKED. Returns false only for invalid input or when it is already
+     * blocked (the UI shows the reason inline).
+     */
+    fun blockWebsite(domain: String): Boolean {
+        val d = domain.trim()
+        if (d.isBlank() || !d.contains(".")) return false
+        val existing = uiState.value.webRules.firstOrNull { it.domain.equals(d, ignoreCase = true) }
+        if (existing != null) {
+            if (existing.status == WebRuleStatus.BLOCKED) return false
+            setWebRuleStatus(existing.domain, WebRuleStatus.BLOCKED)
+            return true
+        }
+        return addWebRule(d, WebRuleStatus.BLOCKED)
     }
+
+    /** Moves a website between the blocked and allowed lists. */
+    fun setWebRuleStatus(domain: String, status: WebRuleStatus) {
+        _uiState.update { state ->
+            state.copy(
+                webRules = state.webRules.map {
+                    if (it.domain.equals(domain, ignoreCase = true)) {
+                        it.copy(status = status, updatedAt = System.currentTimeMillis())
+                    } else it
+                },
+            )
+        }
+        showToast { if (status == WebRuleStatus.BLOCKED) it.webToastBlocked else it.webToastUnblocked }
+    }
+
+    /** Removes a website rule from the list. */
+    fun removeWebRule(domain: String) {
+        _uiState.update { state ->
+            state.copy(webRules = state.webRules.filterNot { it.domain.equals(domain, ignoreCase = true) })
+        }
+        showToast { it.webToastRemoved }
+    }
+
+    /** "example.com" -> "Example" — display name for manually added websites. */
+    private fun deriveWebDisplayName(domain: String): String =
+        domain.removePrefix("www.").substringBefore(".").replaceFirstChar { it.uppercase() }
 
     // ---- Settings sub-screens (dedicated screens; Navigation Compose back
     //      stack hosted in SettingsNavHost; backend-ready) ----

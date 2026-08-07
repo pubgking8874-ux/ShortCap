@@ -49,6 +49,11 @@ enum class IconKey {
     WEB,
     SETTINGS,
 
+    // ---- Web (analytics + website rules) ----
+    WEB_ANALYTICS,
+    WEB_BLOCKED,
+    WEB_ALLOWED,
+
     // ---- Settings home ----
     GENERAL,
     MONITORING,
