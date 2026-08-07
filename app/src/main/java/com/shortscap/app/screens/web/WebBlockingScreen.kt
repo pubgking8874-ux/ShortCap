@@ -37,6 +37,7 @@ import com.shortscap.app.components.ScChip
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorBrush
 import com.shortscap.app.theme.ScTextStyles
 
 /**
@@ -110,6 +111,7 @@ fun WebBlockingScreen(
                             error = null
                         },
                         textStyle = TextStyle(color = colors.TextPrimary, fontSize = 14.sp),
+                        cursorBrush = ScCursorBrush(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         modifier = Modifier.weight(1f),
                         decorationBox = { inner ->

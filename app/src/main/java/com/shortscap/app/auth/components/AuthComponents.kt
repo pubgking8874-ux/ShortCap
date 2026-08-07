@@ -100,6 +100,7 @@ import com.shortscap.app.auth.theme.GradientStart
 import com.shortscap.app.auth.theme.SuccessColor
 import com.shortscap.app.auth.theme.WarningColor
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorBrush
 import kotlinx.coroutines.delay
 
 /** Filled, full-width primary CTA — [gradient] renders the ShortsCap brand color (single solid Accent). */
@@ -387,7 +388,7 @@ private fun CompactAuthOutlinedField(
                 modifier = Modifier.fillMaxSize(),
                 singleLine = singleLine,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
-                cursorBrush = SolidColor(if (isError) scheme.error else scheme.primary),
+                cursorBrush = if (isError) SolidColor(scheme.error) else ScCursorBrush(),
                 visualTransformation = visualTransformation,
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 interactionSource = interactionSource,
@@ -918,7 +919,7 @@ private fun CompactOtpDigitBox(
                 color = scheme.onSurface,
                 textAlign = TextAlign.Center
             ),
-            cursorBrush = SolidColor(if (isError) scheme.error else scheme.primary),
+            cursorBrush = if (isError) SolidColor(scheme.error) else ScCursorBrush(),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Done

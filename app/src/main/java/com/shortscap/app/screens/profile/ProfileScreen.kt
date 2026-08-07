@@ -81,6 +81,7 @@ import com.shortscap.app.icons.IconTheme
 import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.ProfileData
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorBrush
 import com.shortscap.app.theme.ScTextStyles
 import java.time.Instant
 import java.time.LocalDate
@@ -515,6 +516,7 @@ private fun ProfileField(
                     color = if (readOnly) colors.TextDisabled else colors.TextPrimary,
                     fontSize = 14.sp,
                 ),
+                cursorBrush = ScCursorBrush(),
                 modifier = Modifier.weight(1f),
                 decorationBox = { inner ->
                     Box(contentAlignment = Alignment.CenterStart) {

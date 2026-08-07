@@ -49,6 +49,7 @@ import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.ScEntity
 import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorBrush
 import com.shortscap.app.theme.ScTextStyles
 import com.shortscap.app.web.WebRule
 import com.shortscap.app.web.WebRuleStatus
@@ -137,6 +138,7 @@ fun WebSearchField(
             value = query,
             onValueChange = onQueryChange,
             textStyle = TextStyle(color = colors.TextPrimary, fontSize = 13.5.sp),
+            cursorBrush = ScCursorBrush(),
             modifier = Modifier.weight(1f),
             decorationBox = { inner ->
                 if (query.isEmpty()) {
@@ -378,6 +380,7 @@ fun AddWebsiteDialog(
                             error = null
                         },
                         textStyle = TextStyle(color = colors.TextPrimary, fontSize = 14.sp),
+                        cursorBrush = ScCursorBrush(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         modifier = Modifier.weight(1f),
                         decorationBox = { inner ->

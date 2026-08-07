@@ -51,6 +51,7 @@ import com.shortscap.app.icons.IconTheme
 import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorColor
 import com.shortscap.app.theme.ScTextStyles
 
 /**
@@ -323,7 +324,7 @@ fun MonitoringScreen(
                             unfocusedBorderColor = colors.Divider,
                             focusedLabelColor = colors.Accent,
                             unfocusedLabelColor = colors.TextSecondary,
-                            cursorColor = colors.Accent,
+                            cursorColor = ScCursorColor(),
                             focusedTextColor = colors.TextPrimary,
                             unfocusedTextColor = colors.TextPrimary,
                         ),

@@ -39,6 +39,7 @@ import com.shortscap.app.icons.IconKey
 import com.shortscap.app.icons.IconTheme
 import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorBrush
 import com.shortscap.app.theme.ScTextStyles
 
 /**
@@ -163,6 +164,7 @@ private fun BugField(
                 value = value,
                 onValueChange = onValueChange,
                 textStyle = TextStyle(color = colors.TextPrimary, fontSize = 13.5.sp),
+                cursorBrush = ScCursorBrush(),
                 modifier = Modifier.fillMaxSize(),
                 decorationBox = { inner ->
                     Box(contentAlignment = Alignment.TopStart) {

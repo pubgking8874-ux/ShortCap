@@ -42,6 +42,7 @@ import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorBrush
 import com.shortscap.app.theme.ScTextStyles
 
 /** Mirrors the Feedback page — star rating, feedback box, submit. */
@@ -132,6 +133,7 @@ fun FeedbackScreen(
                         value = feedback,
                         onValueChange = { feedback = it },
                         textStyle = TextStyle(color = colors.TextPrimary, fontSize = 13.5.sp),
+                        cursorBrush = ScCursorBrush(),
                         modifier = Modifier.fillMaxSize(),
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.TopStart) {

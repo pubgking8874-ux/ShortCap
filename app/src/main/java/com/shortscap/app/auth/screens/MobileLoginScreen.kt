@@ -50,7 +50,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -65,6 +64,7 @@ import com.shortscap.app.auth.components.AuthTextButton
 import com.shortscap.app.auth.components.OrDivider
 import com.shortscap.app.auth.components.SignInWithRow
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScCursorBrush
 
 /**
  * A supported country for mobile-number login.
@@ -397,7 +397,7 @@ private fun PhoneInputRow(
                     .fillMaxHeight(),
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
-                cursorBrush = SolidColor(scheme.primary),
+                cursorBrush = ScCursorBrush(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 interactionSource = interactionSource,
                 decorationBox = { innerTextField ->
