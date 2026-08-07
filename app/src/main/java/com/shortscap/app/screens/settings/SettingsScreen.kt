@@ -5,14 +5,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.model.SettingsDestination
 import com.shortscap.app.model.SettingsItem
 import com.shortscap.app.theme.LocalScColors
@@ -26,24 +29,28 @@ import com.shortscap.app.theme.ScTextStyles
  *
  *   Settings → <item> → Back → Settings
  *
+ * "Reset All Settings" is the LAST row and is the only exception: it never
+ * navigates — tapping it opens the premium [ResetAllSettingsDialog] in place.
  * Labels come from the active language catalog (LocalAppStrings).
  */
 @Composable
 fun SettingsScreen(
     onOpenDestination: (SettingsDestination) -> Unit,
+    onResetAll: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
+    var showResetDialog by remember { mutableStateOf(false) }
+    // Icons are requested through the centralized icon system (IconKey + the
+    // active IconStyle), so the selected style colors every Settings row.
     val settingsItems = listOf(
-        SettingsItem(SettingsDestination.GENERAL, Icons.Filled.Tune, strings.settingsGeneral),
-        SettingsItem(SettingsDestination.MONITORING, Icons.Filled.Visibility, strings.settingsMonitoring),
-        SettingsItem(SettingsDestination.PERMISSIONS, Icons.Filled.VerifiedUser, strings.settingsPermissions),
-        SettingsItem(SettingsDestination.NOTIFICATIONS, Icons.Filled.Notifications, strings.settingsNotifications),
-        SettingsItem(SettingsDestination.APPEARANCE, Icons.Filled.Palette, strings.settingsAppearance),
-        SettingsItem(SettingsDestination.PRIVACY, Icons.Filled.Lock, strings.settingsPrivacy),
-        SettingsItem(SettingsDestination.DATA_BACKUP, Icons.Filled.Storage, strings.settingsDataBackup),
-        SettingsItem(SettingsDestination.ABOUT, Icons.Filled.Info, strings.settingsAbout),
-        SettingsItem(SettingsDestination.RESET_ALL, Icons.Filled.RestartAlt, strings.settingsResetAll),
+        SettingsItem(SettingsDestination.GENERAL, IconKey.GENERAL, strings.settingsGeneral),
+        SettingsItem(SettingsDestination.MONITORING, IconKey.MONITORING, strings.settingsMonitoring),
+        SettingsItem(SettingsDestination.PERMISSIONS, IconKey.PERMISSIONS, strings.settingsPermissions),
+        SettingsItem(SettingsDestination.NOTIFICATIONS, IconKey.NOTIFICATIONS, strings.settingsNotifications),
+        SettingsItem(SettingsDestination.APPEARANCE, IconKey.APPEARANCE, strings.settingsAppearance),
+        SettingsItem(SettingsDestination.DATA_BACKUP, IconKey.DATA_BACKUP, strings.settingsDataBackup),
+        SettingsItem(SettingsDestination.ABOUT, IconKey.ABOUT, strings.settingsAbout),
     )
 
     // Scrolling is provided by the shared ScNavHost container (same as Home /
@@ -58,11 +65,30 @@ fun SettingsScreen(
 
         settingsItems.forEach { item ->
             ScPremiumNavCard(
-                icon = item.icon,
+                iconKey = item.iconKey,
                 title = item.label,
                 onClick = { onOpenDestination(item.destination) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+
+        // Reset All Settings — always the last row. Opens the confirmation
+        // dialog in place; never navigates to a separate screen.
+        ScPremiumNavCard(
+            iconKey = IconKey.RESET_ALL,
+            title = strings.settingsResetAll,
+            onClick = { showResetDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+
+    if (showResetDialog) {
+        ResetAllSettingsDialog(
+            onDismiss = { showResetDialog = false },
+            onReset = {
+                showResetDialog = false
+                onResetAll()
+            },
+        )
     }
 }

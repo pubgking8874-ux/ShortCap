@@ -20,11 +20,14 @@ import com.shortscap.app.model.SettingsDestination
 import com.shortscap.app.notifications.NotificationCategory
 import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.permissions.PermissionRepository
+import com.shortscap.app.screens.legal.LegalDocument
+import com.shortscap.app.screens.legal.LegalDocumentScreen
 import com.shortscap.app.screens.settings.AboutSettingsScreen
 import com.shortscap.app.screens.settings.AllowedAppsScreen
 import com.shortscap.app.screens.settings.AppearanceScreen
 import com.shortscap.app.screens.settings.BlockedAppsScreen
 import com.shortscap.app.screens.settings.GeneralScreen
+import com.shortscap.app.screens.settings.IconScreen
 import com.shortscap.app.screens.settings.LanguageScreen
 import com.shortscap.app.screens.settings.MonitoringScheduleScreen
 import com.shortscap.app.screens.settings.MonitoringScreen
@@ -32,7 +35,6 @@ import com.shortscap.app.screens.settings.NotificationCategoryScreen
 import com.shortscap.app.screens.settings.NotificationsScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
-import com.shortscap.app.screens.settings.ResetAllScreen
 import com.shortscap.app.screens.settings.SettingsSectionScreen
 import com.shortscap.app.screens.settings.TextSizeScreen
 import com.shortscap.app.screens.settings.ThemeScreen
@@ -49,11 +51,11 @@ object SettingsDestinations {
     const val NOTIFICATION_CATEGORY = "settings_notification_category"
     const val APPEARANCE = "settings_appearance"
     const val APPEARANCE_THEME = "settings_appearance_theme"
+    const val APPEARANCE_ICONS = "settings_appearance_icons"
     const val APPEARANCE_TEXT_SIZE = "settings_appearance_text_size"
-    const val PRIVACY = "settings_privacy"
     const val DATA_BACKUP = "settings_data_backup"
+    const val LEGAL_DOCUMENT = "settings_legal_document"
     const val ABOUT = "settings_about"
-    const val RESET_ALL = "settings_reset_all"
     const val LANGUAGE = "settings_language"
 
     const val BLOCKED_APPS = "settings_blocked_apps"
@@ -67,6 +69,9 @@ object SettingsDestinations {
     /** Route with the [NotificationCategory] name appended, e.g. settings_notification_category/REMINDERS. */
     fun notificationCategoryRoute(category: NotificationCategory): String =
         "$NOTIFICATION_CATEGORY/${category.name}"
+
+    /** Route with the legal document key appended, e.g. settings_legal_document/privacy. */
+    fun legalDocumentRoute(document: String): String = "$LEGAL_DOCUMENT/$document"
 }
 
 private fun SettingsDestination.startRoute(): String = when (this) {
@@ -75,10 +80,8 @@ private fun SettingsDestination.startRoute(): String = when (this) {
     SettingsDestination.PERMISSIONS -> SettingsDestinations.PERMISSIONS
     SettingsDestination.NOTIFICATIONS -> SettingsDestinations.NOTIFICATIONS
     SettingsDestination.APPEARANCE -> SettingsDestinations.APPEARANCE
-    SettingsDestination.PRIVACY -> SettingsDestinations.PRIVACY
     SettingsDestination.DATA_BACKUP -> SettingsDestinations.DATA_BACKUP
     SettingsDestination.ABOUT -> SettingsDestinations.ABOUT
-    SettingsDestination.RESET_ALL -> SettingsDestinations.RESET_ALL
 }
 
 /**
@@ -202,6 +205,7 @@ fun SettingsNavHost(
         composable(SettingsDestinations.APPEARANCE) {
             AppearanceScreen(
                 onOpenTheme = { navController.navigate(SettingsDestinations.APPEARANCE_THEME) },
+                onOpenIcons = { navController.navigate(SettingsDestinations.APPEARANCE_ICONS) },
                 onOpenTextSize = { navController.navigate(SettingsDestinations.APPEARANCE_TEXT_SIZE) },
                 onBack = { navController.backOrClose(onClose) },
             )
@@ -215,17 +219,22 @@ fun SettingsNavHost(
             )
         }
 
-        composable(SettingsDestinations.APPEARANCE_TEXT_SIZE) {
-            TextSizeScreen(
-                textSizeMode = state.textSizeMode,
-                onTextSizeChange = viewModel::setTextSizeMode,
+        composable(SettingsDestinations.APPEARANCE_ICONS) {
+            // Icon Style — selecting + Apply persists the style (via
+            // IconRepository) and updates AppUiState.iconStyle, which is
+            // provided app-wide through LocalIconStyle so the whole app
+            // reflects the change instantly (no restart needed).
+            IconScreen(
+                currentStyle = state.iconStyle,
+                onApply = viewModel::setIconStyle,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
 
-        composable(SettingsDestinations.PRIVACY) {
-            SettingsSectionScreen(
-                title = strings.privacyTitle,
+        composable(SettingsDestinations.APPEARANCE_TEXT_SIZE) {
+            TextSizeScreen(
+                textSizeMode = state.textSizeMode,
+                onTextSizeChange = viewModel::setTextSizeMode,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -238,15 +247,31 @@ fun SettingsNavHost(
         }
 
         composable(SettingsDestinations.ABOUT) {
-            AboutSettingsScreen(onBack = { navController.backOrClose(onClose) })
+            AboutSettingsScreen(
+                onOpenPrivacyPolicy = {
+                    navController.navigate(SettingsDestinations.legalDocumentRoute("privacy"))
+                },
+                onOpenTermsConditions = {
+                    navController.navigate(SettingsDestinations.legalDocumentRoute("terms"))
+                },
+                onBack = { navController.backOrClose(onClose) },
+            )
         }
 
-        composable(SettingsDestinations.RESET_ALL) {
-            ResetAllScreen(
-                onResetAll = {
-                    viewModel.resetAllSettings()
-                    navController.backOrClose(onClose)
-                },
+        // NOTE: Reset All Settings has no route or screen — it lives on the
+        // Settings home as the last row and opens an in-place confirmation
+        // dialog (ResetAllSettingsDialog) instead of navigating.
+
+        composable(
+            route = "${SettingsDestinations.LEGAL_DOCUMENT}/{document}",
+            arguments = listOf(navArgument("document") { type = NavType.StringType }),
+        ) { entry ->
+            val document = when (entry.arguments?.getString("document")) {
+                "terms" -> LegalDocument.TERMS_CONDITIONS
+                else -> LegalDocument.PRIVACY_POLICY
+            }
+            LegalDocumentScreen(
+                document = document,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

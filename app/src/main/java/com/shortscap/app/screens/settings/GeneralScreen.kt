@@ -8,14 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -42,7 +41,7 @@ fun GeneralScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ScPremiumNavCard(
-                icon = Icons.Filled.Language,
+                iconKey = IconKey.LANGUAGE,
                 title = strings.languageTitle,
                 onClick = onOpenLanguage,
             )

@@ -61,6 +61,7 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
 
             ScScreen.SETTINGS -> SettingsScreen(
                 onOpenDestination = viewModel::openSettingsScreen,
+                onResetAll = viewModel::resetAllSettings,
             )
         }
     }

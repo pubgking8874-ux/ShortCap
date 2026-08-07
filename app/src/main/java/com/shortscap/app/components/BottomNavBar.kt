@@ -14,12 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.theme.LocalScColors
 
-data class NavItemSpec(val screen: ScScreen, val icon: ImageVector)
+/** Bottom-nav item — the icon is resolved through the centralized icon
+ *  system ([IconKey] + active [IconStyle]) instead of a hardcoded vector. */
+data class NavItemSpec(val screen: ScScreen, val iconKey: IconKey)
 
 /**
  * Mirrors .sc-bottomnav / .sc-navbtn / .sc-navbtn.active — floating pill,
@@ -33,6 +37,7 @@ fun ScBottomNav(
     items: List<NavItemSpec>,
 ) {
     val colors = LocalScColors.current
+    val style = LocalIconStyle.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -45,6 +50,7 @@ fun ScBottomNav(
     ) {
         items.forEach { spec ->
             val active = spec.screen == current
+            val icon = IconTheme.icon(style, spec.iconKey)
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
                     .weight(1f)
@@ -63,7 +69,7 @@ fun ScBottomNav(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        spec.icon,
+                        icon,
                         contentDescription = spec.screen.name,
                         tint = if (active) Color.White else colors.TextSecondary,
                         modifier = Modifier.size(20.dp),

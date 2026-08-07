@@ -23,7 +23,7 @@ object ChineseStrings : AppStrings {
     override val toastProfilePictureUpdated = "个人头像已更新"
     override val toastBugSubmitted = "错误报告已提交"
     override val toastFeedbackThanks = "感谢您的反馈。"
-    override val toastSettingsReset = "设置已重置"
+    override val toastSettingsReset = "设置已恢复为默认值。"
     override val toastWebsiteUpdated = "网站已更新"
     override val toastPreferenceSaved = "偏好已保存"
     override val toastAddWebsite = "添加网站"
@@ -89,10 +89,13 @@ object ChineseStrings : AppStrings {
     override val settingsPermissions = "权限"
     override val settingsNotifications = "通知"
     override val settingsAppearance = "外观"
-    override val settingsPrivacy = "隐私"
     override val settingsDataBackup = "数据备份"
     override val settingsAbout = "关于"
     override val settingsResetAll = "重置所有设置"
+
+    // ---- Reset All Settings dialog ----
+    override val resetAction = "重置"
+    override val resetDialogMessage = "您确定要将所有 ShortsCap 设置恢复为默认值吗？\n\n此操作只会重置应用程序设置。\n\n您的账户、个人资料、登录会话和监控历史不会被删除。"
 
     // ---- Language ----
     override val languageTitle = "语言"
@@ -250,9 +253,18 @@ object ChineseStrings : AppStrings {
     override val sizeSmall = "小"
     override val sizeMediumDefault = "中（默认）"
     override val sizeLarge = "大"
+    override val appearanceIcons = "图标"
 
-    // ---- Privacy / Data Backup ----
-    override val privacyTitle = "隐私"
+    // ---- Icon Style (Settings → Appearance → Icons) ----
+    override val iconStyleTitle = "图标样式"
+    override val iconStyleOriginal = "ShortsCap 经典"
+    override val iconStyleOriginalDesc = "为 ShortsCap 界面设计的简洁蓝黑图标。"
+    override val iconStyleVibrant = "鲜艳色彩"
+    override val iconStyleVibrantDesc = "基于类别的彩色图标——每个版块都有自己的颜色。"
+    override val iconStylePreview = "预览"
+    override val iconStyleSelected = "已选择"
+
+    // ---- Data Backup ----
     override val dataBackupTitle = "数据备份"
 
     // ---- Monitoring placeholder pages ----

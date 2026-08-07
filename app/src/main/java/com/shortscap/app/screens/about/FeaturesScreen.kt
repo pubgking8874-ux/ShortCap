@@ -8,18 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Spa
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -51,27 +46,27 @@ fun FeaturesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ScPremiumInfoCard(
-                icon = Icons.Filled.Block,
+                iconKey = IconKey.FEATURE_APP_BLOCKING,
                 title = strings.featureAppBlocking,
                 subtitle = strings.featureAppBlockingText,
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.BarChart,
+                iconKey = IconKey.FEATURE_USAGE_TRACKING,
                 title = strings.featureUsageTracking,
                 subtitle = strings.featureUsageTrackingText,
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.CenterFocusStrong,
+                iconKey = IconKey.FEATURE_FOCUS_MODE,
                 title = strings.featureFocusMode,
                 subtitle = strings.featureFocusModeText,
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.Spa,
+                iconKey = IconKey.FEATURE_WELLBEING,
                 title = strings.featureDigitalWellbeing,
                 subtitle = strings.featureDigitalWellbeingText,
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.Lock,
+                iconKey = IconKey.FEATURE_SECURE_AUTH,
                 title = strings.featureSecureAuth,
                 subtitle = strings.featureSecureAuthText,
             )

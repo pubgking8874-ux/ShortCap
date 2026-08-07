@@ -15,8 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +35,9 @@ import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -78,17 +79,18 @@ fun ReportBugScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        val style = LocalIconStyle.current
                         Box(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(13.dp))
-                                .background(colors.StatIconBg),
+                                .background(colors.CardHover),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.Filled.BugReport,
+                                IconTheme.icon(style, IconKey.REPORT_BUG),
                                 contentDescription = null,
-                                tint = colors.Accent,
+                                tint = IconTheme.tint(style, IconKey.REPORT_BUG, colors.Accent),
                                 modifier = Modifier.size(22.dp),
                             )
                         }

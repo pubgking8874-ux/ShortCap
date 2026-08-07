@@ -67,7 +67,6 @@ fun ShortsCapTheme(
         SummaryCardGradientEnd = target.SummaryCardGradientEnd.animated(),
         SummaryCardBorder = target.SummaryCardBorder.animated(),
         ProgressTrack = target.ProgressTrack.animated(),
-        StatIconBg = target.StatIconBg.animated(),
         ChipActiveBg = target.ChipActiveBg.animated(),
         ChipActiveText = target.ChipActiveText.animated(),
         DangerBtnBg = target.DangerBtnBg.animated(),

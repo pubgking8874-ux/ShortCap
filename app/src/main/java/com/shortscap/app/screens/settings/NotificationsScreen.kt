@@ -16,6 +16,7 @@ import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.notifications.NotificationCategory
 import com.shortscap.app.theme.LocalScColors
 
+
 /**
  * Notifications hub — a premium overview of the 6 notification categories.
  *
@@ -46,7 +47,7 @@ fun NotificationsScreen(
             // chevron only (no subtitles on the main page).
             NotificationCategory.entries.forEach { category ->
                 ScPremiumNavCard(
-                    icon = notificationCategoryIcon(category),
+                    iconKey = notificationCategoryIconKey(category),
                     title = notificationCategoryTitle(category, strings),
                     onClick = { onOpenCategory(category) },
                 )

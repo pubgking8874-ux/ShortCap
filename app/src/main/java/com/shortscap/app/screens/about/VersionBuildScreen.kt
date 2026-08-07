@@ -8,15 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -49,12 +47,12 @@ fun VersionBuildScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ScPremiumInfoCard(
-                icon = Icons.Filled.Info,
+                iconKey = IconKey.ABOUT_VERSION_BUILD,
                 title = strings.versionLabel,
                 subtitle = "1.1.1",
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.Build,
+                iconKey = IconKey.ABOUT_BUILD,
                 title = strings.buildLabel,
                 subtitle = "2026072801",
             )

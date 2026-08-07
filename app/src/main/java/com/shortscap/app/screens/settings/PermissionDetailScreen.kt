@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.theme.LocalScColors
@@ -77,18 +79,20 @@ fun PermissionDetailScreen(
                     .padding(vertical = 24.dp, horizontal = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                val style = LocalIconStyle.current
+                val iconKey = permissionIconKey(permissionId)
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(colors.StatIconBg),
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(colors.CardHover),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         permissionIcon(permissionId),
                         contentDescription = null,
-                        tint = colors.Accent,
-                        modifier = Modifier.size(34.dp),
+                        tint = IconTheme.tint(style, iconKey, colors.Accent),
+                        modifier = Modifier.size(28.dp),
                     )
                 }
                 Spacer(Modifier.height(14.dp))

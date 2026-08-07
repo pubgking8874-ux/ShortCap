@@ -23,7 +23,7 @@ object HindiStrings : AppStrings {
     override val toastProfilePictureUpdated = "प्रोफ़ाइल फ़ोटो अपडेट की गई"
     override val toastBugSubmitted = "बग रिपोर्ट सबमिट की गई"
     override val toastFeedbackThanks = "आपकी प्रतिक्रिया के लिए धन्यवाद।"
-    override val toastSettingsReset = "सेटिंग्स रीसेट की गईं"
+    override val toastSettingsReset = "सेटिंग्स को उनके डिफ़ॉल्ट मानों पर पुनर्स्थापित कर दिया गया है।"
     override val toastWebsiteUpdated = "वेबसाइट अपडेट की गई"
     override val toastPreferenceSaved = "प्राथमिकता सहेजी गई"
     override val toastAddWebsite = "वेबसाइट जोड़ें"
@@ -89,10 +89,13 @@ object HindiStrings : AppStrings {
     override val settingsPermissions = "अनुमतियाँ"
     override val settingsNotifications = "सूचनाएँ"
     override val settingsAppearance = "दिखावट"
-    override val settingsPrivacy = "गोपनीयता"
     override val settingsDataBackup = "डेटा बैकअप"
     override val settingsAbout = "जानकारी"
     override val settingsResetAll = "सभी सेटिंग्स रीसेट करें"
+
+    // ---- Reset All Settings dialog ----
+    override val resetAction = "रीसेट"
+    override val resetDialogMessage = "क्या आप वाकई सभी ShortsCap सेटिंग्स को उनके डिफ़ॉल्ट मानों पर पुनर्स्थापित करना चाहते हैं?\n\nयह क्रिया केवल एप्लिकेशन सेटिंग्स रीसेट करेगी।\n\nआपका खाता, प्रोफ़ाइल, लॉगिन सत्र और मॉनिटरिंग इतिहास हटाया नहीं जाएगा।"
 
     // ---- Language ----
     override val languageTitle = "भाषा"
@@ -250,9 +253,18 @@ object HindiStrings : AppStrings {
     override val sizeSmall = "छोटा"
     override val sizeMediumDefault = "मध्यम (डिफ़ॉल्ट)"
     override val sizeLarge = "बड़ा"
+    override val appearanceIcons = "आइकन"
 
-    // ---- Privacy / Data Backup ----
-    override val privacyTitle = "गोपनीयता"
+    // ---- Icon Style (Settings → Appearance → Icons) ----
+    override val iconStyleTitle = "आइकन शैली"
+    override val iconStyleOriginal = "शॉर्ट्सकैप ओरिजिनल"
+    override val iconStyleOriginalDesc = "शॉर्ट्सकैप इंटरफ़ेस के लिए डिज़ाइन किए गए साफ़ नीले-काले आइकन।"
+    override val iconStyleVibrant = "वाइब्रेंट रंग"
+    override val iconStyleVibrantDesc = "रंगीन श्रेणी-आधारित आइकन — हर सेक्शन का अपना रंग होता है।"
+    override val iconStylePreview = "पूर्वावलोकन"
+    override val iconStyleSelected = "चयनित"
+
+    // ---- Data Backup ----
     override val dataBackupTitle = "डेटा बैकअप"
 
     // ---- Monitoring placeholder pages ----

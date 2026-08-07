@@ -3,11 +3,6 @@ package com.shortscap.app.screens.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,6 +17,7 @@ import com.shortscap.app.components.ScEntityRow
 import com.shortscap.app.components.ScSkeleton
 import com.shortscap.app.components.ScStatCard
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScEntity
 import com.shortscap.app.model.ScEntityType
@@ -71,13 +67,13 @@ fun HomeScreen(loading: Boolean, metrics: List<ScCircularMetric>) {
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ScStatCard(Icons.Filled.Smartphone, strings.homeAppsUsed, "14", modifier = Modifier.weight(1f))
-                    ScStatCard(Icons.Filled.Block, strings.homeRestrictedApps, "5", accent = colors.Danger, modifier = Modifier.weight(1f))
+                    ScStatCard(iconKey = IconKey.STAT_APPS_USED, label = strings.homeAppsUsed, value = "14", modifier = Modifier.weight(1f))
+                    ScStatCard(iconKey = IconKey.STAT_RESTRICTED, label = strings.homeRestrictedApps, value = "5", accent = colors.Danger, modifier = Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ScStatCard(Icons.Filled.Language, strings.homeBlockedSites, "9", accent = colors.Warning, modifier = Modifier.weight(1f))
-                    ScStatCard(Icons.Filled.Timer, strings.homeFocusTime, "1h 20m", sub = strings.homeFocusStreak, accent = colors.Success, modifier = Modifier.weight(1f))
+                    ScStatCard(iconKey = IconKey.STAT_BLOCKED_SITES, label = strings.homeBlockedSites, value = "9", accent = colors.Warning, modifier = Modifier.weight(1f))
+                    ScStatCard(iconKey = IconKey.STAT_FOCUS_TIME, label = strings.homeFocusTime, value = "1h 20m", sub = strings.homeFocusStreak, accent = colors.Success, modifier = Modifier.weight(1f))
                 }
             }
         }

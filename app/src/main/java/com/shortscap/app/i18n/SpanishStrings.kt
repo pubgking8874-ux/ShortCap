@@ -23,7 +23,7 @@ object SpanishStrings : AppStrings {
     override val toastProfilePictureUpdated = "Foto de perfil actualizada"
     override val toastBugSubmitted = "Informe de error enviado"
     override val toastFeedbackThanks = "Gracias por tus comentarios."
-    override val toastSettingsReset = "Ajustes restablecidos"
+    override val toastSettingsReset = "Los ajustes se han restaurado a sus valores predeterminados."
     override val toastWebsiteUpdated = "Sitio web actualizado"
     override val toastPreferenceSaved = "Preferencia guardada"
     override val toastAddWebsite = "Añadir sitio web"
@@ -89,10 +89,13 @@ object SpanishStrings : AppStrings {
     override val settingsPermissions = "Permisos"
     override val settingsNotifications = "Notificaciones"
     override val settingsAppearance = "Apariencia"
-    override val settingsPrivacy = "Privacidad"
     override val settingsDataBackup = "Copia de seguridad"
     override val settingsAbout = "Acerca de"
     override val settingsResetAll = "Restablecer todos los ajustes"
+
+    // ---- Reset All Settings dialog ----
+    override val resetAction = "Restablecer"
+    override val resetDialogMessage = "¿Seguro que deseas restaurar todos los ajustes de ShortsCap a sus valores predeterminados?\n\nEsta acción solo restablecerá los ajustes de la aplicación.\n\nTu cuenta, perfil, sesión de inicio y historial de monitoreo NO se eliminarán."
 
     // ---- Language ----
     override val languageTitle = "Idioma"
@@ -250,9 +253,18 @@ object SpanishStrings : AppStrings {
     override val sizeSmall = "Pequeño"
     override val sizeMediumDefault = "Mediano (predeterminado)"
     override val sizeLarge = "Grande"
+    override val appearanceIcons = "Iconos"
 
-    // ---- Privacy / Data Backup ----
-    override val privacyTitle = "Privacidad"
+    // ---- Icon Style (Settings → Appearance → Icons) ----
+    override val iconStyleTitle = "Estilo de iconos"
+    override val iconStyleOriginal = "ShortsCap Original"
+    override val iconStyleOriginalDesc = "Iconos azul-negro limpios diseñados para la interfaz de ShortsCap."
+    override val iconStyleVibrant = "Colores vibrantes"
+    override val iconStyleVibrantDesc = "Iconos coloridos por categoría: cada sección tiene su propio color."
+    override val iconStylePreview = "Vista previa"
+    override val iconStyleSelected = "Seleccionado"
+
+    // ---- Data Backup ----
     override val dataBackupTitle = "Copia de seguridad"
 
     // ---- Monitoring placeholder pages ----

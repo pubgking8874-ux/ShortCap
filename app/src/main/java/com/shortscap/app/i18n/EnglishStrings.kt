@@ -23,7 +23,7 @@ object EnglishStrings : AppStrings {
     override val toastProfilePictureUpdated = "Profile picture updated"
     override val toastBugSubmitted = "Bug report submitted"
     override val toastFeedbackThanks = "Thank you for your feedback."
-    override val toastSettingsReset = "Settings reset"
+    override val toastSettingsReset = "Settings have been restored to their default values."
     override val toastWebsiteUpdated = "Website updated"
     override val toastPreferenceSaved = "Preference saved"
     override val toastAddWebsite = "Add website"
@@ -89,10 +89,13 @@ object EnglishStrings : AppStrings {
     override val settingsPermissions = "Permissions"
     override val settingsNotifications = "Notifications"
     override val settingsAppearance = "Appearance"
-    override val settingsPrivacy = "Privacy"
     override val settingsDataBackup = "Data Backup"
     override val settingsAbout = "About"
     override val settingsResetAll = "Reset All Settings"
+
+    // ---- Reset All Settings dialog ----
+    override val resetAction = "Reset"
+    override val resetDialogMessage = "Are you sure you want to restore all ShortsCap settings to their default values?\n\nThis action will only reset application settings.\n\nYour account, profile, login session and monitoring history will NOT be deleted."
 
     // ---- Language ----
     override val languageTitle = "Language"
@@ -250,9 +253,18 @@ object EnglishStrings : AppStrings {
     override val sizeSmall = "Small"
     override val sizeMediumDefault = "Medium (Default)"
     override val sizeLarge = "Large"
+    override val appearanceIcons = "Icons"
 
-    // ---- Privacy / Data Backup ----
-    override val privacyTitle = "Privacy"
+    // ---- Icon Style (Settings → Appearance → Icons) ----
+    override val iconStyleTitle = "Icon Style"
+    override val iconStyleOriginal = "ShortsCap Original"
+    override val iconStyleOriginalDesc = "Clean blue-black icons designed for the ShortsCap interface."
+    override val iconStyleVibrant = "Vibrant Colors"
+    override val iconStyleVibrantDesc = "Colorful category-based icons — every section has its own color."
+    override val iconStylePreview = "Preview"
+    override val iconStyleSelected = "Selected"
+
+    // ---- Data Backup ----
     override val dataBackupTitle = "Data Backup"
 
     // ---- Monitoring placeholder pages ----

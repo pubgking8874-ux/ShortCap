@@ -23,7 +23,7 @@ object UrduStrings : AppStrings {
     override val toastProfilePictureUpdated = "پروفائل تصویر اپ ڈیٹ ہو گئی"
     override val toastBugSubmitted = "بگ رپورٹ جمع ہو گئی"
     override val toastFeedbackThanks = "آپ کی رائے کے لیے شکریہ۔"
-    override val toastSettingsReset = "سیٹنگز ری سیٹ ہو گئیں"
+    override val toastSettingsReset = "سیٹنگز کو ان کی ڈیفالٹ ویلیوز پر بحال کر دیا گیا ہے۔"
     override val toastWebsiteUpdated = "ویب سائٹ اپ ڈیٹ ہو گئی"
     override val toastPreferenceSaved = "ترجیح محفوظ ہو گئی"
     override val toastAddWebsite = "ویب سائٹ شامل کریں"
@@ -89,10 +89,13 @@ object UrduStrings : AppStrings {
     override val settingsPermissions = "اجازتیں"
     override val settingsNotifications = "اطلاعات"
     override val settingsAppearance = "ظاہری شکل"
-    override val settingsPrivacy = "رازداری"
     override val settingsDataBackup = "ڈیٹا بیک اپ"
     override val settingsAbout = "معلومات"
     override val settingsResetAll = "تمام سیٹنگز ری سیٹ کریں"
+
+    // ---- Reset All Settings dialog ----
+    override val resetAction = "ری سیٹ"
+    override val resetDialogMessage = "کیا آپ واقعی تمام ShortsCap سیٹنگز کو ان کی ڈیفالٹ ویلیوز پر بحال کرنا چاہتے ہیں؟\n\nیہ عمل صرف ایپلیکیشن سیٹنگز ری سیٹ کرے گا۔\n\nآپ کا اکاؤنٹ، پروفائل، لاگ ان سیشن اور مانیٹرنگ ہسٹری ڈیلیٹ نہیں ہوگی۔"
 
     // ---- Language ----
     override val languageTitle = "زبان"
@@ -250,9 +253,18 @@ object UrduStrings : AppStrings {
     override val sizeSmall = "چھوٹا"
     override val sizeMediumDefault = "درمیانہ (ڈیفالٹ)"
     override val sizeLarge = "بڑا"
+    override val appearanceIcons = "آئیکنز"
 
-    // ---- Privacy / Data Backup ----
-    override val privacyTitle = "رازداری"
+    // ---- Icon Style (Settings → Appearance → Icons) ----
+    override val iconStyleTitle = "آئیکن سٹائل"
+    override val iconStyleOriginal = "شارٹس کیپ اوریجنل"
+    override val iconStyleOriginalDesc = "شارٹس کیپ انٹرفیس کے لیے بنائے گئے صاف نیلے-سیاہ آئیکنز۔"
+    override val iconStyleVibrant = "وائبرنٹ کلرز"
+    override val iconStyleVibrantDesc = "رنگین زمرہ پر مبنی آئیکنز — ہر سیکشن کا اپنا رنگ۔"
+    override val iconStylePreview = "پیش نظارہ"
+    override val iconStyleSelected = "منتخب"
+
+    // ---- Data Backup ----
     override val dataBackupTitle = "ڈیٹا بیک اپ"
 
     // ---- Monitoring placeholder pages ----

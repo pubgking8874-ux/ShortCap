@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +26,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -76,21 +80,31 @@ fun ScSkeleton(height: Dp = 90.dp, modifier: Modifier = Modifier) {
 
 /** Mirrors EmptyState({ icon, title, subtitle }) */
 @Composable
-fun ScEmptyState(icon: ImageVector, title: String, subtitle: String) {
+fun ScEmptyState(
+    icon: ImageVector? = null,
+    iconKey: IconKey? = null,
+    title: String,
+    subtitle: String,
+) {
     val colors = LocalScColors.current
+    val style = LocalIconStyle.current
+    val resolvedIcon = icon ?: iconKey?.let { IconTheme.icon(style, it) } ?: Icons.Filled.Info
+    val resolvedTint = if (iconKey != null) IconTheme.tint(style, iconKey, colors.TextDisabled) else colors.TextDisabled
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // Compact hero tile (56dp container + 28dp colored icon) consistent
+        // with the app-wide icon proportions.
         Box(
             modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .size(56.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(colors.Card)
-                .border(1.dp, colors.Divider, RoundedCornerShape(20.dp)),
+                .border(1.dp, colors.Divider, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = colors.TextDisabled, modifier = Modifier.size(26.dp))
+            Icon(resolvedIcon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.height(16.dp))
         Text(title, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
@@ -129,7 +143,8 @@ fun ScCard(
 /** Mirrors StatCard({ icon, label, value, sub, accent }) used on Home */
 @Composable
 fun ScStatCard(
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconKey: IconKey? = null,
     label: String,
     value: String,
     sub: String? = null,
@@ -137,15 +152,21 @@ fun ScStatCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalScColors.current
+    val style = LocalIconStyle.current
+    val resolvedIcon = icon ?: iconKey?.let { IconTheme.icon(style, it) } ?: Icons.Filled.Info
+    val resolvedTint = if (iconKey != null) IconTheme.tint(style, iconKey, accent) else accent
+    // Compact stat tile: 36dp neutral container + 20dp colored icon (icon ≈
+    // 55% of the tile) — the color belongs to the icon, not the container.
+    val resolvedBg = colors.CardHover
     ScCard(modifier = modifier) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.StatIconBg),
+                .size(36.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(resolvedBg),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(17.dp))
+            Icon(resolvedIcon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.height(10.dp))
         Text(value, color = colors.TextPrimary, style = ScTextStyles.StatValue)
@@ -234,12 +255,17 @@ fun ScDivider(modifier: Modifier = Modifier) {
  */
 @Composable
 fun ScSettingsListItem(
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconKey: IconKey? = null,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalScColors.current
+    val style = LocalIconStyle.current
+    val resolvedIcon = icon ?: iconKey?.let { IconTheme.icon(style, it) } ?: Icons.Filled.Info
+    val resolvedTint = if (iconKey != null) IconTheme.tint(style, iconKey, colors.TextSecondary) else colors.TextSecondary
+    val resolvedBg = colors.CardHover
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -253,10 +279,10 @@ fun ScSettingsListItem(
         horizontalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         Box(
-            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(colors.CardHover),
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(resolvedBg),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(17.dp))
+            Icon(resolvedIcon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(17.dp))
         }
         Text(label, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold, modifier = Modifier.weight(1f))
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(16.dp))

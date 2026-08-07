@@ -15,7 +15,7 @@ import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 
 /**
- * Generic dedicated screen for a Settings section (Privacy, Data Backup).
+ * Generic dedicated screen for a Settings section (Data Backup).
  *
  * Follows the Settings design rule: no introductory information card — only
  * the top bar (back + title) and the page content. Content slots in later

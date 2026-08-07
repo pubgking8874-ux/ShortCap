@@ -54,7 +54,10 @@ fun NotificationCategoryScreen(
             options.forEach { id ->
                 val setting = settings.firstOrNull { it.id == id } ?: NotificationSetting(id = id)
                 ScPremiumNavCard(
+                    // Icon vector stays per-option; the semantic key gives
+                    // the whole option its category color in Vibrant style.
                     icon = notificationSettingIcon(id),
+                    iconKey = notificationSettingIconKey(id),
                     title = notificationSettingTitle(id, strings),
                     subtitle = notificationSettingDescription(id, strings),
                     onClick = { onToggleSetting(id, !setting.enabled) },

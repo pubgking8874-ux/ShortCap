@@ -10,6 +10,8 @@ import com.shortscap.app.theme.ThemePreferenceStore
 import com.shortscap.app.i18n.AppLanguage
 import com.shortscap.app.i18n.AppStrings
 import com.shortscap.app.i18n.LanguagePreferenceStore
+import com.shortscap.app.icons.IconRepository
+import com.shortscap.app.icons.IconStyle
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.model.ProfileData
@@ -18,6 +20,7 @@ import com.shortscap.app.notifications.NotificationSetting
 import com.shortscap.app.notifications.NotificationSettingId
 import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.permissions.PermissionRepository
+import com.shortscap.app.settings.SettingsManager
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
@@ -102,6 +105,13 @@ data class AppUiState(
     // GET/POST /settings/appearance API).
     val textSizeMode: TextSizeMode = TextSizeMode.MEDIUM,
 
+    // Icon Style preference — which icon system renders app-wide (ShortsCap
+    // Original blue/black, or the Vibrant colorful category system). Held in
+    // [LocalIconStyle] at the app root so every screen updates instantly on
+    // Apply. Persisted locally by IconRepository (backend-ready: maps 1:1 to
+    // a future user_id / selected_icon_style / updated_at backend entry).
+    val iconStyle: IconStyle = IconStyle.ORIGINAL,
+
     // Language preference (persisted via LanguagePreferenceStore and applied
     // to the whole logged-in experience through LocalAppStrings). The Auth
     // flow always stays English and does not read this.
@@ -137,6 +147,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             appLanguage = languageStore.loadLanguage(),
             notificationSettings = NotificationRepository.loadSettings(application),
             textSizeMode = AppearanceRepository.loadTextSizeMode(application),
+            iconStyle = IconRepository.loadIconStyle(application),
         ),
     )
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
@@ -199,6 +210,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         AppearanceRepository.saveTextSizeMode(getApplication(), mode)
         _uiState.update { it.copy(textSizeMode = mode) }
         // Future backend: AppearanceRepository.syncAppearanceToCloud(mode).
+    }
+
+    // ---- Icon Style (persists locally; updates the global icon provider
+    //      instantly — the whole app reflects the new style via LocalIconStyle) ----
+    fun setIconStyle(style: IconStyle) {
+        if (style == uiState.value.iconStyle) return
+        IconRepository.saveIconStyle(getApplication(), style)
+        _uiState.update { it.copy(iconStyle = style) }
+        // Future backend: IconRepository.syncIconStyleToCloud(style);
+        // Future analytics: IconRepository.trackIconStyleAnalytics(style).
     }
 
     // ---- Session (mock seam for the auth flow) ----
@@ -330,18 +351,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Restores every setting to its default (theme included). Future: also
-    // clear backend / cloud preferences through the SettingsRepository seam.
+    // Restores every resettable application setting to its default through the
+    // centralized SettingsManager (Theme → System Default, Text Size → Medium,
+    // Language → English, Monitoring + Notification preferences → defaults).
+    // Account, profile, session, tokens and history are never touched.
+    // Future: SettingsManager.resetCloudSettings() clears backend/cloud too.
     fun resetAllSettings() {
-        themeStore.saveThemeMode(ThemeMode.DARK)
-        NotificationRepository.clearSettings(getApplication())
-        AppearanceRepository.clearSettings(getApplication())
+        SettingsManager.restoreDefaults(getApplication())
         _uiState.update {
             it.copy(
-                monitoring = MonitoringSettings(),
-                notificationSettings = NotificationRepository.seedSettings(),
-                themeMode = ThemeMode.DARK,
-                textSizeMode = TextSizeMode.MEDIUM,
+                monitoring = SettingsManager.defaultMonitoring(),
+                notificationSettings = SettingsManager.defaultNotificationSettings(),
+                themeMode = SettingsManager.defaultThemeMode(),
+                textSizeMode = SettingsManager.defaultTextSizeMode(),
+                iconStyle = SettingsManager.defaultIconStyle(),
+                appLanguage = SettingsManager.defaultLanguage(),
             )
         }
         showToast { it.toastSettingsReset }

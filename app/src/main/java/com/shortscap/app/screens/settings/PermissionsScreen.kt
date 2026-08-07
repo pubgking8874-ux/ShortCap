@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScDivider
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.permissions.PermissionActions
 import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.permissions.PermissionInfo
@@ -136,6 +138,10 @@ private fun PermissionRow(
         label = "permissionRowBg",
     )
 
+    // The permission icon sits in a compact neutral tile; its category color
+    // belongs to the ICON (permission rows keep their own recognizable icon).
+    val style = LocalIconStyle.current
+    val iconKey = permissionIconKey(info.id)
     Row(
         modifier = modifier
             .background(bg)
@@ -151,13 +157,13 @@ private fun PermissionRow(
             modifier = Modifier
                 .size(38.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(colors.StatIconBg),
+                .background(colors.CardHover),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 permissionIcon(info.id),
                 contentDescription = null,
-                tint = colors.Accent,
+                tint = IconTheme.tint(style, iconKey, colors.Accent),
                 modifier = Modifier.size(20.dp),
             )
         }

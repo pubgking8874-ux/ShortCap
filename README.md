@@ -776,10 +776,9 @@ Settings list (icon + title + chevron only):
 3. Permissions
 4. Notifications
 5. Appearance
-6. Privacy
-7. Data Backup
-8. About
-9. Reset All Settings
+6. Data Backup
+7. About
+8. Reset All Settings
 
 ### 2. New dedicated Monitoring screen
 
@@ -802,11 +801,11 @@ All pickers are clean Material 3 dialogs styled with the ShortsCap dark theme; t
 
 ### 3. Other dedicated Settings screens
 
-- **General / Permissions / Privacy / Data Backup** — dedicated screens; Privacy / Data Backup use the generic `SettingsSectionScreen` placeholder page ("Coming soon").
+- **General / Permissions / Data Backup** — dedicated screens; Data Backup uses the generic `SettingsSectionScreen` placeholder page ("Coming soon").
 - **Notifications** — premium hub: 6 category rows, each opening its own dedicated option page with toggles.
 - **Appearance** — hub with **Theme / Text Size**, each on its own dedicated page.
-- **About** — Version 2.4.1, Build 2026072801, © 2026 ShortsCap.
-- **Reset All Settings** — confirmation page with a danger button that restores all settings to defaults.
+- **About** — Version 2.4.1, Build 2026072801, © 2026 ShortsCap; also hosts **Privacy Policy** and **Terms & Conditions**, each opening the existing bundled legal document.
+- **Reset All Settings** — the last row on the Settings home; tapping it opens a premium in-place confirmation dialog (no separate screen).
 
 ### 4. Design rule — no introduction cards (applies to every Settings page, now and future)
 
@@ -941,7 +940,7 @@ Settings → **Notifications** is now a premium, scalable notification center. I
 - Every `NotificationSetting` carries `id` (unique setting ID), `enabled` (current state), plus **future cloud-sync placeholder** (`cloudSyncEnabled`) and **future analytics placeholder** (`analyticsEvent`).
 - **Repository seam**: `syncSettingsToCloud(...)` (POST /notifications/settings) and `trackNotificationAnalytics(...)` are documented placeholders — swapping SharedPreferences for backend APIs or a local Room cache requires **no UI changes**.
 - **Navigation**: `settings_notification_category/{category}` route with typed `NotificationCategory` arg — deep-linking/predictive back works later with no restructure.
-- `Reset All Settings` clears the notification prefs and restores defaults.
+- `Reset All Settings` restores the notification prefs to their defaults (via the centralized `SettingsManager`).
 
 ## Cloud Sync Ready
 
@@ -1005,3 +1004,262 @@ Options: ○ Dark, ○ Light, ○ System Default. Selecting any option immediate
 - `navigation/SettingsNavHost.kt` — routes: `settings_appearance_theme` / `_text_size`
 - `viewmodel/AppViewModel.kt` — `textSizeMode` + setter + reset
 - `i18n/` — full catalog for the module
+
+## Removed Privacy section from Settings
+
+The **Privacy** section has been **completely removed** from the Settings module — no menu row, no route (`settings_privacy`), no `SettingsDestination.PRIVACY`, no screen and no i18n keys (`settingsPrivacy`, `privacyTitle`). The final Settings list is now:
+
+1. General
+2. Monitoring
+3. Permissions
+4. Notifications
+5. Appearance
+6. Data Backup
+7. About
+8. Reset All Settings
+
+## Privacy-related setting options removed entirely
+
+The placeholder privacy options (**Data Collection**, **Export My Data**, **Clear Local Data**) had **no implemented functionality** in the codebase (the Privacy page was a Coming Soon placeholder), so they were **removed entirely rather than relocated** — no empty/placeholder rows were carried over into Data Backup. The Data Backup section remains its Coming Soon placeholder screen.
+
+## Moved Privacy Policy and Terms & Conditions into About
+
+**About** (Settings) now hosts the legal documents:
+
+- **Privacy Policy** — opens the existing bundled `PrivacyPolicy.txt` via `LegalDocumentScreen` (no new document created)
+- **Terms & Conditions** — opens the existing bundled `TermsConditions.txt` via `LegalDocumentScreen`
+
+Both reuse the app's already-bundled local assets and the existing reader screen, with new routes (`settings_legal_document/{document}`) in `SettingsNavHost`. The Dashboard drawer's legal entries are unchanged.
+
+## Reset All Settings redesigned
+
+**Reset All Settings** no longer opens a screen. It stays the **last row** on the main Settings page and, when tapped, shows a premium in-place confirmation dialog.
+
+## Removed unnecessary Reset screen
+
+The dedicated `ResetAllScreen` and its route (`settings_reset_all`) have been **completely removed**: no `SettingsDestination.RESET_ALL`, no navigation, no file. `AppViewModel.resetAllSettings()` is now wired straight from the Settings home's dialog.
+
+## Added confirmation dialog
+
+`ResetAllSettingsDialog` — a premium dark dialog (24dp radius, dimmed scrim, scale + fade entrance, danger icon header) that is deliberately **not** Android's default `AlertDialog`. It shows the exact confirmation message and a single row of equal-width buttons:
+
+- **Cancel** — outlined
+- **Reset** — filled red (`colors.Danger`)
+
+## Reset now restores only application settings
+
+Confirmed reset routes through the centralized **`SettingsManager`** (`settings/SettingsManager.kt`) and restores **only application settings**:
+
+- Theme → **System Default**
+- Text Size → **Medium**
+- Language → **English**
+- Monitoring preferences → defaults
+- Notification preferences (incl. permission reminders) → defaults
+- Any future setting registered in `SettingsManager` → defaults
+
+**Never touched:** user account, login session, profile information/picture, authentication tokens, monitoring history, backend data and cloud data.
+
+After reset the Settings UI refreshes automatically and a success toast appears ("Settings have been restored to their default values.") — **no app restart required**.
+
+## Backend-ready reset architecture prepared
+
+- **`settings/SettingsManager.kt`** — single centralized authority for resettable settings: one default accessor per setting + `restoreDefaults(context)`. Future settings are registered once and are then included automatically in every reset.
+- Local persistence (theme, language, appearance, notifications) is restored to defaults and persisted, so state stays consistent across restarts.
+- Documented future seam: `SettingsManager.resetCloudSettings()` for backend / cloud preference resets.
+- i18n catalog (EN / HI / UR / ZH / ES) covers the dialog message, the Reset button label and the success toast.
+
+---
+
+# Icon System — ShortsCap Original & Vibrant Colors *(newly implemented — Aug 7, 2026)*
+
+A **centralized, app-wide icon system** was added to ShortsCap. Users pick an **icon style** under **Settings → Appearance → Icons**; the chosen style is applied **globally** — Dashboard, Activity, Web, Settings and every sub-page, the drawer, the profile screen, Help & Support, About ShortsCap and all future screens — with **no app restart** and **no state loss**.
+
+## Icon Styles
+
+| Style | Name | Description | Default? |
+| --- | --- | --- | --- |
+| `IconStyle.ORIGINAL` | **ShortsCap Original** | Clean blue-black icons designed for the ShortsCap interface — visually identical to the icons used before this system existed | ✅ Yes |
+| `IconStyle.VIBRANT` | **Vibrant Colors** | Colorful category-based icons — every section (General, Monitoring, Permissions, Notifications, Appearance, Data Backup, About, …) has its own recognizable icon **and** color inside a tinted rounded-square container | No |
+
+- The Vibrant palette is **ShortsCap's own original color language** (blue, cyan, teal, green, lime, amber, orange, red, pink, purple, violet, indigo, slate). It was inspired by the *concept* of colorful, category-specific, rounded-square icons only — **no third-party assets, icons, branding or colors are copied**. The icon shapes come from ShortsCap's existing Material-icon design language, with a few per-category swaps (e.g. Translate for Language, Policy for Privacy, QuestionAnswer for FAQ, Backup for Data Backup) so the two styles are visually distinct.
+- Both styles honor the ShortsCap icon design rules: consistent stroke/shape language, consistent rounded-square container treatment, proper padding, no gradients, no tiny unreadable details, and icons stay crisp at small sizes.
+
+## Icon Settings page (Settings → Appearance → Icons)
+
+- **Premium selection cards**, not a radio list: each card shows a live mini icon strip, the style name, a one-line description and a **check indicator** on the selected card (subtle ShortsCap-blue border + tint) with the same soft press-scale animation as the rest of the app.
+- A compact **PREVIEW** section shows General / Monitoring / Permissions / Notifications / Data Backup exactly as they will look under the pending style — it updates live while browsing.
+- **Apply behavior is deliberate**: browsing cards does NOT change the app. **[ Cancel ]** discards, **[ Apply ]** persists the style, updates the global icon provider and returns to the previous page. Apply is **disabled** while the pending style already equals the active style. No restart is ever needed.
+- Accessibility: selectable cards, labeled icons and check indicators (content descriptions), full touch targets, colors never used as the only signal (icons + labels always accompany color).
+
+## Global icon architecture
+
+| Concept | File | Role |
+| --- | --- | --- |
+| `IconKey` | `icons/IconModels.kt` | Semantic keys — the stable vocabulary screens use to request icons (e.g. `IconKey.MONITORING`, `IconKey.PERMISSIONS`, `IconKey.NOTIFICATIONS`, `IconKey.DATA_BACKUP`). One key per category/destination; ~80 keys cover navigation, Settings, Monitoring, Permissions, Notifications, Appearance, the drawer, Help & Support, About pages, Home stats and Profile |
+| `IconStyle` | `icons/IconModels.kt` | The selectable style (ORIGINAL / VIBRANT); `IconStyle.DEFAULT` = ORIGINAL |
+| `IconTheme` | `icons/IconTheme.kt` | The single manager/resolver: `icon(style, key)`, `tint(style, key, default)` + the per-category Vibrant palette |
+| `LocalIconStyle` | `icons/IconTheme.kt` | App-wide CompositionLocal (mirrors `LocalScColors`) provided in `ShortsCapApp` from `AppUiState.iconStyle` |
+| `IconRepository` | `icons/IconRepository.kt` | Local persistence (SharedPreferences) + documented future cloud-sync / analytics seams |
+| `IconScreen` | `screens/settings/IconScreen.kt` | The dedicated Icon Settings page |
+
+**How screens request icons:** shared components gained an `iconKey` parameter (`ScPremiumNavCard`, `ScPremiumInfoCard`, `ScStatCard`, `ScEmptyState`, `ScSettingsListItem`, `StatTile`); bottom-nav items, drawer items and settings rows now carry `IconKey` instead of hardcoded `ImageVector`s. Screens never resolve vectors or colors themselves — they pass a key and the centralized system decides (e.g. `ScPremiumNavCard(iconKey = IconKey.MONITORING, …)`).
+
+**Global application integration (at minimum):**
+
+- **Dashboard** — Home Quick Stats cards, bottom navigation (Home / Activity / Web / Settings)
+- **Three-dot drawer** — Help & Support, Privacy Policy, Terms & Conditions, About ShortsCap, Feedback, Share App
+- **Profile** — profile field icons (person / email / lock / calendar)
+- **Settings** — General, Monitoring, Permissions, Notifications, Appearance, Data Backup, About, Reset All Settings
+- **General** — Language
+- **Monitoring** — Monitoring, App Blocking, Daily Screen Time Limit, Blocked Apps, Allowed Apps, Strict Mode, Short Video Platforms, Break Reminder, Reminder Interval, Monitoring Schedule, Statistics tiles
+- **Permissions** — all 8 permission rows + detail page hero (each row keeps its recognizable icon and gains its own color in Vibrant)
+- **Notifications** — the 6 categories + every option row (options inherit their category color in Vibrant)
+- **Appearance** — Theme, **Icons**, Text Size
+- **Help & Support** — FAQ, Contact Support, Report a Bug (+ FAQ accordion tiles)
+- **About ShortsCap** — About, Features, Technologies, Version & Build, Copyright (+ their content pages)
+- **Web / Activity / empty states** — Blocked / Allowed / Schedule empty-state icons, Web empty state
+
+**Any future screen** can use the system by passing an `IconKey`; new categories are one enum entry + one mapping, and new styles (e.g. `IconStyle.MINIMAL`, `COLORFUL`, `FUTURISTIC`, `CUSTOM`) are one enum entry + branches in `IconTheme` — **no screen changes required**.
+
+## Persistence behavior
+
+- The selection is stored locally in SharedPreferences (`IconRepository`, prefs `shortscap_icons`, key `icon_style`) and restored on launch (`AppUiState.iconStyle` loads at startup, so the very first frame is correct).
+- The style **survives app restarts** and **logout/login** (it is a local application preference, not session data).
+- Defaults to **ShortsCap Original** on first install and whenever no preference has been stored.
+
+## Reset All Settings behavior
+
+`Settings → Reset All Settings` restores the icon style to **ShortsCap Original** together with every other default (Theme → System Default, Text Size → Medium, Language → English, Monitoring/Notification preferences → defaults) via the centralized `SettingsManager` (`defaultIconStyle()` + one line in `restoreDefaults()`). No separate reset page exists for icons.
+
+## Dark / Light compatibility
+
+- The icon system is **theme-agnostic**: both styles render each icon inside the same compact **neutral charcoal container** (`CardHover` — slightly lighter than the card surface in Dark, a soft light-gray in Light); only the icon color differs (accent vs per-category), so contrast stays correct on Dark and Light surfaces.
+- Both styles work under Dark, Light and System Default (existing `ThemeMode` / `ShortsCapTheme` untouched); text and icon contrast remain sufficient in both modes.
+- Nothing in the Theme, Text Size, Language, Navigation, Auth, Monitoring, Permission, Notification or backend layers was modified — the icon system integrates cleanly alongside them.
+
+## Future backend synchronization readiness
+
+- `IconRepository.syncIconStyleToCloud(style)` and `trackIconStyleAnalytics(style)` are documented placeholders (not implemented — no backend exists yet).
+- Future backend storage: `user_id`, `selected_icon_style`, `updated_at`. Swapping SharedPreferences for the API requires **no UI changes** — `loadIconStyle`/`saveIconStyle` are the only data touch-points, matching the `ThemePreferenceStore` / `AppearanceRepository` pattern.
+
+## Files
+
+- `icons/IconModels.kt`, `icons/IconTheme.kt`, `icons/IconRepository.kt` — **new** Icon System core (styles, keys, resolver, palette, persistence, cloud seams)
+- `screens/settings/IconScreen.kt` — **new** dedicated Icon Settings page
+- `screens/settings/AppearanceScreen.kt` — **Icons** row added (Theme · Icons · Text Size)
+- `navigation/SettingsNavHost.kt` — **new** `settings_appearance_icons` route (`Settings → Appearance → Icons`)
+- `viewmodel/AppViewModel.kt` — `AppUiState.iconStyle` + `setIconStyle()` + reset integration
+- `settings/SettingsManager.kt` — `defaultIconStyle()` + restore registration
+- `components/PremiumCards.kt`, `components/CommonComponents.kt`, `components/BottomNavBar.kt`, `components/AppDrawer.kt`, `model/Models.kt` — shared icon-key-aware components
+- Every screen listed under *Global application integration* — icons routed through `IconKey`/`IconTheme`
+- `i18n/` — new catalog keys (EN / HI / UR / ZH / ES) for the Icons page
+- This `README.md` — this section (appended; all existing content preserved)
+
+*Implemented August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+# Icon System — Compact Proportions Redesign *(newly implemented — Aug 7, 2026)*
+
+Following a visual review, the icon system was **redesigned from large colored icon boxes to a compact, premium icon treatment**. The previous version rendered big tinted containers with oversized icons that dominated the screen; the corrected system uses **small neutral containers with colorful icons inside**, short cards, and refined category colors. This is a pure **visual/UI correction** — no functionality, navigation, persistence, theme, language or backend behavior changed.
+
+## New compact proportions (applied globally)
+
+| Element | Before | After |
+| --- | --- | --- |
+| Row icon container | 60dp | **44dp** (rounded-square, 13dp radius) |
+| Row icon | 36dp | **24dp** (icon ≈ **55%** of the container, generous internal padding) |
+| Settings card height | ~96dp | **~70dp** (13dp vertical padding, 16dp horizontal) |
+| Detail heroes (permission detail, copyright) | 64–72dp / 34–36dp | **52–56dp / 28dp** |
+| Empty-state hero | 64dp / 26dp | **56dp / 28dp** |
+| Home stat tiles | 34dp / 17dp | **36dp / 20dp** |
+| Card shadows | resting 3dp / pressed 14dp | **resting 2dp / pressed 12dp** (subtler, no glow) |
+
+Visual hierarchy is now: **1) title → 2) icon → 3) chevron** (icon is a small accent, never the dominant element), and more settings fit on screen without scrolling.
+
+## Color treatment — color belongs to the ICON, not the container
+
+- **Both styles** use the same compact, **neutral dark/subtle charcoal container** (`CardHover`: slightly lighter than the card in Dark, a soft light-gray surface in Light).
+- The **category color lives on the icon itself** — e.g. dark rounded container + blue eye icon (Monitoring), dark container + green shield icon (Permissions), dark container + pink bell icon (Notifications), dark container + purple palette icon (Appearance). No more large saturated colored panels.
+- The centralized `IconTheme` intentionally has **no container resolver** — the neutral container is shared by every style so layout dimensions can never diverge; a future style that needs its own container can add one seam without touching screens.
+
+## Refined category color system (Vibrant Colors)
+
+Tasteful, non-neon shades matched to the recommended mapping:
+
+| Category | Color |
+| --- | --- |
+| General | Purple |
+| Monitoring | Blue |
+| Permissions | Green |
+| Notifications | Pink/Red |
+| Appearance | Purple |
+| Data Backup | Cyan |
+| About | Blue/Violet |
+| Help & Support | Blue |
+| Feedback | Orange |
+| Share | Cyan/Blue |
+| Language | Violet |
+
+## Both styles keep the compact proportions
+
+- **ShortsCap Original** — every icon in the ShortsCap accent blue, compact neutral tiles.
+- **Vibrant Colors** — the same compact tiles; only the icon treatment differs (per-category color + a few distinctive icon swaps).
+- The **difference between styles is the visual icon treatment, never layout dimensions** — switching styles does not change row heights, spacing or tile sizes.
+
+## Global application
+
+The corrected proportions apply everywhere: Settings (all rows), Monitoring, Permissions (+ detail page), Notifications, Appearance, General, Language, Data Backup, About (+ all sub-pages), Help & Support, FAQ, Contact Support, Report a Bug, Profile, Dashboard (Home stat cards), Web empty states, the three-dot drawer and the Icon Settings page itself. All icons continue to flow through the **centralized `IconKey` / `IconTheme` architecture** — no screen hardcodes its own dimensions.
+
+## Dark / Light / System Default compatibility
+
+- **Dark:** very dark charcoal cards, slightly lighter charcoal icon containers, category-accent icons, very subtle 1dp borders — no glow, no neon.
+- **Light:** the same hierarchy with a soft light-gray container (`CardHover` #F0F0F2) on white cards and adjusted icon contrast; the category colors remain readable.
+- System Default follows the existing `ThemeMode` unchanged; the theme system was not modified except removing the now-unused `StatIconBg` token.
+
+## Responsive sizing
+
+All dimensions are standard `dp` values (44dp tiles, 24dp icons, 13dp padding) derived from the existing design conventions, so the system scales consistently across small and large Android screens; touch targets stay comfortable (70dp+ rows).
+
+## Files touched (visual correction only)
+
+- `icons/IconTheme.kt` — neutral-container model + refined palette (Share→cyan, Language→violet)
+- `components/PremiumCards.kt` — compact 44dp/24dp `PremiumIconTile`, 13dp padding, subtler shadows
+- `components/CommonComponents.kt` — compact `ScStatCard` (36/20), `ScEmptyState` (56/28)
+- `screens/settings/MonitoringScreen.kt`, `PermissionsScreen.kt`, `PermissionDetailScreen.kt`, `IconScreen.kt` — neutral containers / compact heroes
+- `screens/about/CopyrightScreen.kt`, `screens/help/FaqScreen.kt`, `screens/help/ReportBugScreen.kt` — neutral containers / compact tiles
+- `theme/Color.kt`, `theme/Theme.kt` — removed the now-unused `StatIconBg` token
+- This `README.md` — this section (appended; all existing content preserved)
+
+*Redesign completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## Android Launcher Icon — Official ShortsCap Logo (NEW)
+
+> Implementation completed **August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801**.
+
+### What changed
+
+The generic **Android Studio template launcher icon** (green grid background + robot silhouette, `ic_launcher*.webp` at 5 densities, non-versioned `mipmap-anydpi` adaptive XMLs) was **removed** and replaced with the **official ShortsCap logo** as the launcher/app icon — shown on the home screen, app drawer, recent shortcuts, and the Android App Info screen.
+
+- **Existing logo reused** — the launcher icon is generated from the project's own `res/drawable/logo_pic.png` (blue speech-bubble + red play mark). The logo itself was **not redesigned, redrawn or altered**; its identity and proportions are preserved exactly. The in-app logo placements (Splash, Dashboard, Profile, About, auth screens, TopBar, drawer) are **unchanged**.
+- **Android Adaptive Icon implemented** — `res/mipmap-anydpi-v26/ic_launcher.xml` + `ic_launcher_round.xml` with:
+  - `background` → `@drawable/ic_launcher_background` (solid brand black `#000000`, matching the logo tile)
+  - `foreground` → `@mipmap/ic_launcher_foreground` (432px PNG, logo scaled into the 66dp safe zone)
+  - `monochrome` → `@mipmap/ic_launcher_monochrome` (white silhouette for Android 13+ themed icons)
+- **Safe-area handling** — the logo artwork occupies ≈ 49% × 58% of the canvas, keeping every element inside the **66dp adaptive-icon safe zone**, so it is never clipped or cropped by launcher masks (circle, rounded square, squircle, Samsung/Xiaomi/OEM shapes) and is not stretched, rotated or distorted.
+- **Legacy fallback maintained** — proper `ic_launcher.png` / `ic_launcher_round.png` PNGs at all five densities (`mipmap-mdpi` 48px → `xxxhdpi` 192px) cover pre-API-26 launchers and remain as a safety net (current `minSdk = 26` uses the adaptive icon on all supported devices).
+- **Manifest** — `AndroidManifest.xml` sets `android:icon="@mipmap/ic_launcher"` and now also `android:roundIcon="@mipmap/ic_launcher_round"`. No other manifest/Gradle changes were made.
+- **Default template icons removed** — the old `mipmap-anydpi/` folder, `drawable/ic_launcher_foreground.xml`, and all template `ic_launcher*.webp` density files were deleted; nothing else in the project referenced them.
+- **Verified** — `./gradlew :app:assembleDebug` builds successfully with no resource-linking errors; the APK was inspected and contains the adaptive XMLs, all density PNGs, the foreground and the monochrome layer.
+
+### Asset generation (for reproducibility)
+
+The launcher assets were produced from `drawable/logo_pic.png` with a short Python/PIL routine: extract the logo content (blue-dominant OR red-dominant OR luminance > 150 mask), crop to its content bounding box, scale the longer side to ~58.5% of the canvas (inside the safe zone), center it on a transparent 432px foreground; legacy icons use the same composition on solid `#000000`; the monochrome is the same silhouette in white. If the logo ever changes, regenerate all PNGs with the same parameters for a consistent result.
+
+### Icon caching note
+
+Android launchers can cache app icons. If the old default icon still appears after reinstalling the APK, **uninstall the previous build and install the new one** — the launcher will then pick up the ShortsCap logo.
+
+*Launcher icon replaced August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*

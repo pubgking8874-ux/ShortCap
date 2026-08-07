@@ -109,10 +109,13 @@ interface AppStrings {
     val settingsPermissions: String
     val settingsNotifications: String
     val settingsAppearance: String
-    val settingsPrivacy: String
     val settingsDataBackup: String
     val settingsAbout: String
     val settingsResetAll: String
+
+    // ---- Reset All Settings dialog ----
+    val resetAction: String
+    val resetDialogMessage: String
 
     // ---- Language ----
     val languageTitle: String
@@ -281,8 +284,19 @@ interface AppStrings {
     val sizeMediumDefault: String
     val sizeLarge: String
 
-    // ---- Privacy / Data Backup ----
-    val privacyTitle: String
+    /** Appearance row + dedicated page title for the icon style picker. */
+    val appearanceIcons: String
+
+    // ---- Icon Style (Settings → Appearance → Icons) ----
+    val iconStyleTitle: String
+    val iconStyleOriginal: String
+    val iconStyleOriginalDesc: String
+    val iconStyleVibrant: String
+    val iconStyleVibrantDesc: String
+    val iconStylePreview: String
+    val iconStyleSelected: String
+
+    // ---- Data Backup ----
     val dataBackupTitle: String
 
     // ---- Monitoring placeholder pages ----

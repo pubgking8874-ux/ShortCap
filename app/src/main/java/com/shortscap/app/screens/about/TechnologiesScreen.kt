@@ -10,12 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -24,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumInfoCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -56,28 +51,28 @@ fun TechnologiesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ScPremiumInfoCard(
-                icon = Icons.Filled.Android,
+                iconKey = IconKey.TECH_ANDROID,
                 title = strings.techAndroid,
                 subtitle = strings.techAndroidText,
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.Code,
+                iconKey = IconKey.TECH_KOTLIN,
                 title = strings.techKotlin,
                 subtitle = strings.techKotlinText,
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.Widgets,
+                iconKey = IconKey.TECH_COMPOSE,
                 title = strings.techCompose,
                 subtitle = strings.techComposeText,
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.Storage,
+                iconKey = IconKey.TECH_PYTHON,
                 title = strings.techPython,
                 subtitle = strings.techPythonText,
                 trailing = { FuturePill(strings.future) },
             )
             ScPremiumInfoCard(
-                icon = Icons.Filled.Cloud,
+                iconKey = IconKey.TECH_AWS,
                 title = strings.techAws,
                 subtitle = strings.techAwsText,
                 trailing = { FuturePill(strings.future) },

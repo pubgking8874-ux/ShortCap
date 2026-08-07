@@ -47,6 +47,8 @@ import com.shortscap.app.components.ScToast
 import com.shortscap.app.i18n.AppStrings
 import com.shortscap.app.i18n.LocalAppLanguage
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.DrawerItem
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.ScScreen
@@ -60,11 +62,13 @@ import com.shortscap.app.theme.ShortsCapTheme
 import com.shortscap.app.util.ShareUtils
 import com.shortscap.app.viewmodel.AppViewModel
 
+// Bottom-nav icons are requested through the centralized icon system, so the
+// active IconStyle (ShortsCap Original / Vibrant Colors) renders them app-wide.
 private val bottomNavItems = listOf(
-    NavItemSpec(ScScreen.HOME, Icons.Filled.Home),
-    NavItemSpec(ScScreen.ACTIVITY, Icons.Filled.Schedule),
-    NavItemSpec(ScScreen.WEB, Icons.Filled.Language),
-    NavItemSpec(ScScreen.SETTINGS, Icons.Filled.Settings),
+    NavItemSpec(ScScreen.HOME, IconKey.HOME),
+    NavItemSpec(ScScreen.ACTIVITY, IconKey.ACTIVITY),
+    NavItemSpec(ScScreen.WEB, IconKey.WEB),
+    NavItemSpec(ScScreen.SETTINGS, IconKey.SETTINGS),
 )
 
 /**
@@ -91,17 +95,21 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
         CompositionLocalProvider(
             LocalAppStrings provides AppStrings.forLanguage(state.appLanguage),
             LocalAppLanguage provides state.appLanguage,
+            // Global icon style — every screen resolves its icons through
+            // IconTheme + LocalIconStyle; switching the style updates the
+            // whole application instantly (no restart, no state loss).
+            LocalIconStyle provides state.iconStyle,
             LocalLayoutDirection provides layoutDirection,
         ) {
             val colors = LocalScColors.current
             val strings = LocalAppStrings.current
             val drawerItems = listOf(
-                DrawerItem("help", Icons.Filled.HelpOutline, strings.drawerHelp),
-                DrawerItem("privacy", Icons.Filled.Description, strings.drawerPrivacy),
-                DrawerItem("terms", Icons.Filled.Gavel, strings.drawerTerms),
-                DrawerItem("about", Icons.Filled.Info, strings.drawerAbout),
-                DrawerItem("feedback", Icons.Filled.Message, strings.drawerFeedback),
-                DrawerItem("share", Icons.Filled.Share, strings.drawerShare),
+                DrawerItem("help", IconKey.HELP_SUPPORT, strings.drawerHelp),
+                DrawerItem("privacy", IconKey.PRIVACY_POLICY, strings.drawerPrivacy),
+                DrawerItem("terms", IconKey.TERMS_CONDITIONS, strings.drawerTerms),
+                DrawerItem("about", IconKey.ABOUT, strings.drawerAbout),
+                DrawerItem("feedback", IconKey.FEEDBACK, strings.drawerFeedback),
+                DrawerItem("share", IconKey.SHARE, strings.drawerShare),
             )
             Surface(modifier = Modifier.fillMaxSize(), color = colors.Bg) {
             Box(

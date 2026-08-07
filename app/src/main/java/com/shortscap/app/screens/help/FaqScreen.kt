@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.AppStrings
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -146,6 +149,7 @@ private fun FaqAccordionCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            val style = LocalIconStyle.current
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -154,9 +158,9 @@ private fun FaqAccordionCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Filled.HelpOutline,
+                    IconTheme.icon(style, IconKey.FAQ),
                     contentDescription = null,
-                    tint = colors.Accent,
+                    tint = IconTheme.tint(style, IconKey.FAQ, colors.Accent),
                     modifier = Modifier.size(20.dp),
                 )
             }

@@ -4,14 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DoNotDisturbOn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScEmptyState
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -27,7 +26,7 @@ fun BlockedAppsScreen(onBack: () -> Unit) {
         ScSubScreenTopBar(title = strings.monitoringBlockedApps, onBack = onBack)
         Column(modifier = Modifier.fillMaxSize().padding(top = 40.dp)) {
             ScEmptyState(
-                icon = Icons.Filled.DoNotDisturbOn,
+                iconKey = IconKey.BLOCKED_APPS,
                 title = strings.blockedAppsEmptyTitle,
                 subtitle = strings.blockedAppsEmptyDesc,
             )

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ShortsCap adaptive launcher icon (Android 8.0+ / API 26+).
+    Foreground = the official ShortsCap logo (blue speech-bubble + red play mark),
+    extracted from drawable/logo_pic.png and scaled inside the 66dp safe zone so
+    it is never clipped by launcher masks (circle, rounded square, squircle, etc.).
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
+</adaptive-icon>

@@ -8,18 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Copyright
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 
 /**
@@ -56,27 +51,27 @@ fun AboutShortsCapScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ScPremiumNavCard(
-                icon = Icons.Filled.Info,
+                iconKey = IconKey.ABOUT_INFO,
                 title = strings.aboutHubAbout,
                 onClick = onOpenAbout,
             )
             ScPremiumNavCard(
-                icon = Icons.Filled.Star,
+                iconKey = IconKey.ABOUT_FEATURES,
                 title = strings.aboutHubFeatures,
                 onClick = onOpenFeatures,
             )
             ScPremiumNavCard(
-                icon = Icons.Filled.Tune,
+                iconKey = IconKey.ABOUT_TECHNOLOGIES,
                 title = strings.aboutHubTechnologies,
                 onClick = onOpenTechnologies,
             )
             ScPremiumNavCard(
-                icon = Icons.Filled.Build,
+                iconKey = IconKey.ABOUT_VERSION_BUILD,
                 title = strings.aboutHubVersionBuild,
                 onClick = onOpenVersionBuild,
             )
             ScPremiumNavCard(
-                icon = Icons.Filled.Copyright,
+                iconKey = IconKey.ABOUT_COPYRIGHT,
                 title = strings.aboutHubCopyright,
                 onClick = onOpenCopyright,
             )

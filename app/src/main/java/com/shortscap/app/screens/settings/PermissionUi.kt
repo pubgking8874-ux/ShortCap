@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.shortscap.app.i18n.AppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.permissions.PermissionStatus
 import com.shortscap.app.theme.ScColors
@@ -31,6 +32,22 @@ fun permissionIcon(id: PermissionId): ImageVector = when (id) {
     PermissionId.AUTO_START -> Icons.Filled.PowerSettingsNew
     PermissionId.STORAGE_MEDIA -> Icons.Filled.PhotoLibrary
     PermissionId.ROOT -> Icons.Filled.Security
+}
+
+/**
+ * Semantic icon key for a permission — lets the centralized icon system
+ * color each permission row with its own category color in the Vibrant
+ * style (the icon vector itself stays [permissionIcon]).
+ */
+fun permissionIconKey(id: PermissionId): IconKey = when (id) {
+    PermissionId.USAGE_ACCESS -> IconKey.PERM_USAGE_ACCESS
+    PermissionId.ACCESSIBILITY -> IconKey.PERM_ACCESSIBILITY
+    PermissionId.OVERLAY -> IconKey.PERM_OVERLAY
+    PermissionId.NOTIFICATIONS -> IconKey.PERM_NOTIFICATIONS
+    PermissionId.BATTERY_OPTIMIZATION -> IconKey.PERM_BATTERY
+    PermissionId.AUTO_START -> IconKey.PERM_AUTO_START
+    PermissionId.STORAGE_MEDIA -> IconKey.PERM_STORAGE
+    PermissionId.ROOT -> IconKey.PERM_ROOT
 }
 
 /** Localized title for a permission. */

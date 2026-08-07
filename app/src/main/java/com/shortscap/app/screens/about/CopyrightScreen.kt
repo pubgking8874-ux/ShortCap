@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Copyright
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -62,20 +63,21 @@ fun CopyrightScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    val style = LocalIconStyle.current
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(colors.StatIconBg),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.Copyright,
-                            contentDescription = null,
-                            tint = colors.Accent,
-                            modifier = Modifier.size(36.dp),
-                        )
-                    }
+                            .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(colors.CardHover),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        IconTheme.icon(style, IconKey.ABOUT_COPYRIGHT),
+                        contentDescription = null,
+                        tint = IconTheme.tint(style, IconKey.ABOUT_COPYRIGHT, colors.Accent),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
                     Spacer(Modifier.height(8.dp))
                     Text(
                         strings.copyrightLine,

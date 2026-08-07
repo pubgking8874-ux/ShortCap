@@ -76,6 +76,9 @@ import com.shortscap.app.components.ScButton
 import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.ProfileData
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -229,12 +232,16 @@ fun ProfileScreen(
             )
             Spacer(Modifier.height(24.dp))
 
+            // Profile field icons go through the centralized icon system so
+            // they follow the selected icon style app-wide.
+            val style = LocalIconStyle.current
             ProfileField(
                 label = strings.profileFullName,
                 value = fullName,
                 onValueChange = { fullName = it },
                 placeholder = strings.profileNamePlaceholder,
-                leadingIcon = Icons.Filled.Person,
+                leadingIcon = IconTheme.icon(style, IconKey.PROFILE_PERSON),
+                leadingIconTint = IconTheme.tint(style, IconKey.PROFILE_PERSON, colors.TextSecondary),
             )
             Spacer(Modifier.height(14.dp))
 
@@ -244,8 +251,10 @@ fun ProfileScreen(
                 onValueChange = {},
                 placeholder = strings.profileEmailPlaceholder,
                 readOnly = true,
-                leadingIcon = Icons.Filled.Email,
-                trailingIcon = Icons.Filled.Lock,
+                leadingIcon = IconTheme.icon(style, IconKey.PROFILE_EMAIL),
+                leadingIconTint = IconTheme.tint(style, IconKey.PROFILE_EMAIL, colors.TextSecondary),
+                trailingIcon = IconTheme.icon(style, IconKey.PROFILE_LOCK),
+                trailingIconTint = IconTheme.tint(style, IconKey.PROFILE_LOCK, colors.TextSecondary),
                 trailingIconContentDescription = strings.profileReadOnly,
             )
             Spacer(Modifier.height(14.dp))
@@ -293,7 +302,8 @@ fun ProfileScreen(
                 value = dobText,
                 placeholder = strings.profileDobPlaceholder,
                 onClick = { openPicker { showDatePicker = true } },
-                trailingIcon = Icons.Filled.CalendarMonth,
+                trailingIcon = IconTheme.icon(style, IconKey.PROFILE_CALENDAR),
+                trailingIconTint = IconTheme.tint(style, IconKey.PROFILE_CALENDAR, colors.TextSecondary),
                 trailingIconContentDescription = strings.profileDob,
             )
 
@@ -470,7 +480,9 @@ private fun ProfileField(
     modifier: Modifier = Modifier,
     readOnly: Boolean = false,
     leadingIcon: ImageVector? = null,
+    leadingIconTint: Color = LocalScColors.current.TextSecondary,
     trailingIcon: ImageVector? = null,
+    trailingIconTint: Color = LocalScColors.current.TextSecondary,
     trailingIconContentDescription: String? = null,
 ) {
     val colors = LocalScColors.current
@@ -491,7 +503,7 @@ private fun ProfileField(
                 Icon(
                     leadingIcon,
                     contentDescription = null,
-                    tint = colors.TextSecondary,
+                    tint = leadingIconTint,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -517,7 +529,7 @@ private fun ProfileField(
                 Icon(
                     trailingIcon,
                     contentDescription = trailingIconContentDescription,
-                    tint = colors.TextSecondary,
+                    tint = trailingIconTint,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -534,6 +546,7 @@ private fun ProfilePickerField(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailingIcon: ImageVector = Icons.Filled.ArrowDropDown,
+    trailingIconTint: Color = LocalScColors.current.TextSecondary,
     trailingIconContentDescription: String? = null,
 ) {
     val colors = LocalScColors.current
@@ -565,7 +578,7 @@ private fun ProfilePickerField(
             Icon(
                 trailingIcon,
                 contentDescription = trailingIconContentDescription,
-                tint = colors.TextSecondary,
+                tint = trailingIconTint,
                 modifier = Modifier.size(20.dp),
             )
         }

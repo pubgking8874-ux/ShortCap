@@ -1,7 +1,7 @@
 package com.shortscap.app.model
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import com.shortscap.app.icons.IconKey
 
 /** Bottom nav destinations — order preserved: home, activity, web, settings */
 enum class ScScreen { HOME, ACTIVITY, WEB, SETTINGS }
@@ -49,8 +49,10 @@ enum class WebTab { BLOCKED, ALLOWED, RECENT }
 /**
  * Drawer item — [id] is a stable key for click routing (labels are
  * localized, so matching on label text would break across languages).
+ * The icon is requested through the centralized icon system via [iconKey],
+ * so the active IconStyle renders it app-wide (no hardcoded ImageVectors).
  */
-data class DrawerItem(val id: String, val icon: ImageVector, val label: String)
+data class DrawerItem(val id: String, val iconKey: IconKey, val label: String)
 
 /**
  * Full-screen destinations opened from the Dashboard drawer. Each maps to a
@@ -87,13 +89,13 @@ data class ProfileData(
  */
 enum class SettingsDestination {
     GENERAL, MONITORING, PERMISSIONS, NOTIFICATIONS, APPEARANCE,
-    PRIVACY, DATA_BACKUP, ABOUT, RESET_ALL,
+    DATA_BACKUP, ABOUT,
 }
 
 /** One row on the Settings home — icon + title + chevron only (no subtitles). */
 data class SettingsItem(
     val destination: SettingsDestination,
-    val icon: ImageVector,
+    val iconKey: IconKey,
     val label: String,
 )
 

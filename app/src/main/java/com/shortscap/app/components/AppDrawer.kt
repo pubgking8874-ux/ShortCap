@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.DrawerItem
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -83,7 +85,10 @@ fun ScAppDrawer(
             ScDivider(modifier = Modifier.padding(horizontal = 0.dp))
             Spacer(Modifier.height(8.dp))
 
-            // Items
+            // Items — icons are requested through the centralized icon system
+            // (IconKey + active IconStyle): the Vibrant style tints each
+            // drawer entry with its category color.
+            val style = LocalIconStyle.current
             items.forEachIndexed { index, item ->
                 Row(
                     modifier = Modifier
@@ -93,7 +98,15 @@ fun ScAppDrawer(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Icon(item.icon, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(19.dp))
+                    // The adjacent text is the row's accessible label, so the
+                    // icon is decorative (contentDescription = null) to avoid
+                    // announcing each drawer item twice.
+                    Icon(
+                        IconTheme.icon(style, item.iconKey),
+                        contentDescription = null,
+                        tint = IconTheme.tint(style, item.iconKey, colors.TextSecondary),
+                        modifier = Modifier.size(19.dp),
+                    )
                     Text(item.label, color = colors.TextPrimary, style = ScTextStyles.Body)
                 }
                 if (index < items.size - 1) {

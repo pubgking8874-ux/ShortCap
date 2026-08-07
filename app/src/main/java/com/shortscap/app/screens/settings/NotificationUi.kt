@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.shortscap.app.i18n.AppStrings
+import com.shortscap.app.icons.IconKey
 import com.shortscap.app.notifications.NotificationCategory
 import com.shortscap.app.notifications.NotificationSettingId
 
@@ -35,6 +36,28 @@ fun notificationCategoryIcon(category: NotificationCategory): ImageVector = when
     NotificationCategory.SYSTEM_NOTIFICATIONS -> Icons.Filled.AdminPanelSettings
     NotificationCategory.SOUND_VIBRATION -> Icons.Filled.VolumeUp
 }
+
+/**
+ * Semantic icon key for a notification category — lets the centralized icon
+ * system color each category with its own color in the Vibrant style (the
+ * icon vector itself stays [notificationCategoryIcon]).
+ */
+fun notificationCategoryIconKey(category: NotificationCategory): IconKey = when (category) {
+    NotificationCategory.REMINDERS -> IconKey.NOTIF_REMINDERS
+    NotificationCategory.LIMIT_ALERTS -> IconKey.NOTIF_LIMIT_ALERTS
+    NotificationCategory.BLOCK_NOTIFICATIONS -> IconKey.NOTIF_BLOCK
+    NotificationCategory.WEEKLY_INSIGHTS -> IconKey.NOTIF_WEEKLY_INSIGHTS
+    NotificationCategory.SYSTEM_NOTIFICATIONS -> IconKey.NOTIF_SYSTEM
+    NotificationCategory.SOUND_VIBRATION -> IconKey.NOTIF_SOUND
+}
+
+/**
+ * Semantic icon key for a single notification option — each option inherits
+ * its category's color in the Vibrant style (the icon vector stays
+ * [notificationSettingIcon]).
+ */
+fun notificationSettingIconKey(id: NotificationSettingId): IconKey =
+    notificationCategoryIconKey(id.category)
 
 /** Localized title for a notification category. */
 fun notificationCategoryTitle(category: NotificationCategory, strings: AppStrings): String = when (category) {

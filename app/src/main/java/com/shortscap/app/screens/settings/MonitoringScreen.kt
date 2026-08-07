@@ -46,6 +46,9 @@ import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.components.ScSwitch
 import com.shortscap.app.i18n.AppStrings
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -118,7 +121,7 @@ fun MonitoringScreen(
             // ---- Section 1 — Monitoring (master switch) ----
             SectionTitle(strings.monitoringSection)
             ScPremiumNavCard(
-                icon = Icons.Filled.Insights,
+                iconKey = IconKey.MONITORING_ENABLE,
                 title = strings.monitoringEnable,
                 subtitle = strings.monitoringEnableDesc,
                 onClick = { onToggleMonitoring(!settings.enabled) },
@@ -130,7 +133,7 @@ fun MonitoringScreen(
             // ---- Section 2 — App Blocking ----
             SectionTitle(strings.monitoringAppBlocking)
             ScPremiumNavCard(
-                icon = Icons.Filled.Block,
+                iconKey = IconKey.APP_BLOCKING,
                 title = strings.monitoringEnableAppBlocking,
                 subtitle = strings.monitoringEnableAppBlockingDesc,
                 onClick = { onToggleAppBlocking(!settings.appBlockingEnabled) },
@@ -142,7 +145,7 @@ fun MonitoringScreen(
             // ---- Section 3 — Daily Screen Time Limit (picker dialog) ----
             SectionTitle(strings.monitoringDailyLimit)
             ScPremiumNavCard(
-                icon = Icons.Filled.Timer,
+                iconKey = IconKey.SCREEN_TIME_LIMIT,
                 title = strings.monitoringDailyLimit,
                 onClick = { limitDialogOpen = true },
                 trailing = { TrailingValue(formatLimit(settings.screenTimeLimitMinutes)) },
@@ -151,7 +154,7 @@ fun MonitoringScreen(
             // ---- Section 4 — Blocked Apps (dedicated page, UI only) ----
             SectionTitle(strings.monitoringBlockedApps)
             ScPremiumNavCard(
-                icon = Icons.Filled.DoNotDisturbOn,
+                iconKey = IconKey.BLOCKED_APPS,
                 title = strings.monitoringBlockedApps,
                 onClick = onOpenBlockedApps,
             )
@@ -159,7 +162,7 @@ fun MonitoringScreen(
             // ---- Section 5 — Allowed Apps (dedicated page, UI only) ----
             SectionTitle(strings.monitoringAllowedApps)
             ScPremiumNavCard(
-                icon = Icons.Filled.CheckCircle,
+                iconKey = IconKey.ALLOWED_APPS,
                 title = strings.monitoringAllowedApps,
                 onClick = onOpenAllowedApps,
             )
@@ -167,7 +170,7 @@ fun MonitoringScreen(
             // ---- Section 6 — Strict Mode ----
             SectionTitle(strings.monitoringStrictMode)
             ScPremiumNavCard(
-                icon = Icons.Filled.GppMaybe,
+                iconKey = IconKey.STRICT_MODE,
                 title = strings.monitoringStrictMode,
                 subtitle = strings.monitoringStrictModeDesc,
                 onClick = { onToggleStrictMode(!settings.strictModeEnabled) },
@@ -180,7 +183,7 @@ fun MonitoringScreen(
             SectionTitle(strings.monitoringShortVideoPlatforms)
             settings.platforms.forEach { platform ->
                 ScPremiumNavCard(
-                    icon = Icons.Filled.SmartDisplay,
+                    iconKey = IconKey.PLATFORM,
                     title = platform.name,
                     onClick = { onTogglePlatform(platform.id) },
                     trailing = {
@@ -192,7 +195,7 @@ fun MonitoringScreen(
             // ---- Section 8 — Break Reminder ----
             SectionTitle(strings.monitoringBreakReminder)
             ScPremiumNavCard(
-                icon = Icons.Filled.SelfImprovement,
+                iconKey = IconKey.BREAK_REMINDER,
                 title = strings.monitoringBreakReminder,
                 onClick = { onToggleBreakReminder(!settings.breakReminderEnabled) },
                 trailing = {
@@ -200,7 +203,7 @@ fun MonitoringScreen(
                 },
             )
             ScPremiumNavCard(
-                icon = Icons.Filled.Alarm,
+                iconKey = IconKey.REMINDER_INTERVAL,
                 title = strings.monitoringReminderInterval,
                 onClick = { intervalDialogOpen = true },
                 trailing = { TrailingValue(intervalLabel(settings.breakReminderIntervalMinutes)) },
@@ -209,7 +212,7 @@ fun MonitoringScreen(
             // ---- Section 9 — Monitoring Schedule (dedicated page, UI only) ----
             SectionTitle(strings.monitoringSchedule)
             ScPremiumNavCard(
-                icon = Icons.Filled.CalendarMonth,
+                iconKey = IconKey.SCHEDULE,
                 title = strings.monitoringSchedule,
                 onClick = onOpenSchedule,
             )
@@ -219,13 +222,13 @@ fun MonitoringScreen(
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     StatTile(
-                        icon = Icons.Filled.Schedule,
+                        iconKey = IconKey.STAT_TODAY_USAGE,
                         label = strings.monitoringTodayUsage,
                         value = settings.todayUsage,
                         modifier = Modifier.weight(1f),
                     )
                     StatTile(
-                        icon = Icons.Filled.Block,
+                        iconKey = IconKey.STAT_BLOCKED_COUNT,
                         label = strings.monitoringBlockedAppsCount,
                         value = settings.blockedAppsCount.toString(),
                         modifier = Modifier.weight(1f),
@@ -233,13 +236,13 @@ fun MonitoringScreen(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     StatTile(
-                        icon = Icons.Filled.Timer,
+                        iconKey = IconKey.STAT_CURRENT_LIMIT,
                         label = strings.monitoringCurrentDailyLimit,
                         value = formatLimit(settings.screenTimeLimitMinutes),
                         modifier = Modifier.weight(1f),
                     )
                     StatTile(
-                        icon = Icons.Filled.MonitorHeart,
+                        iconKey = IconKey.STAT_MONITORING_STATUS,
                         label = strings.monitoringStatus,
                         value = if (settings.enabled) strings.monitoringActive else strings.monitoringPaused,
                         valueColor = if (settings.enabled) colors.Success else colors.Warning,
@@ -393,13 +396,18 @@ private fun SectionTitle(text: String) {
 /** Small read-only stat card used in the Statistics section. */
 @Composable
 private fun StatTile(
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconKey: IconKey? = null,
     label: String,
     value: String,
     modifier: Modifier = Modifier,
     valueColor: Color = LocalScColors.current.TextPrimary,
 ) {
     val colors = LocalScColors.current
+    val style = LocalIconStyle.current
+    val resolvedIcon = icon ?: iconKey?.let { IconTheme.icon(style, it) } ?: Icons.Filled.Info
+    val resolvedTint = if (iconKey != null) IconTheme.tint(style, iconKey, colors.Accent) else colors.Accent
+    val resolvedBg = colors.CardHover
     val shape = RoundedCornerShape(22.dp)
     Column(
         modifier = modifier
@@ -413,10 +421,10 @@ private fun StatTile(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(colors.StatIconBg),
+                .background(resolvedBg),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = colors.Accent, modifier = Modifier.size(22.dp))
+            Icon(resolvedIcon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(22.dp))
         }
         Text(
             value,
