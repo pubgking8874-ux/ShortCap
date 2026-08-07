@@ -18,7 +18,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -150,8 +149,9 @@ fun WebSearchField(
 }
 
 /**
- * One website-rule row: leading website tile (globe fallback), name + domain,
- * a compact primary action (Unblock / Block) and a delete icon button.
+ * One website-rule row: leading website tile (globe fallback), name + domain
+ * and a single compact status action (Unblock / Block) — the only way to
+ * change a rule's state. The rule itself is never deleted.
  */
 @Composable
 fun WebRuleRow(
@@ -159,8 +159,6 @@ fun WebRuleRow(
     primaryLabel: String,
     primaryTint: Color,
     onPrimary: () -> Unit,
-    onDelete: () -> Unit,
-    deleteLabel: String,
     statusLabel: String? = null,
 ) {
     val colors = LocalScColors.current
@@ -213,19 +211,6 @@ fun WebRuleRow(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Text(primaryLabel, color = primaryTint, style = ScTextStyles.Caption)
-        }
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDelete,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Delete, contentDescription = deleteLabel, tint = colors.Danger, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -429,45 +414,3 @@ fun AddWebsiteDialog(
     }
 }
 
-/** Confirmation dialog shown before a website is removed/deleted. */
-@Composable
-fun WebRemoveConfirmDialog(
-    domain: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-    val shape = RoundedCornerShape(22.dp)
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, colors.Divider, shape),
-            shape = shape,
-            color = colors.Card,
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Text(strings.webRemoveDialogTitle, color = colors.TextPrimary, style = ScTextStyles.H1)
-                Text(strings.webRemoveMessage(domain), color = colors.TextSecondary, style = ScTextStyles.Body)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ScButton(
-                        label = strings.cancel,
-                        variant = ScButtonVariant.SECONDARY,
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ScButton(
-                        label = strings.webConfirmRemove,
-                        variant = ScButtonVariant.DANGER,
-                        onClick = onConfirm,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-    }
-}

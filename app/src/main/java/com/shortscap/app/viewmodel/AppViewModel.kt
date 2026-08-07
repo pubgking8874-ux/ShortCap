@@ -24,10 +24,13 @@ import com.shortscap.app.settings.SettingsManager
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
+import com.shortscap.app.favicon.FaviconRepository
 import com.shortscap.app.web.WebAnalyticsPeriod
 import com.shortscap.app.web.WebRepository
 import com.shortscap.app.web.WebRule
 import com.shortscap.app.web.WebRuleStatus
+import com.shortscap.app.web.WebsiteBlockingEngine
+import com.shortscap.app.web.PlaceholderBlockingEngine
 import com.shortscap.app.web.WebUsageRecord
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -263,6 +266,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ---- Web section (rules + analytics; backend-ready via WebRepository) ----
+
+    // The website blocking engine. Today this is the honest placeholder that
+    // performs NO network filtering (see web/BlockingEngine.kt) — the UI only
+    // manages the local rule list and never claims to block. Swap this field
+    // for a real VPN/DNS engine implementation when it is available; the UI
+    // and WebRule data model do not change.
+    private val blockingEngine: WebsiteBlockingEngine = PlaceholderBlockingEngine()
+
+    /**
+     * Propagates a rule change to the blocking engine. No-op with the
+     * placeholder engine (no fake blocking) — a real engine's apply/remove
+     * is async, so this is fire-and-forget; failures are non-fatal because
+     * the local rule list remains the source of truth for the UI.
+     */
+    private fun pushRuleToEngine(domain: String, status: WebRuleStatus) {
+        viewModelScope.launch {
+            val result = when (status) {
+                WebRuleStatus.BLOCKED -> blockingEngine.applyBlock(domain)
+                WebRuleStatus.ALLOWED -> blockingEngine.removeBlock(domain)
+            }
+            result.onFailure { /* log / future sync analytics here */ }
+        }
+    }
+
     fun setWebPeriod(period: WebAnalyticsPeriod) =
         _uiState.update { it.copy(webPeriod = period) }
 
@@ -281,13 +308,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 webRules = state.webRules + WebRule(
                     id = d.lowercase(),
                     domain = d,
-                    displayName = deriveWebDisplayName(d),
+                    displayName = WebRepository.displayNameFor(d),
                     status = status,
                     createdAt = now,
                     updatedAt = now,
+                    // Website identity: store the favicon URL + cache key only —
+                    // pixels live in the local favicon cache, never in the model.
+                    faviconUrl = FaviconRepository.faviconUrl(d),
+                    localIconPath = FaviconRepository.cacheKey(d),
                 ),
             )
         }
+        if (status == WebRuleStatus.BLOCKED) pushRuleToEngine(d, status)
         showToast { if (status == WebRuleStatus.BLOCKED) it.webToastBlocked else it.webToastAllowed }
         return true
     }
@@ -310,7 +342,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return addWebRule(d, WebRuleStatus.BLOCKED)
     }
 
-    /** Moves a website between the blocked and allowed lists. */
+    /**
+     * Moves a website between the blocked and allowed lists. The website
+     * identity (favicon refs) is untouched — the same cached icon is shown
+     * in both states, never re-downloaded.
+     */
     fun setWebRuleStatus(domain: String, status: WebRuleStatus) {
         _uiState.update { state ->
             state.copy(
@@ -321,20 +357,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 },
             )
         }
+        pushRuleToEngine(domain, status)
         showToast { if (status == WebRuleStatus.BLOCKED) it.webToastBlocked else it.webToastUnblocked }
     }
-
-    /** Removes a website rule from the list. */
-    fun removeWebRule(domain: String) {
-        _uiState.update { state ->
-            state.copy(webRules = state.webRules.filterNot { it.domain.equals(domain, ignoreCase = true) })
-        }
-        showToast { it.webToastRemoved }
-    }
-
-    /** "example.com" -> "Example" — display name for manually added websites. */
-    private fun deriveWebDisplayName(domain: String): String =
-        domain.removePrefix("www.").substringBefore(".").replaceFirstChar { it.uppercase() }
 
     // ---- Settings sub-screens (dedicated screens; Navigation Compose back
     //      stack hosted in SettingsNavHost; backend-ready) ----

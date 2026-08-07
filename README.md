@@ -1384,3 +1384,44 @@ Add Website   → dialog with Block/Allow choice
 - Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
 
 *Web section restructure completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## UPDATE — Automatic Website Favicon System + Real-Blocking Readiness (August 7, 2026)
+
+Added an automatic **website identity / favicon system** to the Web section (Blocked, Allowed, Recent and the Web Usage breakdown) and made the website-rule architecture ready for a **real blocking engine** and future backend sync. No Web page structure or navigation was changed.
+
+### Website favicon system (`favicon/` package — reusable app-wide)
+
+- **Automatic for ANY domain** — nothing is hardcoded. When a website is added (e.g. `youtube.com`, `reddit.com`, `x.com`), the app normalizes the URL/domain, extracts the main domain (subdomains like `m.youtube.com` resolve to `youtube.com` for the logo lookup), identifies a display name, and retrieves the site's official favicon.
+- **`FaviconRepository`** — resolution order: in-memory `LruCache` → disk cache (`cacheDir/favicons`, PNG) → network. Network tries the site's official `https://<domain>/favicon.ico` first, then a public favicon lookup service as fallback. Includes:
+  - short connect/read timeouts + a 512 KB response cap (hostile/broken domains cannot exhaust memory)
+  - failure tracking with a **10-minute TTL** so transient network blips self-heal (the globe fallback is not pinned for the session)
+  - `refresh()` (cache refresh/update) and `clearCache()` (reset)
+- **`WebsiteFavicon` composable** — loading state and professional fallback built in: the globe tile shows while loading and whenever the favicon is unavailable/invalid/offline, so the UI never breaks. Loaded logos render on a soft white tile (favicons are designed for light backgrounds) that reads correctly in dark, light and system themes.
+- **Display name identification** — `WebRepository.displayNameFor()` uses known-domain hints (metadata only, never icons) with automatic derivation for unknown domains.
+
+### Data model (future backend/database ready)
+
+- `WebRule` now carries **website identity references only**: `faviconUrl` (primary favicon URL candidate) and `localIconPath` (favicon cache key = normalized domain). **Image bytes are never stored** in the model — pixels always come from the local favicon cache, so a future backend can sync rules + favicon references without transporting image data.
+- Moving a website Blocked ⇄ Allowed keeps the same identity and cached icon — it is never re-downloaded.
+- `AppViewModel.addWebRule()` populates the identity fields automatically for every new website.
+
+### Real-blocking readiness (`web/BlockingEngine.kt`)
+
+- New `WebsiteBlockingEngine` interface — `applyBlock` / `removeBlock` / `isBlocked` / `isAvailable` — the modular seam for a future Android-supported mechanism (VPN / DNS-based domain filtering, local proxy, accessibility-driven blocker).
+- `PlaceholderBlockingEngine` is wired into the ViewModel (`pushRuleToEngine` on add / status change / remove). It performs **NO network filtering** (`isAvailable = false`) and fails loudly instead of silently succeeding — the app **never claims the current UI can block websites**; the BLOCKED/ALLOWED state is a local rule list only.
+- Connecting a real engine later requires swapping one field in `AppViewModel` — zero Web UI or data-model changes.
+
+### Other changes
+
+- `AndroidManifest.xml`: added the `INTERNET` permission (favicon download only).
+- `components/EntityIcon.kt`: website entities now render through the favicon system app-wide (any future list picks it up automatically).
+
+### Files
+
+- New: `favicon/FaviconRepository.kt`, `favicon/WebsiteFavicon.kt`, `web/BlockingEngine.kt`
+- Modified: `web/WebModels.kt` (`WebRule` + `faviconUrl`/`localIconPath`), `web/WebRepository.kt` (seed identity refs + `displayNameFor`), `viewmodel/AppViewModel.kt` (identity on add + engine push), `components/EntityIcon.kt`, `AndroidManifest.xml`
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Favicon system + blocking readiness completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*

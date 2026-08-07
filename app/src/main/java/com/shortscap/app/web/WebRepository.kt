@@ -1,5 +1,6 @@
 package com.shortscap.app.web
 
+import com.shortscap.app.favicon.FaviconRepository
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -34,15 +35,33 @@ object WebRepository {
 
     /** Demo block/allow list — replaced by a backend `web_rules` fetch later. */
     fun seedRules(now: Long = System.currentTimeMillis()): List<WebRule> = listOf(
-        WebRule("tiktok.com", "tiktok.com", "TikTok", WebRuleStatus.BLOCKED, now, now),
-        WebRule("instagram.com", "instagram.com", "Instagram", WebRuleStatus.BLOCKED, now, now),
-        WebRule("x.com", "x.com", "X", WebRuleStatus.BLOCKED, now, now),
-        WebRule("reddit.com", "reddit.com", "Reddit", WebRuleStatus.BLOCKED, now, now),
-        WebRule("netflix.com", "netflix.com", "Netflix", WebRuleStatus.BLOCKED, now, now),
-        WebRule("youtube.com", "youtube.com", "YouTube", WebRuleStatus.ALLOWED, now, now),
-        WebRule("wikipedia.org", "wikipedia.org", "Wikipedia", WebRuleStatus.ALLOWED, now, now),
-        WebRule("coursera.org", "coursera.org", "Coursera", WebRuleStatus.ALLOWED, now, now),
+        seedRule("tiktok.com", "TikTok", WebRuleStatus.BLOCKED, now),
+        seedRule("instagram.com", "Instagram", WebRuleStatus.BLOCKED, now),
+        seedRule("x.com", "X", WebRuleStatus.BLOCKED, now),
+        seedRule("reddit.com", "Reddit", WebRuleStatus.BLOCKED, now),
+        seedRule("netflix.com", "Netflix", WebRuleStatus.BLOCKED, now),
+        seedRule("youtube.com", "YouTube", WebRuleStatus.ALLOWED, now),
+        seedRule("wikipedia.org", "Wikipedia", WebRuleStatus.ALLOWED, now),
+        seedRule("coursera.org", "Coursera", WebRuleStatus.ALLOWED, now),
     )
+
+    /**
+     * Builds a seed rule with its website identity — [faviconUrl] is the
+     * primary official favicon candidate and [localIconPath] the favicon
+     * cache key; the favicon pixels themselves are resolved + cached at
+     * render time by [FaviconRepository] (never stored inline).
+     */
+    private fun seedRule(domain: String, name: String, status: WebRuleStatus, now: Long): WebRule =
+        WebRule(
+            id = domain,
+            domain = domain,
+            displayName = name,
+            status = status,
+            createdAt = now,
+            updatedAt = now,
+            faviconUrl = FaviconRepository.faviconUrl(domain),
+            localIconPath = FaviconRepository.cacheKey(domain),
+        )
 
     /**
      * Deterministic demo website usage for the last 30 days. This is NOT
@@ -122,6 +141,50 @@ object WebRepository {
             val minutes = records.filter { it.dateEpochDay in startDay..endDay }.sumOf { it.durationMinutes }
             WebTrendPoint("W${4 - bucket}", minutes)
         }
+
+    // ---- Website display-name identification ----
+    // Display-name hints for very common domains (metadata only — favicons are
+    // NEVER hardcoded; the favicon system resolves them automatically for any
+    // domain). Unknown domains fall back to derivation from the domain.
+    private val knownDisplayNames = mapOf(
+        "youtube.com" to "YouTube",
+        "google.com" to "Google",
+        "google.co.in" to "Google",
+        "x.com" to "X",
+        "twitter.com" to "Twitter",
+        "reddit.com" to "Reddit",
+        "instagram.com" to "Instagram",
+        "facebook.com" to "Facebook",
+        "tiktok.com" to "TikTok",
+        "netflix.com" to "Netflix",
+        "wikipedia.org" to "Wikipedia",
+        "coursera.org" to "Coursera",
+        "linkedin.com" to "LinkedIn",
+        "github.com" to "GitHub",
+        "amazon.com" to "Amazon",
+        "whatsapp.com" to "WhatsApp",
+        "spotify.com" to "Spotify",
+        "discord.com" to "Discord",
+        "twitch.tv" to "Twitch",
+        "docs.google.com" to "Google Docs",
+        "drive.google.com" to "Google Drive",
+        "gmail.com" to "Gmail",
+    )
+
+    /**
+     * Identifies a human-friendly website name for [domain]: known-domain
+     * hint first (also matched by root when a subdomain is given), then
+     * derived from the domain. Pure function — no context or IO.
+     */
+    fun displayNameFor(domain: String): String {
+        val d = domain.trim().lowercase()
+        knownDisplayNames[d]?.let { return it }
+        val parts = d.split(".")
+        if (parts.size > 2) {
+            knownDisplayNames[parts.takeLast(2).joinToString(".")]?.let { return it }
+        }
+        return d.removePrefix("www.").substringBefore(".").replaceFirstChar { it.uppercase() }
+    }
 
     // ---- Future backend / tracking seams (documented only — not implemented) ----
     // Once a real data source connects (backend API, database, or a

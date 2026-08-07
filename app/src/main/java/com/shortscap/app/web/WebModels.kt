@@ -24,6 +24,13 @@ enum class WebRuleStatus { BLOCKED, ALLOWED }
 /**
  * A website rule in the user's block/allow list. [createdAt] / [updatedAt]
  * are epoch-millis timestamps (future-ready; not rendered today).
+ *
+ * Website identity: [faviconUrl] is the primary favicon URL candidate and
+ * [localIconPath] is the local favicon cache key (normalized domain) — the
+ * actual image bytes are never stored here, only references, so a future
+ * backend/database can store and synchronize rules + favicon references
+ * without carrying image data. The pixels always come from
+ * [com.shortscap.app.favicon.FaviconRepository].
  */
 data class WebRule(
     val id: String,
@@ -32,6 +39,10 @@ data class WebRule(
     val status: WebRuleStatus,
     val createdAt: Long,
     val updatedAt: Long,
+    /** Primary favicon URL candidate (`https://<domain>/favicon.ico`). */
+    val faviconUrl: String? = null,
+    /** Local favicon cache key (see FaviconRepository) — image bytes are not stored. */
+    val localIconPath: String? = null,
 )
 
 /** Analytics aggregation periods offered on the Web Usage Analytics screen. */

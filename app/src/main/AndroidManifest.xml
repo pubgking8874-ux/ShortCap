@@ -8,6 +8,10 @@
         requests and the system-settings redirects are driven from
         PermissionActions / PermissionRepository.
     -->
+    <!-- Internet access for the website favicon system (FaviconRepository):
+         downloads a site's official favicon.ico (with a public lookup
+         fallback) and caches it locally. No other network use today. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

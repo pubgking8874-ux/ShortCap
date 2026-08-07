@@ -94,7 +94,6 @@ fun WebNavHost(state: AppUiState, viewModel: AppViewModel) {
                 rules = state.webRules.filter { it.status == WebRuleStatus.BLOCKED },
                 existingDomains = existingDomains,
                 onUnblock = { viewModel.setWebRuleStatus(it.domain, WebRuleStatus.ALLOWED) },
-                onDelete = { viewModel.removeWebRule(it.domain) },
                 onAdd = { domain, status -> viewModel.addWebRule(domain, status) },
                 onBack = { navController.popBackStack() },
             )
@@ -105,7 +104,6 @@ fun WebNavHost(state: AppUiState, viewModel: AppViewModel) {
                 rules = state.webRules.filter { it.status == WebRuleStatus.ALLOWED },
                 existingDomains = existingDomains,
                 onBlock = { viewModel.setWebRuleStatus(it.domain, WebRuleStatus.BLOCKED) },
-                onRemove = { viewModel.removeWebRule(it.domain) },
                 onAdd = { domain, status -> viewModel.addWebRule(domain, status) },
                 onBack = { navController.popBackStack() },
             )
@@ -120,7 +118,6 @@ fun WebNavHost(state: AppUiState, viewModel: AppViewModel) {
                         if (rule.status == WebRuleStatus.BLOCKED) WebRuleStatus.ALLOWED else WebRuleStatus.BLOCKED,
                     )
                 },
-                onDelete = { viewModel.removeWebRule(it.domain) },
                 onBack = { navController.popBackStack() },
             )
         }

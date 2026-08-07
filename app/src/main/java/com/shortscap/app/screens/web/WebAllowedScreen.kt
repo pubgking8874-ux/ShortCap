@@ -28,17 +28,17 @@ import com.shortscap.app.web.WebRuleStatus
 /**
  * Allowed Websites — dedicated full page for the website allow list.
  *
- * Every allowed website shows its icon, name and domain with Block and
- * Remove actions, so a website can be switched between Allowed and Blocked
- * states right from here. Search and Add Website are included; data comes
- * from the ViewModel (WebRepository), never hardcoded.
+ * Every allowed website shows its icon, name and domain with a single
+ * Block action (the rule is never removed — only its state changes), so a
+ * website can be switched between Allowed and Blocked states right from
+ * here. Search and Add Website are included; data comes from the ViewModel
+ * (WebRepository), never hardcoded.
  */
 @Composable
 fun WebAllowedScreen(
     rules: List<WebRule>,
     existingDomains: Set<String>,
     onBlock: (WebRule) -> Unit,
-    onRemove: (WebRule) -> Unit,
     onAdd: (domain: String, status: WebRuleStatus) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -46,7 +46,6 @@ fun WebAllowedScreen(
     val strings = LocalAppStrings.current
     var query by remember { mutableStateOf("") }
     var showAdd by remember { mutableStateOf(false) }
-    var pendingRemove by remember { mutableStateOf<WebRule?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         WebSubScreenTopBar(title = strings.webAllowedTitle, onBack = onBack)
@@ -84,8 +83,6 @@ fun WebAllowedScreen(
                             primaryLabel = strings.webBlockAction,
                             primaryTint = colors.Danger,
                             onPrimary = { onBlock(rule) },
-                            onDelete = { pendingRemove = rule },
-                            deleteLabel = strings.webRemove,
                             statusLabel = strings.webAllowed,
                         )
                         if (index < filtered.size - 1) ScDivider(modifier = Modifier.padding(start = 62.dp))
@@ -115,14 +112,4 @@ fun WebAllowedScreen(
         )
     }
 
-    pendingRemove?.let { rule ->
-        WebRemoveConfirmDialog(
-            domain = rule.domain,
-            onDismiss = { pendingRemove = null },
-            onConfirm = {
-                onRemove(rule)
-                pendingRemove = null
-            },
-        )
-    }
 }

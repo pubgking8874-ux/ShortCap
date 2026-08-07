@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.shortscap.app.favicon.WebsiteFavicon
 import com.shortscap.app.model.ScEntity
 import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.theme.LocalScColors
@@ -34,11 +35,13 @@ import kotlinx.coroutines.withContext
 /**
  * Leading icon for any app/website [ScEntity]. Resolution order:
  *
- * 1. Backend-supplied icon reference ([ScEntity.icon]) — decoded later when
+ * 1. Websites with a URL — the official website favicon via the centralized
+ *    [WebsiteFavicon] system (memory → disk → network cache; globe fallback
+ *    doubles as the loading state). Works automatically for ANY domain.
+ * 2. Backend-supplied icon reference ([ScEntity.icon]) — decoded later when
  *    the API/Accessibility data source is connected.
- * 2. Installed application icon via PackageManager (apps with a packageName).
- * 3. Clean fallback — a brand-letter tile (apps) or a globe (websites), which
- *    is also shown immediately as a placeholder while loading.
+ * 3. Installed application icon via PackageManager (apps with a packageName).
+ * 4. Clean fallback — a brand-letter tile (apps) or a globe (websites).
  *
  * Icons are resolved asynchronously and keyed per entity, so nothing recomposes
  * unnecessarily and empty space never appears where an icon should be.
@@ -50,6 +53,15 @@ fun ScEntityIcon(
     size: Dp = 36.dp,
     corner: Dp = 10.dp,
 ) {
+    // Websites: the favicon system owns the leading icon (loading state +
+    // fallback included), so every website list app-wide picks it up. This
+    // branch takes precedence over the future [entity.icon] reference — for
+    // websites the official favicon is always resolved by domain.
+    if (entity.type == ScEntityType.WEBSITE && entity.websiteUrl != null) {
+        WebsiteFavicon(domain = entity.websiteUrl, modifier = modifier, size = size, corner = corner)
+        return
+    }
+
     val context = LocalContext.current
     val density = LocalDensity.current
     val loaded by produceState<ImageBitmap?>(
