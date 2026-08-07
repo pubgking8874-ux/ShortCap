@@ -127,6 +127,7 @@ fun WebNavHost(state: AppUiState, viewModel: AppViewModel) {
                 period = state.webPeriod,
                 onPeriodChange = viewModel::setWebPeriod,
                 summary = summary,
+                chartStyle = state.chartStyle,
                 onBack = { navController.popBackStack() },
             )
         }

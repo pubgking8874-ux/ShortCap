@@ -71,6 +71,18 @@ object HindiStrings : AppStrings {
     override val activityMonthlyReport = "मासिक रिपोर्ट"
     override val activityReportSummary = "इस अवधि में स्क्रीन समय 12% घटा, सबसे बड़ी गिरावट सप्ताह के दिनों की शाम को रही। सोशल ऐप्स अभी भी उपयोग का सबसे बड़ा हिस्सा हैं।"
 
+    // ---- Activity — period usage titles + dedicated report screens ----
+    override val activityDailyUsage = "दैनिक उपयोग"
+    override val activityWeeklyUsage = "साप्ताहिक उपयोग"
+    override val activityMonthlyUsage = "मासिक उपयोग"
+    override val reportSummary = "सारांश"
+    override val reportTotalUsage = "कुल उपयोग"
+    override val reportBusiestDay = "सबसे व्यस्त दिन"
+    override val reportMostUsedApp = "सबसे अधिक उपयोग किया जाने वाला ऐप"
+    override val reportShortsUsage = "शॉर्ट्स उपयोग"
+    override val reportShortsWatched = "देखे गए शॉर्ट्स"
+    override val reportTrend = "रुझान"
+
     // ---- Web ----
     override val webTitle = "वेब"
     override val webSearchPlaceholder = "वेबसाइट खोजें"
@@ -308,6 +320,18 @@ object HindiStrings : AppStrings {
     override val sizeMediumDefault = "मध्यम (डिफ़ॉल्ट)"
     override val sizeLarge = "बड़ा"
     override val appearanceIcons = "आइकन"
+
+    // ---- Chart Style (Settings → Appearance → Chart) ----
+    override val appearanceChart = "चार्ट"
+    override val chartBarChart = "बार चार्ट"
+    override val chartCircularChart = "सर्कुलर चार्ट"
+    override val chartGraphChart = "ग्राफ चार्ट"
+
+    // ---- Chart tooltip (tap a bar / point / slice for exact time info) ----
+    override val chartTooltipTime = "समय"
+    override val chartTooltipUsage = "उपयोग"
+    override val chartViewDetails = "विवरण देखें"
+    override val chartTooltipClose = "बंद करें"
 
     // ---- Icon Style (Settings → Appearance → Icons) ----
     override val iconStyleTitle = "आइकन शैली"

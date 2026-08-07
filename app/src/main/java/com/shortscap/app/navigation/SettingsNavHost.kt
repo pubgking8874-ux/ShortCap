@@ -25,6 +25,7 @@ import com.shortscap.app.screens.settings.AboutSettingsScreen
 import com.shortscap.app.screens.settings.AllowedAppsScreen
 import com.shortscap.app.screens.settings.AppearanceScreen
 import com.shortscap.app.screens.settings.BlockedAppsScreen
+import com.shortscap.app.screens.settings.ChartScreen
 import com.shortscap.app.screens.settings.GeneralScreen
 import com.shortscap.app.screens.settings.IconScreen
 import com.shortscap.app.screens.settings.LanguageScreen
@@ -50,6 +51,7 @@ object SettingsDestinations {
     const val APPEARANCE = "settings_appearance"
     const val APPEARANCE_THEME = "settings_appearance_theme"
     const val APPEARANCE_ICONS = "settings_appearance_icons"
+    const val APPEARANCE_CHART = "settings_appearance_chart"
     const val APPEARANCE_TEXT_SIZE = "settings_appearance_text_size"
     const val LEGAL_DOCUMENT = "settings_legal_document"
     const val ABOUT = "settings_about"
@@ -199,8 +201,10 @@ fun SettingsNavHost(
 
         composable(SettingsDestinations.APPEARANCE) {
             AppearanceScreen(
+                chartStyle = state.chartStyle,
                 onOpenTheme = { navController.navigate(SettingsDestinations.APPEARANCE_THEME) },
                 onOpenIcons = { navController.navigate(SettingsDestinations.APPEARANCE_ICONS) },
+                onOpenChart = { navController.navigate(SettingsDestinations.APPEARANCE_CHART) },
                 onOpenTextSize = { navController.navigate(SettingsDestinations.APPEARANCE_TEXT_SIZE) },
                 onBack = { navController.backOrClose(onClose) },
             )
@@ -222,6 +226,18 @@ fun SettingsNavHost(
             IconScreen(
                 currentStyle = state.iconStyle,
                 onApply = viewModel::setIconStyle,
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.APPEARANCE_CHART) {
+            // Chart Style — selecting + Apply persists the global preference
+            // (via AppearanceRepository) and updates AppUiState.chartStyle,
+            // which Activity, Web Analytics and every future chart read so
+            // the same usage data simply re-renders in the chosen style.
+            ChartScreen(
+                currentStyle = state.chartStyle,
+                onApply = viewModel::setChartStyle,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

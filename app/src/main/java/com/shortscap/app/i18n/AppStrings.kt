@@ -91,6 +91,18 @@ interface AppStrings {
     val activityMonthlyReport: String
     val activityReportSummary: String
 
+    // ---- Activity — period usage titles + dedicated report screens ----
+    val activityDailyUsage: String
+    val activityWeeklyUsage: String
+    val activityMonthlyUsage: String
+    val reportSummary: String
+    val reportTotalUsage: String
+    val reportBusiestDay: String
+    val reportMostUsedApp: String
+    val reportShortsUsage: String
+    val reportShortsWatched: String
+    val reportTrend: String
+
     // ---- Web ----
     val webTitle: String
     val webSearchPlaceholder: String
@@ -342,6 +354,18 @@ interface AppStrings {
 
     /** Appearance row + dedicated page title for the icon style picker. */
     val appearanceIcons: String
+
+    // ---- Chart Style (Settings → Appearance → Chart) ----
+    val appearanceChart: String
+    val chartBarChart: String
+    val chartCircularChart: String
+    val chartGraphChart: String
+
+    // ---- Chart tooltip (tap a bar / point / slice for exact time info) ----
+    val chartTooltipTime: String
+    val chartTooltipUsage: String
+    val chartViewDetails: String
+    val chartTooltipClose: String
 
     // ---- Icon Style (Settings → Appearance → Icons) ----
     val iconStyleTitle: String

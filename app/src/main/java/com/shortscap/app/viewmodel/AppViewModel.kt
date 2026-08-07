@@ -3,8 +3,11 @@ package com.shortscap.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shortscap.app.activity.ActivityPeriod
+import com.shortscap.app.activity.ActivityRange
 import com.shortscap.app.appearance.AppearanceRepository
 import com.shortscap.app.appearance.TextSizeMode
+import com.shortscap.app.charts.ChartStyle
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
 import com.shortscap.app.i18n.AppLanguage
@@ -62,9 +65,14 @@ data class AppUiState(
         ScCircularMetric(id = "shorts-watched", label = "Today's Shorts Watched", value = "245", unit = "Shorts", progress = 0.65f),
     ),
 
-    // ActivityScreen: range chip + expanded report card
+    // ActivityScreen: range chip + dedicated report screens. The report data
+    // itself is derived in ActivityRepository.reportFor(period) /
+    // rangeReportFor(range) — the UI only renders it, and the global chart
+    // style changes the visualization only.
     val activityRange: String = "Weekly",
-    val expandedReport: String? = null,
+    val activityReport: ActivityPeriod? = null,
+    // Per-day detail for a tapped monthly date range (Aug 1–7, …).
+    val activityRangeDetail: ActivityRange? = null,
 
     // Web section: analytics period + website rules + raw usage records. All
     // data flows from WebRepository (seeds today; backend/database later) —
@@ -100,6 +108,12 @@ data class AppUiState(
     // AppearanceRepository (backend-ready: maps 1:1 to a future
     // GET/POST /settings/appearance API).
     val textSizeMode: TextSizeMode = TextSizeMode.MEDIUM,
+
+    // Global Chart Style preference — which visualization every supported
+    // analytics chart uses (Bar Chart or Circular Chart). Presentation-only:
+    // it never touches usage data. Persisted locally by AppearanceRepository
+    // (backend-ready: maps 1:1 to a future UserPreferences.chartStyle entry).
+    val chartStyle: ChartStyle = ChartStyle.DEFAULT,
 
     // Icon Style preference — which icon system renders app-wide (ShortsCap
     // Original blue/black, or the Vibrant colorful category system). Held in
@@ -143,6 +157,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             appLanguage = languageStore.loadLanguage(),
             notificationSettings = NotificationRepository.loadSettings(application),
             textSizeMode = AppearanceRepository.loadTextSizeMode(application),
+            chartStyle = AppearanceRepository.loadChartStyle(application),
             iconStyle = IconRepository.loadIconStyle(application),
         ),
     )
@@ -208,6 +223,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Future backend: AppearanceRepository.syncAppearanceToCloud(mode).
     }
 
+    // ---- Chart Style (global visualization preference; persists locally and
+    //      updates instantly — Activity, Web Analytics and every future chart
+    //      read AppUiState.chartStyle and re-render with the same data) ----
+    fun setChartStyle(style: ChartStyle) {
+        if (style == uiState.value.chartStyle) return
+        AppearanceRepository.saveChartStyle(getApplication(), style)
+        _uiState.update { it.copy(chartStyle = style) }
+        // Future backend: sync as a user preference (UserPreferences.chartStyle),
+        // never inside usage/analytics records.
+    }
+
     // ---- Icon Style (persists locally; updates the global icon provider
     //      instantly — the whole app reflects the new style via LocalIconStyle) ----
     fun setIconStyle(style: IconStyle) {
@@ -261,9 +287,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Activity screen ----
     fun setActivityRange(range: String) = _uiState.update { it.copy(activityRange = range) }
-    fun toggleReport(report: String) = _uiState.update {
-        it.copy(expandedReport = if (it.expandedReport == report) null else report)
-    }
+
+    // Dedicated Weekly / Monthly report screens — opened from the Activity
+    // page's Reports section; closed via the in-app back arrow or system Back.
+    fun openActivityReport(period: ActivityPeriod) =
+        _uiState.update { it.copy(activityReport = period) }
+
+    fun closeActivityReport() = _uiState.update { it.copy(activityReport = null) }
+
+    // Per-day detail opened by tapping a monthly date-range bar. Back returns
+    // to the Activity page (system Back is wired in ScNavHost).
+    fun openActivityRangeDetail(range: ActivityRange) =
+        _uiState.update { it.copy(activityRangeDetail = range) }
+
+    fun closeActivityRangeDetail() = _uiState.update { it.copy(activityRangeDetail = null) }
 
     // ---- Web section (rules + analytics; backend-ready via WebRepository) ----
 
@@ -432,6 +469,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 notificationSettings = SettingsManager.defaultNotificationSettings(),
                 themeMode = SettingsManager.defaultThemeMode(),
                 textSizeMode = SettingsManager.defaultTextSizeMode(),
+                chartStyle = SettingsManager.defaultChartStyle(),
                 iconStyle = SettingsManager.defaultIconStyle(),
                 appLanguage = SettingsManager.defaultLanguage(),
             )

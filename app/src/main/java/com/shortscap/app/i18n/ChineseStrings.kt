@@ -71,6 +71,18 @@ object ChineseStrings : AppStrings {
     override val activityMonthlyReport = "每月报告"
     override val activityReportSummary = "本周期屏幕使用时间下降 12%，工作日晚间降幅最大。社交应用仍占使用量的最大份额。"
 
+    // ---- Activity — period usage titles + dedicated report screens ----
+    override val activityDailyUsage = "每日用量"
+    override val activityWeeklyUsage = "每周用量"
+    override val activityMonthlyUsage = "每月用量"
+    override val reportSummary = "摘要"
+    override val reportTotalUsage = "总用量"
+    override val reportBusiestDay = "最繁忙的一天"
+    override val reportMostUsedApp = "最常用的应用"
+    override val reportShortsUsage = "短视频用量"
+    override val reportShortsWatched = "观看的短视频"
+    override val reportTrend = "趋势"
+
     // ---- Web ----
     override val webTitle = "网页"
     override val webSearchPlaceholder = "搜索网站"
@@ -308,6 +320,18 @@ object ChineseStrings : AppStrings {
     override val sizeMediumDefault = "中（默认）"
     override val sizeLarge = "大"
     override val appearanceIcons = "图标"
+
+    // ---- Chart Style (Settings → Appearance → Chart) ----
+    override val appearanceChart = "图表"
+    override val chartBarChart = "条形图"
+    override val chartCircularChart = "环形图"
+    override val chartGraphChart = "折线图"
+
+    // ---- Chart tooltip (tap a bar / point / slice for exact time info) ----
+    override val chartTooltipTime = "时间"
+    override val chartTooltipUsage = "用量"
+    override val chartViewDetails = "查看详情"
+    override val chartTooltipClose = "关闭"
 
     // ---- Icon Style (Settings → Appearance → Icons) ----
     override val iconStyleTitle = "图标样式"

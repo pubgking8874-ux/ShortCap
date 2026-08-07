@@ -6,17 +6,6 @@ import com.shortscap.app.icons.IconKey
 /** Bottom nav destinations — order preserved: home, activity, web, settings */
 enum class ScScreen { HOME, ACTIVITY, WEB, SETTINGS }
 
-/** Mirrors `weekData` in the RN source (Mon..Sun screen-time minutes) */
-data class DayUsage(val day: String, val minutes: Int)
-
-val WeekData = listOf(
-    DayUsage("Mon", 210), DayUsage("Tue", 185), DayUsage("Wed", 260),
-    DayUsage("Thu", 150), DayUsage("Fri", 300), DayUsage("Sat", 340), DayUsage("Sun", 190),
-)
-
-/** Mirrors `appUsage` pie-chart data */
-data class AppUsageSlice(val name: String, val value: Int, val color: Color)
-
 /** Kind of entity shown with a leading icon — installed apps vs websites */
 enum class ScEntityType { APP, WEBSITE }
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.charts.ChartStyle
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
@@ -17,15 +18,19 @@ import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 
 /**
- * Appearance hub — 3 premium rows (icon · title · chevron, no subtitles),
- * each opening its own dedicated page: Theme, Icons (the global icon style
- * picker) and Text Size (global typography scale). Consistent with the
- * Settings design rule: no intro cards, no expandable sections.
+ * Appearance hub — premium rows (icon · title · chevron), each opening its
+ * own dedicated page: Theme, Icons (the global icon style picker), Chart
+ * (the global visualization style) and Text Size (global typography scale).
+ * The Chart row shows a short summary of the currently selected chart style.
+ * Consistent with the Settings design rule: no intro cards, no expandable
+ * sections.
  */
 @Composable
 fun AppearanceScreen(
+    chartStyle: ChartStyle,
     onOpenTheme: () -> Unit,
     onOpenIcons: () -> Unit,
+    onOpenChart: () -> Unit,
     onOpenTextSize: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -51,6 +56,12 @@ fun AppearanceScreen(
                 iconKey = IconKey.ICONS,
                 title = strings.appearanceIcons,
                 onClick = onOpenIcons,
+            )
+            ScPremiumNavCard(
+                iconKey = IconKey.CHART,
+                title = strings.appearanceChart,
+                subtitle = chartStyle.displayName(strings),
+                onClick = onOpenChart,
             )
             ScPremiumNavCard(
                 iconKey = IconKey.TEXT_SIZE,

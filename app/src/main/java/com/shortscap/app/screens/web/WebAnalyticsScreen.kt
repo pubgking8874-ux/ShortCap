@@ -1,8 +1,5 @@
 package com.shortscap.app.screens.web
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,11 +21,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shortscap.app.charts.ChartSlice
+import com.shortscap.app.charts.ChartStyle
+import com.shortscap.app.charts.ScDistributionChart
+import com.shortscap.app.charts.ScDonutCenterTotal
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScChip
 import com.shortscap.app.components.ScDivider
@@ -61,10 +60,24 @@ fun WebAnalyticsScreen(
     period: WebAnalyticsPeriod,
     onPeriodChange: (WebAnalyticsPeriod) -> Unit,
     summary: WebAnalyticsSummary,
+    chartStyle: ChartStyle,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
+
+    // Same website distribution fed to the shared chart renderer — the
+    // aggregated values stay untouched; only the visualization follows the
+    // global chart style preference.
+    val chartSlices = remember(summary.items) {
+        summary.items.mapIndexed { index, item ->
+            ChartSlice(
+                label = item.displayName,
+                value = item.durationMinutes.toFloat(),
+                color = DonutColors[index % DonutColors.size],
+            )
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         WebSubScreenTopBar(title = strings.webAnalyticsTitle, onBack = onBack)
@@ -95,25 +108,49 @@ fun WebAnalyticsScreen(
                 ScChip(label = strings.webPeriodMonth, active = period == WebAnalyticsPeriod.MONTH, onClick = { onPeriodChange(WebAnalyticsPeriod.MONTH) })
             }
 
-            // Donut chart — each website a proportional segment, total in center.
+            // Distribution chart — each website a proportional share, rendered
+            // by the global chart style: CIRCULAR draws the classic donut with
+            // the total in the center, BAR draws proportional bars. The data
+            // (WebRepository aggregation) is identical either way.
             ScCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Box(modifier = Modifier.size(216.dp), contentAlignment = Alignment.Center) {
-                        WebDonutChart(summary = summary)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    when (chartStyle) {
+                        // A line graph does not represent a distribution, so
+                        // CIRCULAR and GRAPH both render the donut here.
+                        ChartStyle.CIRCULAR, ChartStyle.GRAPH -> Box(
+                            modifier = Modifier.size(216.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            ScDistributionChart(
+                                slices = chartSlices,
+                                chartStyle = ChartStyle.CIRCULAR,
+                                modifier = Modifier.fillMaxSize(),
+                                centerContent = {
+                                    ScDonutCenterTotal(
+                                        total = formatWebDuration(summary.totalMinutes, strings),
+                                        subtitle = periodLabel(period, strings),
+                                    )
+                                },
+                            )
+                        }
+                        ChartStyle.BAR -> {
+                            Spacer(Modifier.height(2.dp))
                             Text(
                                 formatWebDuration(summary.totalMinutes, strings),
                                 color = colors.TextPrimary,
                                 style = ScTextStyles.BigStat,
                             )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                periodLabel(period, strings),
-                                color = colors.TextSecondary,
-                                style = ScTextStyles.Label,
+                            Spacer(Modifier.height(10.dp))
+                            ScDistributionChart(
+                                slices = chartSlices,
+                                chartStyle = ChartStyle.BAR,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp),
+                                showLabels = true,
                             )
                         }
                     }
@@ -171,45 +208,6 @@ private fun periodLabel(period: WebAnalyticsPeriod, strings: AppStrings): String
         WebAnalyticsPeriod.WEEK -> strings.webPeriodWeek
         WebAnalyticsPeriod.MONTH -> strings.webPeriodMonth
     }
-
-/**
- * Segmented donut chart — one arc per website, sweep proportional to its
- * share of the total usage. Animated sweep on first composition / period
- * change.
- */
-@Composable
-private fun WebDonutChart(summary: WebAnalyticsSummary) {
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(summary.period, summary.totalMinutes) {
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 950, easing = FastOutSlowInEasing),
-        )
-    }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        if (summary.totalMinutes <= 0 || summary.items.isEmpty()) return@Canvas
-        val stroke = 26.dp.toPx()
-        val diameter = size.minDimension - stroke
-        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-        val arcSize = Size(diameter, diameter)
-        var start = -90f
-        summary.items.forEachIndexed { index, item ->
-            val fraction = item.durationMinutes / summary.totalMinutes.toFloat()
-            val sweep = 360f * fraction * progress.value
-            drawArc(
-                color = DonutColors[index % DonutColors.size],
-                startAngle = start,
-                sweepAngle = sweep,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = stroke),
-            )
-            start += 360f * fraction
-        }
-    }
-}
 
 /** Simple rounded bar chart for the weekly / monthly trend data. */
 @Composable

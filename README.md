@@ -1425,3 +1425,218 @@ Added an automatic **website identity / favicon system** to the Web section (Blo
 - Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
 
 *Favicon system + blocking readiness completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## Global Chart Style System (`Settings → Appearance → Chart`) — New
+
+A single, app-wide Chart Style preference controls how every supported analytics chart in ShortsCap visualizes data. This is a **presentation-only** preference: the underlying usage data is never recalculated, filtered, or changed by the selected style (DATA ≠ VISUALIZATION).
+
+### Chart Styles
+- **Bar Chart** — distributions drawn as proportional bars.
+- **Circular Chart** — distributions drawn as circular/donut charts (the default).
+
+One preference drives Activity, Web Usage Analytics, weekly/monthly reports and any future analytics screen — there are **no per-screen chart settings**.
+
+### Selection & Apply behavior
+- `Settings → Appearance → Chart` opens a dedicated page with two radio options (each with a mini chart preview).
+- Apply persists the choice locally, closes the page and returns to Appearance; the Chart row shows the current style as its summary. Apply is disabled when the selection is unchanged (no repeated confirmations).
+
+### Global application
+- **Activity**: the Usage Timeline card renders per the style — BAR shows Mon–Sun bars for Weekly (per-app bars for Daily/Monthly, never a Mon–Sun chart for Daily), CIRCULAR shows a donut with the total in the center. The Most Used Apps card uses the same renderer. Data identical either way.
+- **Web Usage Analytics**: the distribution card renders the same aggregation as a donut (CIRCULAR) or proportional bars (BAR); the weekly/monthly trend chart is unchanged.
+
+### Architecture
+- `charts/ChartModels.kt` — `ChartStyle` (BAR / CIRCULAR, default CIRCULAR) + `ChartSlice` pure data model.
+- `charts/ChartRenderer.kt` — `ScDistributionChart`: one renderer, same slices, two visualizations (donut / bars).
+- Preference layer: persisted by `AppearanceRepository` (SharedPreferences, `chart_style`), default + reset via `SettingsManager.defaultChartStyle()` / `restoreDefaults()`, state in `AppUiState.chartStyle` (`AppViewModel.setChartStyle`).
+- Backend-ready: usage records never store "bar" or "circular"; a future backend provides data only, and the chart preference syncs as a separate user preference (e.g. `UserPreferences.chartStyle`).
+- Reset All Settings restores Chart to Circular Chart along with all other defaults. Dark / Light / System themes unaffected.
+
+- New: `charts/ChartModels.kt`, `charts/ChartRenderer.kt`, `screens/settings/ChartScreen.kt`
+- Modified: `appearance/AppearanceRepository.kt`, `settings/SettingsManager.kt`, `viewmodel/AppViewModel.kt`, `icons/IconModels.kt` + `icons/IconTheme.kt` (`IconKey.CHART`), `screens/settings/AppearanceScreen.kt`, `navigation/SettingsNavHost.kt`, `screens/activity/ActivityScreen.kt`, `screens/web/WebAnalyticsScreen.kt`, `navigation/ScNavHost.kt`, `navigation/WebNavHost.kt`, i18n catalogs (3 keys × 5 languages)
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Global Chart Style system completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## Activity & Reports Update — Period-Driven Charts + Dedicated Reports (New)
+
+### Period-driven chart data
+- The Daily | Weekly | Monthly tabs are unchanged; the chart now shows the data for the **selected period** — each period has its OWN dataset (never reused):
+  - **Daily** = today's hourly usage series.
+  - **Weekly** = the Mon–Sun day-by-day series (the values the page always showed).
+  - **Monthly** = the day-by-day series for the month.
+- All values flow from the new `activity/` data layer (`ActivityModels.kt` + `ActivityRepository.kt`) — a single structured `ActivityReport` shape per period with a documented backend seam (`fetchReportFromBackend`). No per-screen fake data; a future backend fills the same shape with zero UI changes.
+
+### Thin, consistent bar design
+- Bars are now significantly thinner (~30% of their slot) with consistent width, spacing, pill-top corner radius, alignment and 10sp labels — across Daily, Weekly, Monthly, Activity and Reports. Long series use sparse labels (`labelEvery`) so 30-day months stay readable.
+- Responsive: bars scale to the available width; no clipping or overlapping on small/large screens.
+
+### Chart style applies to Activity + Reports
+- The global chart style (Settings → Appearance → Chart) drives the Activity timeline chart **and** the report charts (thin bars or circular/donut). One centralized preference — no per-screen logic.
+- Changing the style never touches the underlying activity data.
+
+### Dedicated Weekly / Monthly Report screens
+- Tapping **Weekly Report** (and **Monthly Report**) now opens a dedicated full report screen instead of expanding inline.
+- The report shows the period chart in the selected chart style, plus a summary derived from the same structured data: total usage, busiest day, most-used app, trend %, and Shorts usage/count (derived until real tracking) — all from `ActivityRepository.reportFor(period)`, nothing hardcoded.
+- Back navigation (in-app arrow and system Back) returns to the Activity page.
+
+### Architecture / data separation
+- `activity/ActivityModels.kt` — `ActivityPeriod`, `ActivityPoint`, `ActivitySlice`, `ActivityReport` (data only, no presentation fields).
+- `activity/ActivityRepository.kt` — deterministic per-period seeds + future backend seam.
+- Charts consume the structured report; the renderer (`ScDistributionChart` in the charts package) only visualizes it.
+- Cleanup: removed the old `DayUsage`/`WeekData`/`AppUsageSlice` models (moved behind the repository) and the inline report-expansion state (`expandedReport`/`toggleReport` → `activityReport` + `open/closeActivityReport`).
+
+- New: `activity/ActivityModels.kt`, `activity/ActivityRepository.kt`, `screens/activity/ActivityReportScreen.kt`
+- Modified: `charts/ChartRenderer.kt` (thin bars + `labelEvery`), `screens/activity/ActivityScreen.kt` (period-driven rewrite), `viewmodel/AppViewModel.kt`, `navigation/ScNavHost.kt` (report screen + BackHandler), `model/Models.kt`, i18n catalogs (10 keys × 5 languages)
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Activity & Reports update completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+## Activity Charts — Correct Time Granularity + Graph Chart Style (August 7, 2026)
+
+Newly implemented update to the Activity / Reports charts. The underlying usage data and monitoring logic are unchanged; this update fixes the labeling/granularity of the Daily, Weekly and Monthly charts and adds a third chart style.
+
+### Correct time granularity per period
+
+- **Daily** → usage grouped by hour of the selected day (X-axis shows hours such as 9 AM, 10 AM, 11 AM, 12 PM — never weekday names). Each bar/point shows the actual usage during that hour, with the usage duration printed above each point. Hours with no usage render as clean empty gaps (no misleading bars).
+- **Weekly** → exactly 7 data points labelled Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday (Sunday-first), each showing its actual aggregated usage with the duration above the bar.
+- **Monthly** → aggregated by calendar month (January, February, March, …) over the recent 6-month range; each month bar shows its total usage duration above it. No weekday names are used.
+- The headline total always equals the sum of the currently selected period (day / week / month).
+
+### Single data source, dynamic aggregation
+
+- One raw record set (`activity/ActivityRepository.kt` → `ActivityRecord` with date + hour-of-day + minutes) is aggregated dynamically per period — Daily groups by hour, Weekly by weekday, Monthly by calendar month. There are NO separate fake datasets per period.
+- The reference day's hourly profile is scaled to its weekday base total, so the daily total always equals that day's bar in the weekly chart and the weekly total stays at the established series (27h 15m).
+- Data stays entirely in the data layer; the charts only visualize. A future backend/database fills the exact same `ActivityReport` shape with no UI redesign.
+
+### Three chart styles (Settings → Appearance → Chart)
+
+- **Bar Chart** → thin, compact professional bars (consistent width/spacing, rounded pill tops) for all three periods.
+- **Circular Chart** → circular/donut distribution with the period total in the center.
+- **Graph Chart** → new line/area graph with point markers for time-series data (Daily / Weekly / Monthly).
+- One global preference drives Activity, Reports and Web Analytics — changing it only re-renders the identical data; it never modifies the underlying usage values.
+
+### Responsive & readable
+
+- Dense series (24 hourly points) use sparse axis labels and sparse duration labels (`labelEvery` / `valueEvery`) so nothing clips on narrow screens; weekly (7) and monthly (6) label every point.
+- Charts respect screen width, avoid overlapping labels, and stay clear of the system navigation area.
+
+### Files
+
+- New: none (built on `activity/ActivityModels.kt` + `activity/ActivityRepository.kt`)
+- Modified: `charts/ChartRenderer.kt` (`ScSeriesChart` with BAR/GRAPH + sparse `valueEvery`), `charts/ChartModels.kt` (`ChartStyle.GRAPH`), `screens/activity/ActivityScreen.kt`, `screens/activity/ActivityReportScreen.kt`, `screens/settings/ChartScreen.kt`, `screens/web/WebAnalyticsScreen.kt` (GRAPH → donut fallback for distributions), i18n catalogs (`chartGraphChart` × 5 languages)
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Activity charts granularity + Graph chart style completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+## Activity / Reports — Time-First Timeline Update (August 7, 2026)
+
+Newly implemented update to the Activity and Reports charts. TIME, DATE and TIMELINE are now the primary information in every visualization. No monitoring logic, backend architecture or underlying usage data changed — this is a presentation + aggregation update.
+
+### Daily — complete 24-hour timeline
+
+- Shows the full timeline from 12 AM to 11 PM (24 points, one per hour).
+- Every hour is clearly labelled (two-line "12 / AM" style so all 24 fit on narrow screens) and every hour with usage shows its exact duration (e.g. 45m, 1h 20m) above its bar/point.
+- Hours with no usage render as clean empty gaps — never misleading bars.
+- The user can always tell WHEN usage happened, not just how much.
+
+### Weekly — Monday to Sunday with exact durations
+
+- Exactly 7 points, labelled Monday–Sunday (full day names), each showing its aggregated total duration above the bar.
+- The highest/lowest usage days are immediately identifiable.
+
+### Monthly — adaptive date ranges with tap-to-detail
+
+- The current month is divided into meaningful 7-day date ranges (Aug 1–7, Aug 8–14, …; the final range holds the remaining days).
+- The number of ranges adapts automatically to the actual days in the selected month (28/29/30/31).
+- Each bar shows its date range below and its total usage duration above (e.g. Aug 1–7 → 42h 15m).
+- **Tapping a monthly date-range bar opens a dedicated per-day detail screen** for exactly that range — per-day bars, total, busiest day and trend. This works in Bar and Graph styles (bar tap) and in Circular style (legend row tap). System Back returns to Activity.
+
+### Circular / Donut uses the SAME time data
+
+- The donut is no longer the app-share distribution: it renders the exact same hour/day/range time slices as the bar chart, with the total in the center and a duration-first legend (label + exact duration + share %) beneath.
+- No separate or fake data for the circle — one data source, two visualizations.
+
+### Data layer (future-backend-ready)
+
+- One raw record set (`activity/ActivityRepository.kt` → `ActivityRecord` date + hour + minutes) is aggregated dynamically per period — Daily groups by hour, Weekly by weekday (Monday-first), Monthly by date range. `rangeReportFor(range)` drills into one range's per-day usage. No per-period fake datasets.
+- The seed now covers the full previous + current month so every date range and trend has data; the reference week keeps the established series (weekly 27h 15m, daily equals its Friday bar).
+- Charts only visualize; a future backend/database fills the exact same `ActivityReport` / `ActivityRange` shapes with zero screen redesign.
+
+### Chart styles (Settings → Appearance → Chart)
+
+- Bar Chart → thin, compact, professional bars for all three periods.
+- Circular Chart → donut of the same time data with a duration legend.
+- Graph Chart → line/area with point markers for time-series data.
+- One global preference drives Activity and Reports; changing it only re-renders identical data.
+
+### Responsive & readable
+
+- Dense 24-hour series use two-line hour labels and a smaller duration font so nothing overlaps on small phones; weekly (7) and monthly (5) label every point.
+- Bars are thin with consistent spacing; charts respect screen width and stay clear of the system navigation area.
+
+### Files
+
+- Modified: `activity/ActivityModels.kt` (+`ActivityRange`), `activity/ActivityRepository.kt` (full-month seed, Monday-first weekly, monthly date ranges, `rangeReportFor`), `charts/ChartRenderer.kt` (`labelLines`, `valueFontSp`, `onPointClick` taps, `ScTimeLegend`), `screens/activity/ActivityScreen.kt`, `screens/activity/ActivityReportScreen.kt` (range detail), `viewmodel/AppViewModel.kt`, `navigation/ScNavHost.kt`
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Activity time-first timeline update completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## Update — TIME, DAY & DATE visible in every Activity chart style (August 8, 2026)
+
+New implementation entry — **TIME/DAY/DATE is now the primary information in ALL three chart styles** (Bar Chart, Circular/Donut Chart, Graph/Line Chart), driven by the single global Chart preference (Settings → Appearance → Chart). The underlying activity data, Activity architecture, Daily/Weekly/Monthly tabs and chart-selection system are unchanged — this update only improves how the existing data is visualized.
+
+**What changed:**
+
+- **Daily** → the complete 24-hour timeline is used internally, with clean, readable 3-hour markers (12 AM, 3 AM, 6 AM, 9 AM, 12 PM, 3 PM, 6 PM, 9 PM) so the chart never looks crowded. Bars/line rise and fall with the real hourly data; zero-usage hours stay clean empty gaps.
+- **Weekly** → exactly 7 points, Monday–Sunday, each labelled with its day **and** its actual date on two lines ("Mon" / "Aug 4") plus its exact duration above.
+- **Monthly** → the current month split into 7-day date ranges (Aug 1–7, Aug 8–14, …), each bar showing its date range below and total duration above; the count adapts to the month's real length.
+- **Tap-to-inspect tooltip (all three styles)** → tapping a bar, graph point or donut segment surfaces a small professional detail card with the exact date ("Friday, August 7"), the clock window for daily hours ("2:00 PM – 3:00 PM") and the usage duration ("35m"), plus a close action. Monthly ranges add a "View details" action that opens the per-day detail screen.
+- **Date caption near the chart** → the exact calendar span of the selected period ("Friday, August 7" / "Aug 3 – Aug 9" / "August 2026") is displayed right beside the chart and inside the donut centre, so the user always knows WHICH day/date a chart covers.
+- **Selected-point highlight** → the tapped bar / graph point / donut segment is visually highlighted (others dimmed), so the selection is unmistakable in every style.
+- **One data source, three renderings** → Bar, Graph and Donut all consume the exact same `ActivityPoint` series (label + minutes + full date + clock range) from `ActivityRepository`; the chart type only changes the drawing, never the numbers.
+
+**Architecture notes:**
+
+- `activity/ActivityModels.kt` — `ActivityPoint` now carries `detailTitle` (full date) and `timeRange` (hourly clock window) alongside `label` and `minutes`, so every renderer can show exact time/date info.
+- `activity/ActivityRepository.kt` — hourly, weekday and date-range aggregations emit full date metadata; new `periodDateCaption(period)` returns the exact span text.
+- `charts/ChartRenderer.kt` — `ScSeriesChart`/`ScDistributionChart` gained `selectedIndex` + tap callbacks; the donut now supports arc-level hit-testing (`donutIndexAt`, geometry matched exactly to the drawn ring) and a highlight state; new reusable `ScPointTooltipCard` renders the detail card in any style.
+- `screens/activity/ActivityScreen.kt` + `ActivityReportScreen.kt` — selection is tracked by label so bar, line and donut taps always resolve to the same point, even though the donut only draws non-zero slices.
+- **Future backend:** the same structured `ActivityReport`/`ActivityPoint` shapes are all the chart layer needs — a backend/database can fill them without any chart or UI redesign. The chart preference remains a pure presentation preference, never stored in usage records.
+
+**Files modified:** `activity/ActivityModels.kt`, `activity/ActivityRepository.kt`, `charts/ChartRenderer.kt`, `screens/activity/ActivityScreen.kt`, `screens/activity/ActivityReportScreen.kt`, `i18n/AppStrings.kt` (+ `EnglishStrings`, `HindiStrings`, `UrduStrings`, `ChineseStrings`, `SpanishStrings` — 4 new tooltip strings).
+
+**Verified:** `:app:compileDebugKotlin` and `:app:test` both pass; code review confirmed label/index mapping, donut hit-test geometry and no regressions.
+
+*Chart time/date visibility update completed August 8, 2026 · ShortsCap v1.1.1*
+
+---
+
+## Update — Slide-to-inspect Graph/Line Chart interaction (August 8, 2026)
+
+New implementation entry — a **simple touch-based visualizer** for the Graph/Line Activity chart. The user no longer needs to precisely tap small dots: placing a finger on the line chart and sliding horizontally (left ↔ right) automatically selects the **nearest data point** at every finger position, and the selection follows the finger continuously (10 AM → 11 AM → 12 PM → …).
+
+**How it behaves:**
+
+- **Nearest-point auto-selection** — the point under the finger is highlighted immediately (enlarged ringed marker); no precise tapping required.
+- **Guide lines** — ONE thin (1dp) vertical line through the selected point and ONE thin horizontal line from the left (value-axis side) to the point, in a subtle muted colour. Minimal, professional — no crosshairs, candles, trading controls or stock-market UI.
+- **Live info label** — the existing compact detail card updates automatically with the actual data for the selected point:
+  - Daily → full date + clock window ("Time: 10:00 AM – 11:00 AM") + "Usage: 35m"
+  - Weekly → day + date ("Monday, August 4") + "Usage: 3h 20m"
+  - Monthly → date range ("Aug 1–7") + "Usage: 42h 15m"
+- **Slide-only semantics** — dragging always selects (never deselects), so the label cannot vanish mid-inspection; taps still toggle. The interaction is **Graph chart only** — the Bar chart behaviour and the Circular/Donut chart are untouched.
+- **Scroll-friendly** — the drag detector deliberately does not consume the touch, so vertical page scrolling still works when the finger starts on the chart.
+
+**Architecture notes:**
+
+- `charts/ChartRenderer.kt` — `ScSeriesChart`/`ScLineSeries` gained an `onPointDrag` callback wired only into the GRAPH branch; a new `pointDragDetector` modifier (awaitEachGesture-based) maps finger x → nearest point slot and reports only index changes (no recomposition churn); the line canvas draws the thin vertical + horizontal guides when a point is selected.
+- `screens/activity/ActivityScreen.kt` + `ActivityReportScreen.kt` — pass a select-only drag handler that drives the same label-based selection state behind the existing `ScPointTooltipCard`; the underlying Activity data/architecture is unchanged (one data source, three renderings).
+
+**Verified:** `:app:compileDebugKotlin` and `:app:test` both pass; code review confirmed graph-only scoping, gesture coexistence (tap + drag), scroll compatibility and no regressions.
+
+*Slide-to-inspect Graph chart interaction completed August 8, 2026 · ShortsCap v1.1.1*

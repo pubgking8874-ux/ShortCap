@@ -1,5 +1,6 @@
 package com.shortscap.app.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -8,7 +9,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.activity.ActivityPeriod
 import com.shortscap.app.model.ScScreen
+import com.shortscap.app.screens.activity.ActivityReportScreen
 import com.shortscap.app.screens.activity.ActivityScreen
 import com.shortscap.app.screens.home.HomeScreen
 import com.shortscap.app.screens.settings.SettingsScreen
@@ -41,12 +44,35 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
         when (state.screen) {
             ScScreen.HOME -> HomeScreen(loading = state.homeLoading, metrics = state.homeMetrics)
 
-            ScScreen.ACTIVITY -> ActivityScreen(
-                range = state.activityRange,
-                onRangeChange = viewModel::setActivityRange,
-                expandedReport = state.expandedReport,
-                onToggleReport = viewModel::toggleReport,
-            )
+            ScScreen.ACTIVITY -> {
+                // Dedicated report / range-detail screens (full pages inside
+                // the Activity tab): a tapped monthly date-range bar opens its
+                // per-day detail, the Reports section opens Weekly/Monthly
+                // reports; the system Back button returns to the Activity page.
+                val reportPeriod = state.activityReport
+                val rangeDetail = state.activityRangeDetail
+                when {
+                    rangeDetail != null -> ActivityReportScreen(
+                        period = ActivityPeriod.MONTHLY,
+                        range = rangeDetail,
+                        chartStyle = state.chartStyle,
+                        onBack = viewModel::closeActivityRangeDetail,
+                    )
+                    reportPeriod != null -> ActivityReportScreen(
+                        period = reportPeriod,
+                        chartStyle = state.chartStyle,
+                        onBack = viewModel::closeActivityReport,
+                        onOpenRange = viewModel::openActivityRangeDetail,
+                    )
+                    else -> ActivityScreen(
+                        range = state.activityRange,
+                        onRangeChange = viewModel::setActivityRange,
+                        chartStyle = state.chartStyle,
+                        onOpenReport = viewModel::openActivityReport,
+                        onOpenRange = viewModel::openActivityRangeDetail,
+                    )
+                }
+            }
 
             // The Web tab is a dedicated nav stack: analytics root + Blocked /
             // Allowed rule screens (WebNavHost), all data via WebRepository.
@@ -57,5 +83,16 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                 onResetAll = viewModel::resetAllSettings,
             )
         }
+    }
+
+    // System Back while an Activity report / range-detail screen is open
+    // returns to the Activity page (never exits the app). Composed after the
+    // content so it takes precedence over the default behavior.
+    BackHandler(
+        enabled = state.screen == ScScreen.ACTIVITY &&
+            (state.activityReport != null || state.activityRangeDetail != null),
+    ) {
+        if (state.activityRangeDetail != null) viewModel.closeActivityRangeDetail()
+        else viewModel.closeActivityReport()
     }
 }

@@ -71,6 +71,18 @@ object EnglishStrings : AppStrings {
     override val activityMonthlyReport = "Monthly Report"
     override val activityReportSummary = "Screen time trended down 12% this period, with the biggest drop on weekday evenings. Social apps still account for the largest share of usage."
 
+    // ---- Activity — period usage titles + dedicated report screens ----
+    override val activityDailyUsage = "Daily Usage"
+    override val activityWeeklyUsage = "Weekly Usage"
+    override val activityMonthlyUsage = "Monthly Usage"
+    override val reportSummary = "Summary"
+    override val reportTotalUsage = "Total Usage"
+    override val reportBusiestDay = "Busiest Day"
+    override val reportMostUsedApp = "Most Used App"
+    override val reportShortsUsage = "Shorts Usage"
+    override val reportShortsWatched = "Shorts Watched"
+    override val reportTrend = "Trend"
+
     // ---- Web ----
     override val webTitle = "Web"
     override val webSearchPlaceholder = "Search websites"
@@ -308,6 +320,18 @@ object EnglishStrings : AppStrings {
     override val sizeMediumDefault = "Medium (Default)"
     override val sizeLarge = "Large"
     override val appearanceIcons = "Icons"
+
+    // ---- Chart Style (Settings → Appearance → Chart) ----
+    override val appearanceChart = "Chart"
+    override val chartBarChart = "Bar Chart"
+    override val chartCircularChart = "Circular Chart"
+    override val chartGraphChart = "Graph Chart"
+
+    // ---- Chart tooltip (tap a bar / point / slice for exact time info) ----
+    override val chartTooltipTime = "Time"
+    override val chartTooltipUsage = "Usage"
+    override val chartViewDetails = "View details"
+    override val chartTooltipClose = "Close"
 
     // ---- Icon Style (Settings → Appearance → Icons) ----
     override val iconStyleTitle = "Icon Style"
