@@ -11,12 +11,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.shortscap.app.model.DrawerScreen
-import com.shortscap.app.screens.about.AboutInfoScreen
-import com.shortscap.app.screens.about.AboutShortsCapScreen
-import com.shortscap.app.screens.about.CopyrightScreen
-import com.shortscap.app.screens.about.FeaturesScreen
-import com.shortscap.app.screens.about.TechnologiesScreen
-import com.shortscap.app.screens.about.VersionBuildScreen
 import com.shortscap.app.screens.feedback.FeedbackScreen
 import com.shortscap.app.screens.help.ContactSupportScreen
 import com.shortscap.app.screens.help.FaqScreen
@@ -32,13 +26,6 @@ object DrawerDestinations {
     const val CONTACT_SUPPORT = "contact_support"
     const val REPORT_BUG = "report_bug"
 
-    const val ABOUT_SHORTSCAP = "about_shortscap"
-    const val ABOUT = "about_info"
-    const val FEATURES = "features"
-    const val TECHNOLOGIES = "technologies"
-    const val VERSION_BUILD = "version_build"
-    const val COPYRIGHT = "copyright"
-
     const val PRIVACY_POLICY = "privacy_policy"
     const val TERMS_CONDITIONS = "terms_conditions"
     const val FEEDBACK = "feedback"
@@ -48,7 +35,6 @@ private fun DrawerScreen.startRoute(): String = when (this) {
     DrawerScreen.HELP_SUPPORT -> DrawerDestinations.HELP_SUPPORT
     DrawerScreen.PRIVACY_POLICY -> DrawerDestinations.PRIVACY_POLICY
     DrawerScreen.TERMS_CONDITIONS -> DrawerDestinations.TERMS_CONDITIONS
-    DrawerScreen.ABOUT_SHORTSCAP -> DrawerDestinations.ABOUT_SHORTSCAP
     DrawerScreen.FEEDBACK -> DrawerDestinations.FEEDBACK
 }
 
@@ -98,33 +84,6 @@ fun DrawerNavHost(
                 onBack = { navController.popBackStack() },
                 onSubmitted = onBugSubmitted,
             )
-        }
-
-        // ---- About ShortsCap hub + child pages ----
-        composable(DrawerDestinations.ABOUT_SHORTSCAP) {
-            AboutShortsCapScreen(
-                onBack = onClose,
-                onOpenAbout = { navController.navigate(DrawerDestinations.ABOUT) },
-                onOpenFeatures = { navController.navigate(DrawerDestinations.FEATURES) },
-                onOpenTechnologies = { navController.navigate(DrawerDestinations.TECHNOLOGIES) },
-                onOpenVersionBuild = { navController.navigate(DrawerDestinations.VERSION_BUILD) },
-                onOpenCopyright = { navController.navigate(DrawerDestinations.COPYRIGHT) },
-            )
-        }
-        composable(DrawerDestinations.ABOUT) {
-            AboutInfoScreen(onBack = { navController.popBackStack() })
-        }
-        composable(DrawerDestinations.FEATURES) {
-            FeaturesScreen(onBack = { navController.popBackStack() })
-        }
-        composable(DrawerDestinations.TECHNOLOGIES) {
-            TechnologiesScreen(onBack = { navController.popBackStack() })
-        }
-        composable(DrawerDestinations.VERSION_BUILD) {
-            VersionBuildScreen(onBack = { navController.popBackStack() })
-        }
-        composable(DrawerDestinations.COPYRIGHT) {
-            CopyrightScreen(onBack = { navController.popBackStack() })
         }
 
         // ---- Other drawer destinations (content untouched; hosted here so

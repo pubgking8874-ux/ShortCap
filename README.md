@@ -1263,3 +1263,30 @@ The launcher assets were produced from `drawable/logo_pic.png` with a short Pyth
 Android launchers can cache app icons. If the old default icon still appears after reinstalling the APK, **uninstall the previous build and install the new one** — the launcher will then pick up the ShortsCap logo.
 
 *Launcher icon replaced August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
+
+---
+
+## Removed: Settings → Data Backup & Dashboard menu → About ShortsCap (NEW)
+
+> Implementation completed **August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801**.
+
+### 1. Settings → "Data Backup" removed
+
+- The **Data Backup** row was removed from the main Settings screen (`SettingsScreen.kt`); the remaining rows render identically (the list is data-driven, so no empty space or broken item is left behind).
+- Its navigation was removed end-to-end: the `SettingsDestination.DATA_BACKUP` enum entry, the `settings_data_backup` route constant, the `startRoute()` mapping and the dedicated composable route in `SettingsNavHost.kt` are all gone, along with the now-unused generic section screen (`SettingsSectionScreen.kt`).
+- No other Settings option was modified.
+
+### 2. Dashboard three-dot menu → "About ShortsCap" removed
+
+- The **About** item was removed from the drawer/three-dot menu (`ShortsCapApp.kt`): the `DrawerItem("about", …)` entry and its click handler are gone, so no unused menu item remains.
+- Its navigation/window/page was removed end-to-end: the `DrawerScreen.ABOUT_SHORTSCAP` enum entry and all About routes (`about_shortscap`, `about_info`, `features`, `technologies`, `version_build`, `copyright`) plus their composable blocks were removed from `DrawerNavHost.kt`, and the six About screen files under `screens/about/` were deleted.
+- The other three-dot menu options (Help & Support, Privacy Policy, Terms & Conditions, Feedback, Share App) are unchanged.
+
+### Notes
+
+- The **Settings → About** screen (Privacy Policy / Terms & Conditions) is a separate feature and was **not** touched.
+- The **Icon Settings preview** still lists "Data Backup" as one of its style-demo categories (`IconKey.DATA_BACKUP` + its label string were intentionally kept — the preview has no navigation).
+- Unused string keys (`dataBackupTitle`, `drawerAbout`) and the About-related icon keys remain declared in the language/icon catalogs to keep those systems untouched; they are harmless and can be cleaned up later if desired.
+- Verified: `:app:compileDebugKotlin` and `:app:test` both pass.
+
+*Feature removals August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*

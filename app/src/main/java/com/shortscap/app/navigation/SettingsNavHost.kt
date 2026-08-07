@@ -15,7 +15,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.SettingsDestination
 import com.shortscap.app.notifications.NotificationCategory
 import com.shortscap.app.permissions.PermissionId
@@ -35,7 +34,6 @@ import com.shortscap.app.screens.settings.NotificationCategoryScreen
 import com.shortscap.app.screens.settings.NotificationsScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
-import com.shortscap.app.screens.settings.SettingsSectionScreen
 import com.shortscap.app.screens.settings.TextSizeScreen
 import com.shortscap.app.screens.settings.ThemeScreen
 import com.shortscap.app.viewmodel.AppUiState
@@ -53,7 +51,6 @@ object SettingsDestinations {
     const val APPEARANCE_THEME = "settings_appearance_theme"
     const val APPEARANCE_ICONS = "settings_appearance_icons"
     const val APPEARANCE_TEXT_SIZE = "settings_appearance_text_size"
-    const val DATA_BACKUP = "settings_data_backup"
     const val LEGAL_DOCUMENT = "settings_legal_document"
     const val ABOUT = "settings_about"
     const val LANGUAGE = "settings_language"
@@ -80,7 +77,6 @@ private fun SettingsDestination.startRoute(): String = when (this) {
     SettingsDestination.PERMISSIONS -> SettingsDestinations.PERMISSIONS
     SettingsDestination.NOTIFICATIONS -> SettingsDestinations.NOTIFICATIONS
     SettingsDestination.APPEARANCE -> SettingsDestinations.APPEARANCE
-    SettingsDestination.DATA_BACKUP -> SettingsDestinations.DATA_BACKUP
     SettingsDestination.ABOUT -> SettingsDestinations.ABOUT
 }
 
@@ -110,7 +106,6 @@ fun SettingsNavHost(
     onClose: () -> Unit,
 ) {
     val navController = rememberNavController()
-    val strings = LocalAppStrings.current
 
     NavHost(
         navController = navController,
@@ -235,13 +230,6 @@ fun SettingsNavHost(
             TextSizeScreen(
                 textSizeMode = state.textSizeMode,
                 onTextSizeChange = viewModel::setTextSizeMode,
-                onBack = { navController.backOrClose(onClose) },
-            )
-        }
-
-        composable(SettingsDestinations.DATA_BACKUP) {
-            SettingsSectionScreen(
-                title = strings.dataBackupTitle,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

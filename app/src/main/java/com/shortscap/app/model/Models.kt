@@ -56,14 +56,13 @@ data class DrawerItem(val id: String, val iconKey: IconKey, val label: String)
 
 /**
  * Full-screen destinations opened from the Dashboard drawer. Each maps to a
- * dedicated sub-screen (Help & Support, legal readers, About, Feedback).
+ * dedicated sub-screen (Help & Support, legal readers, Feedback).
  * Share App is not here — it launches the native share sheet directly.
  */
 enum class DrawerScreen {
     HELP_SUPPORT,
     PRIVACY_POLICY,
     TERMS_CONDITIONS,
-    ABOUT_SHORTSCAP,
     FEEDBACK,
 }
 
@@ -88,8 +87,7 @@ data class ProfileData(
  * Settings -> <item> -> Back -> Settings.
  */
 enum class SettingsDestination {
-    GENERAL, MONITORING, PERMISSIONS, NOTIFICATIONS, APPEARANCE,
-    DATA_BACKUP, ABOUT,
+    GENERAL, MONITORING, PERMISSIONS, NOTIFICATIONS, APPEARANCE, ABOUT,
 }
 
 /** One row on the Settings home — icon + title + chevron only (no subtitles). */

@@ -107,7 +107,6 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                 DrawerItem("help", IconKey.HELP_SUPPORT, strings.drawerHelp),
                 DrawerItem("privacy", IconKey.PRIVACY_POLICY, strings.drawerPrivacy),
                 DrawerItem("terms", IconKey.TERMS_CONDITIONS, strings.drawerTerms),
-                DrawerItem("about", IconKey.ABOUT, strings.drawerAbout),
                 DrawerItem("feedback", IconKey.FEEDBACK, strings.drawerFeedback),
                 DrawerItem("share", IconKey.SHARE, strings.drawerShare),
             )
@@ -168,7 +167,6 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                                 "help" -> viewModel.openDrawerScreen(DrawerScreen.HELP_SUPPORT)
                                 "privacy" -> viewModel.openDrawerScreen(DrawerScreen.PRIVACY_POLICY)
                                 "terms" -> viewModel.openDrawerScreen(DrawerScreen.TERMS_CONDITIONS)
-                                "about" -> viewModel.openDrawerScreen(DrawerScreen.ABOUT_SHORTSCAP)
                                 "feedback" -> viewModel.openDrawerScreen(DrawerScreen.FEEDBACK)
                                 "share" -> {
                                     viewModel.closeDrawer()

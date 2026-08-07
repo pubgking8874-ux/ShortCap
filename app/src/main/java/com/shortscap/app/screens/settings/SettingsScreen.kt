@@ -49,7 +49,6 @@ fun SettingsScreen(
         SettingsItem(SettingsDestination.PERMISSIONS, IconKey.PERMISSIONS, strings.settingsPermissions),
         SettingsItem(SettingsDestination.NOTIFICATIONS, IconKey.NOTIFICATIONS, strings.settingsNotifications),
         SettingsItem(SettingsDestination.APPEARANCE, IconKey.APPEARANCE, strings.settingsAppearance),
-        SettingsItem(SettingsDestination.DATA_BACKUP, IconKey.DATA_BACKUP, strings.settingsDataBackup),
         SettingsItem(SettingsDestination.ABOUT, IconKey.ABOUT, strings.settingsAbout),
     )
 
