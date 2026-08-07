@@ -321,6 +321,16 @@ object ChineseStrings : AppStrings {
     override val sizeLarge = "大"
     override val appearanceIcons = "图标"
 
+    // ---- Font (Settings → Appearance → Font) ----
+    override val appearanceFont = "字体"
+    override val toastFontApplied = "字体已应用"
+    override val fontSimple = "默认 / 简单"
+    override val fontNunito = "Nunito"
+    override val fontPatrickHand = "Patrick Hand"
+    override val fontRoboto = "Roboto"
+    override val fontTimesNewRoman = "Times New Roman"
+    override val fontPreviewSample = "Aa Bb Cc 123 — The quick brown fox"
+
     // ---- Chart Style (Settings → Appearance → Chart) ----
     override val appearanceChart = "图表"
     override val chartBarChart = "条形图"

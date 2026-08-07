@@ -321,6 +321,16 @@ object SpanishStrings : AppStrings {
     override val sizeLarge = "Grande"
     override val appearanceIcons = "Iconos"
 
+    // ---- Font (Settings → Appearance → Font) ----
+    override val appearanceFont = "Fuente"
+    override val toastFontApplied = "Fuente aplicada"
+    override val fontSimple = "Predeterminada / Simple"
+    override val fontNunito = "Nunito"
+    override val fontPatrickHand = "Patrick Hand"
+    override val fontRoboto = "Roboto"
+    override val fontTimesNewRoman = "Times New Roman"
+    override val fontPreviewSample = "Aa Bb Cc 123 — The quick brown fox"
+
     // ---- Chart Style (Settings → Appearance → Chart) ----
     override val appearanceChart = "Gráfico"
     override val chartBarChart = "Gráfico de barras"

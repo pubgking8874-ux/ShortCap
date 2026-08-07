@@ -25,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -57,6 +58,7 @@ import com.shortscap.app.navigation.ScNavHost
 import com.shortscap.app.navigation.SettingsNavHost
 import com.shortscap.app.screens.profile.ProfileScreen
 import com.shortscap.app.theme.LocalScColors
+import com.shortscap.app.theme.ScFonts
 import com.shortscap.app.theme.ScTextStyles
 import com.shortscap.app.theme.ShortsCapTheme
 import com.shortscap.app.util.ShareUtils
@@ -86,6 +88,13 @@ private val bottomNavItems = listOf(
 @Composable
 fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
+
+    // Global font — the persisted preference is applied to the centralized
+    // typography system on launch and on every change, so the ENTIRE app
+    // re-renders in the selected family instantly (no restart needed).
+    LaunchedEffect(state.fontMode) {
+        ScFonts.apply(state.fontMode)
+    }
 
     ShortsCapTheme(mode = state.themeMode) {
         // The whole logged-in experience reads text from the active language

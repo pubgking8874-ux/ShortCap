@@ -46,8 +46,19 @@ data class ActivityPoint(
 /**
  * One app slice of the usage distribution. [id] is a stable key (the
  * display [name] is data, and the UI localizes the "Other" entry).
+ *
+ * [percent] is the proportional share (the seed value, also what the charts
+ * render). [minutes] is the REAL usage duration for the current period —
+ * derived from the period's aggregated total by the repository so every
+ * app row can show "4h 35m" instead of "42%". A future backend provides
+ * minutes directly; the chart/UI shapes do not change.
  */
-data class ActivitySlice(val id: String, val name: String, val percent: Int)
+data class ActivitySlice(
+    val id: String,
+    val name: String,
+    val percent: Int,
+    val minutes: Int = 0,
+)
 
 /**
  * Structured activity/report data consumed by the Activity page and the

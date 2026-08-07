@@ -26,6 +26,7 @@ import com.shortscap.app.screens.settings.AllowedAppsScreen
 import com.shortscap.app.screens.settings.AppearanceScreen
 import com.shortscap.app.screens.settings.BlockedAppsScreen
 import com.shortscap.app.screens.settings.ChartScreen
+import com.shortscap.app.screens.settings.FontScreen
 import com.shortscap.app.screens.settings.GeneralScreen
 import com.shortscap.app.screens.settings.IconScreen
 import com.shortscap.app.screens.settings.LanguageScreen
@@ -52,6 +53,7 @@ object SettingsDestinations {
     const val APPEARANCE_THEME = "settings_appearance_theme"
     const val APPEARANCE_ICONS = "settings_appearance_icons"
     const val APPEARANCE_CHART = "settings_appearance_chart"
+    const val APPEARANCE_FONT = "settings_appearance_font"
     const val APPEARANCE_TEXT_SIZE = "settings_appearance_text_size"
     const val LEGAL_DOCUMENT = "settings_legal_document"
     const val ABOUT = "settings_about"
@@ -202,10 +204,23 @@ fun SettingsNavHost(
         composable(SettingsDestinations.APPEARANCE) {
             AppearanceScreen(
                 chartStyle = state.chartStyle,
+                fontMode = state.fontMode,
                 onOpenTheme = { navController.navigate(SettingsDestinations.APPEARANCE_THEME) },
                 onOpenIcons = { navController.navigate(SettingsDestinations.APPEARANCE_ICONS) },
                 onOpenChart = { navController.navigate(SettingsDestinations.APPEARANCE_CHART) },
+                onOpenFont = { navController.navigate(SettingsDestinations.APPEARANCE_FONT) },
                 onOpenTextSize = { navController.navigate(SettingsDestinations.APPEARANCE_TEXT_SIZE) },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.APPEARANCE_FONT) {
+            // Font — tapping a family applies + persists it immediately (no
+            // Apply/Save step): the centralized typography system re-renders
+            // the whole application via ScFonts, so every screen updates.
+            FontScreen(
+                currentFont = state.fontMode,
+                onSelect = viewModel::setFontMode,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

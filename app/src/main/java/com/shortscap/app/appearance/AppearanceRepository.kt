@@ -21,6 +21,7 @@ object AppearanceRepository {
     private const val PREFS_NAME = "shortscap_appearance"
     private const val KEY_TEXT_SIZE = "text_size_mode"
     private const val KEY_CHART_STYLE = "chart_style"
+    private const val KEY_FONT = "font_mode"
 
     /** Loads the persisted text-size mode (defaults to [TextSizeMode.MEDIUM]). */
     fun loadTextSizeMode(context: Context): TextSizeMode {
@@ -49,6 +50,21 @@ object AppearanceRepository {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_CHART_STYLE, style.name)
+            .apply()
+    }
+
+    /** Loads the persisted font family (defaults to [FontMode.DEFAULT]). */
+    fun loadFontMode(context: Context): FontMode {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return FontMode.entries.firstOrNull { it.name == prefs.getString(KEY_FONT, null) }
+            ?: FontMode.DEFAULT
+    }
+
+    /** Persists the global font family locally (UI preference only). */
+    fun saveFontMode(context: Context, mode: FontMode) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_FONT, mode.name)
             .apply()
     }
 

@@ -355,6 +355,18 @@ interface AppStrings {
     /** Appearance row + dedicated page title for the icon style picker. */
     val appearanceIcons: String
 
+    // ---- Font (Settings → Appearance → Font) ----
+    val appearanceFont: String
+    /** Toast shown the moment a font is applied app-wide. */
+    val toastFontApplied: String
+    val fontSimple: String
+    val fontNunito: String
+    val fontPatrickHand: String
+    val fontRoboto: String
+    val fontTimesNewRoman: String
+    /** Latin specimen line rendered in each font's real typeface (same across languages). */
+    val fontPreviewSample: String
+
     // ---- Chart Style (Settings → Appearance → Chart) ----
     val appearanceChart: String
     val chartBarChart: String

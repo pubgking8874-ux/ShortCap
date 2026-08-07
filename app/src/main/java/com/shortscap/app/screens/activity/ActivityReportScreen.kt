@@ -254,7 +254,14 @@ fun ActivityReportScreen(
                         ) {
                             Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(999.dp)).background(slice.pieColor(colors)))
                             Text(slice.displayName(strings), color = colors.TextSecondary, style = ScTextStyles.Body, modifier = Modifier.weight(1f))
-                            Text("${slice.percent}%", color = colors.TextPrimary, fontWeight = FontWeight.SemiBold, style = ScTextStyles.Body)
+                            // Real usage duration ("4h 35m"), derived from the
+                            // period's aggregated data — never a percentage.
+                            Text(
+                                formatWebDuration(slice.minutes, strings),
+                                color = colors.TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                style = ScTextStyles.Body,
+                            )
                         }
                     }
                 }

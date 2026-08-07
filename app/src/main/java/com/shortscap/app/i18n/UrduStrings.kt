@@ -321,6 +321,16 @@ object UrduStrings : AppStrings {
     override val sizeLarge = "بڑا"
     override val appearanceIcons = "آئیکنز"
 
+    // ---- Font (Settings → Appearance → Font) ----
+    override val appearanceFont = "فونٹ"
+    override val toastFontApplied = "فونٹ لاگو ہو گیا"
+    override val fontSimple = "ڈیفالٹ / سادہ"
+    override val fontNunito = "Nunito"
+    override val fontPatrickHand = "Patrick Hand"
+    override val fontRoboto = "Roboto"
+    override val fontTimesNewRoman = "Times New Roman"
+    override val fontPreviewSample = "Aa Bb Cc 123 — The quick brown fox"
+
     // ---- Chart Style (Settings → Appearance → Chart) ----
     override val appearanceChart = "چارٹ"
     override val chartBarChart = "بار چارٹ"

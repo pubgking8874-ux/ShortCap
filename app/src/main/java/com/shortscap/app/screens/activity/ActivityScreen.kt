@@ -302,7 +302,14 @@ fun ActivityScreen(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(999.dp)).background(slice.pieColor(colors)))
                             Text(slice.displayName(strings), color = colors.TextSecondary, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
-                            Text("${slice.percent}%", color = colors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                            // Real usage duration ("4h 35m"), derived from the
+                            // period's aggregated data — never a percentage.
+                            Text(
+                                formatWebDuration(slice.minutes, strings),
+                                color = colors.TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.5.sp,
+                            )
                         }
                     }
                 }

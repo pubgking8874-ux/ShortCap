@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.shortscap.app.activity.ActivityPeriod
 import com.shortscap.app.activity.ActivityRange
 import com.shortscap.app.appearance.AppearanceRepository
+import com.shortscap.app.appearance.FontMode
 import com.shortscap.app.appearance.TextSizeMode
 import com.shortscap.app.charts.ChartStyle
+import com.shortscap.app.theme.ScFonts
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
 import com.shortscap.app.i18n.AppLanguage
@@ -115,6 +117,12 @@ data class AppUiState(
     // (backend-ready: maps 1:1 to a future UserPreferences.chartStyle entry).
     val chartStyle: ChartStyle = ChartStyle.DEFAULT,
 
+    // Global Font preference — which bundled family the centralized typography
+    // system (ScTextStyles → ScFonts) renders app-wide. Independent from the
+    // Language setting. Persisted locally by AppearanceRepository
+    // (backend-ready: maps 1:1 to a future UserPreferences.fontFamily entry).
+    val fontMode: FontMode = FontMode.DEFAULT,
+
     // Icon Style preference — which icon system renders app-wide (ShortsCap
     // Original blue/black, or the Vibrant colorful category system). Held in
     // [LocalIconStyle] at the app root so every screen updates instantly on
@@ -159,7 +167,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             textSizeMode = AppearanceRepository.loadTextSizeMode(application),
             chartStyle = AppearanceRepository.loadChartStyle(application),
             iconStyle = IconRepository.loadIconStyle(application),
-        ),
+            fontMode = AppearanceRepository.loadFontMode(application),
+        // Apply the persisted font to the centralized typography system BEFORE
+        // the first frame renders, so there is never a default-font flash.
+        ).also { ScFonts.apply(it.fontMode) },
     )
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
@@ -232,6 +243,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(chartStyle = style) }
         // Future backend: sync as a user preference (UserPreferences.chartStyle),
         // never inside usage/analytics records.
+    }
+
+    // ---- Font (persists locally; applies instantly through the centralized
+    //      typography system — the whole app re-renders via ScFonts) ----
+    fun setFontMode(mode: FontMode) {
+        if (mode == uiState.value.fontMode) return
+        AppearanceRepository.saveFontMode(getApplication(), mode)
+        _uiState.update { it.copy(fontMode = mode) }
+        showToast { it.toastFontApplied }
+        // Future backend: sync as a user preference (UserPreferences.fontFamily),
+        // never inside usage/analytics/account records.
     }
 
     // ---- Icon Style (persists locally; updates the global icon provider
@@ -471,6 +493,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 textSizeMode = SettingsManager.defaultTextSizeMode(),
                 chartStyle = SettingsManager.defaultChartStyle(),
                 iconStyle = SettingsManager.defaultIconStyle(),
+                fontMode = SettingsManager.defaultFontMode(),
                 appLanguage = SettingsManager.defaultLanguage(),
             )
         }

@@ -88,6 +88,7 @@ object IconTheme {
         IconKey.TEXT_SIZE -> Icons.Filled.FormatSize
         IconKey.ICONS -> Icons.Filled.AutoAwesome
         IconKey.CHART -> Icons.Filled.BarChart
+        IconKey.FONT -> Icons.Filled.TextFields
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> Icons.Filled.Insights
@@ -182,6 +183,7 @@ object IconTheme {
     private fun vibrantIcon(key: IconKey): ImageVector = when (key) {
         IconKey.ICONS -> Icons.Filled.Brush
         IconKey.CHART -> Icons.Filled.PieChart
+        IconKey.FONT -> Icons.Filled.FontDownload
         IconKey.PERMISSIONS -> Icons.Filled.Security
         IconKey.DATA_BACKUP -> Icons.Filled.Backup
         IconKey.LANGUAGE -> Icons.Filled.Translate
@@ -250,6 +252,7 @@ private object VibrantPalette {
         IconKey.TEXT_SIZE -> teal
         IconKey.ICONS -> indigo
         IconKey.CHART -> cyan
+        IconKey.FONT -> violet
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> blue

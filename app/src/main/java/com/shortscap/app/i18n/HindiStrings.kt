@@ -321,6 +321,16 @@ object HindiStrings : AppStrings {
     override val sizeLarge = "बड़ा"
     override val appearanceIcons = "आइकन"
 
+    // ---- Font (Settings → Appearance → Font) ----
+    override val appearanceFont = "फ़ॉन्ट"
+    override val toastFontApplied = "फ़ॉन्ट लागू हो गया"
+    override val fontSimple = "डिफ़ॉल्ट / सरल"
+    override val fontNunito = "Nunito"
+    override val fontPatrickHand = "Patrick Hand"
+    override val fontRoboto = "Roboto"
+    override val fontTimesNewRoman = "Times New Roman"
+    override val fontPreviewSample = "Aa Bb Cc 123 — The quick brown fox"
+
     // ---- Chart Style (Settings → Appearance → Chart) ----
     override val appearanceChart = "चार्ट"
     override val chartBarChart = "बार चार्ट"

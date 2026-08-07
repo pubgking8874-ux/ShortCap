@@ -148,7 +148,7 @@ object ActivityRepository {
             period = period,
             totalMinutes = total,
             points = points,
-            distribution = distribution,
+            distribution = distributionWithMinutes(total),
             shortsMinutes = shortsMinutes,
             shortsCount = shortsMinutes / AVG_SHORTS_MINUTES,
             busiestLabel = points.maxByOrNull { it.minutes }?.label.orEmpty(),
@@ -258,12 +258,33 @@ object ActivityRepository {
             period = ActivityPeriod.MONTHLY,
             totalMinutes = total,
             points = dayPoints,
-            distribution = distribution,
+            distribution = distributionWithMinutes(total),
             shortsMinutes = shortsMinutes,
             shortsCount = shortsMinutes / AVG_SHORTS_MINUTES,
             busiestLabel = dayPoints.maxByOrNull { it.minutes }?.label.orEmpty(),
             trendPercent = percentChange(total, prevTotal),
         )
+    }
+
+    /**
+     * The app distribution for one report — per-app MINUTES derived from the
+     * period's aggregated total, so the displayed hours/minutes are real usage
+     * data (and sum EXACTLY to the period total; rounding remainder is
+     * distributed one minute at a time). [percent] stays the proportional
+     * source that drives the charts. A future backend provides minutes
+     * directly behind the same shape.
+     */
+    private fun distributionWithMinutes(total: Int): List<ActivitySlice> {
+        if (total <= 0) return distribution
+        val minutes = distribution.map { total * it.percent / 100 }.toMutableList()
+        var remainder = total - minutes.sum()
+        var i = 0
+        while (remainder > 0) {
+            minutes[i] = minutes[i] + 1
+            remainder--
+            i = (i + 1) % minutes.size
+        }
+        return distribution.mapIndexed { index, slice -> slice.copy(minutes = minutes[index]) }
     }
 
     /** Trend % vs the previous comparable period, derived from the records. */

@@ -321,6 +321,16 @@ object EnglishStrings : AppStrings {
     override val sizeLarge = "Large"
     override val appearanceIcons = "Icons"
 
+    // ---- Font (Settings → Appearance → Font) ----
+    override val appearanceFont = "Font"
+    override val toastFontApplied = "Font applied"
+    override val fontSimple = "Default / Simple"
+    override val fontNunito = "Nunito"
+    override val fontPatrickHand = "Patrick Hand"
+    override val fontRoboto = "Roboto"
+    override val fontTimesNewRoman = "Times New Roman"
+    override val fontPreviewSample = "Aa Bb Cc 123 — The quick brown fox"
+
     // ---- Chart Style (Settings → Appearance → Chart) ----
     override val appearanceChart = "Chart"
     override val chartBarChart = "Bar Chart"

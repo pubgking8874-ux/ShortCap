@@ -72,6 +72,7 @@ enum class IconKey {
     TEXT_SIZE,
     ICONS,
     CHART,
+    FONT,
 
     // ---- Monitoring ----
     MONITORING_ENABLE,

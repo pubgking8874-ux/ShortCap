@@ -2,6 +2,7 @@ package com.shortscap.app.settings
 
 import android.content.Context
 import com.shortscap.app.appearance.AppearanceRepository
+import com.shortscap.app.appearance.FontMode
 import com.shortscap.app.appearance.TextSizeMode
 import com.shortscap.app.charts.ChartStyle
 import com.shortscap.app.i18n.AppLanguage
@@ -44,6 +45,9 @@ object SettingsManager {
     /** Chart Style default after reset — Circular Chart (donut). */
     fun defaultChartStyle(): ChartStyle = ChartStyle.DEFAULT
 
+    /** Font default after reset — Inter (the original ShortsCap family). */
+    fun defaultFontMode(): FontMode = FontMode.DEFAULT
+
     /** Icon Style default after reset — ShortsCap Original. */
     fun defaultIconStyle(): IconStyle = IconStyle.ORIGINAL
 
@@ -67,6 +71,7 @@ object SettingsManager {
         LanguagePreferenceStore(context).saveLanguage(defaultLanguage())
         AppearanceRepository.saveTextSizeMode(context, defaultTextSizeMode())
         AppearanceRepository.saveChartStyle(context, defaultChartStyle())
+        AppearanceRepository.saveFontMode(context, defaultFontMode())
         IconRepository.saveIconStyle(context, defaultIconStyle())
         NotificationRepository.saveSettings(context, defaultNotificationSettings())
     }
