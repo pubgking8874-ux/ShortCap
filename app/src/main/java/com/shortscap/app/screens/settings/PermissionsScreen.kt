@@ -178,7 +178,7 @@ private fun PermissionRow(
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            permissionStatusLabel(info.id, info.status, strings),
+            permissionStatusLabel(info.status, strings),
             color = permissionStatusColor(info.status, colors),
             style = ScTextStyles.BodySemiBold.copy(fontSize = 13.sp),
             maxLines = 1,

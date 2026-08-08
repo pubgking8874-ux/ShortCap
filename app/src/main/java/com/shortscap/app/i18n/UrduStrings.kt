@@ -235,14 +235,8 @@ object UrduStrings : AppStrings {
 
     // ---- Permissions ----
     override val permissionsTitle = "اجازتیں"
-    override val permStatusGranted = "دی گئی"
     override val permStatusEnabled = "فعال"
-    override val permStatusAllowed = "اجازت یافتہ"
-    override val permStatusIgnored = "نظر انداز"
-    override val permStatusNeedsAttention = "توجہ درکار"
-    override val permStatusDenied = "مسترد"
-    override val permStatusNotAvailable = "دستیاب نہیں"
-    override val permStatusFuture = "مستقبل کی خصوصیت"
+    override val permStatusDisabled = "غیر فعال"
     override val permLastChecked = "آخری جانچ"
     override val permNeverChecked = "کبھی نہیں"
     override val permDetailWhyTitle = "یہ اجازت کیوں ضروری ہے"

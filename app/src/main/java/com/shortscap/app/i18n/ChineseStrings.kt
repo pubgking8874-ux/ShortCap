@@ -235,14 +235,8 @@ object ChineseStrings : AppStrings {
 
     // ---- Permissions ----
     override val permissionsTitle = "权限"
-    override val permStatusGranted = "已授予"
     override val permStatusEnabled = "已启用"
-    override val permStatusAllowed = "已允许"
-    override val permStatusIgnored = "已忽略"
-    override val permStatusNeedsAttention = "需要关注"
-    override val permStatusDenied = "已拒绝"
-    override val permStatusNotAvailable = "不可用"
-    override val permStatusFuture = "未来功能"
+    override val permStatusDisabled = "已停用"
     override val permLastChecked = "上次检查"
     override val permNeverChecked = "从未"
     override val permDetailWhyTitle = "为什么需要此权限"

@@ -75,22 +75,22 @@ fun permissionDescription(id: PermissionId, strings: AppStrings): String = when 
 }
 
 /**
- * Status text shown next to each permission. Granted state uses a
- * permission-specific label (Granted / Enabled / Allowed / Ignored); the
- * remaining states use the generic vocabulary.
+ * Normalized UI status text — the ONLY two statuses shown app-wide for
+ * permissions: "Enabled" when the permission/service is active and working,
+ * "Disabled" when it is missing, denied, or inactive. Permissions may
+ * internally have different Android states ([PermissionStatus]) and the
+ * underlying checks are unchanged, but the visible UI normalizes them all
+ * into this single consistent vocabulary. Nothing else is displayed as a
+ * permission status.
  */
-fun permissionStatusLabel(id: PermissionId, status: PermissionStatus, strings: AppStrings): String =
+fun permissionStatusLabel(status: PermissionStatus, strings: AppStrings): String =
     when (status) {
-        PermissionStatus.GRANTED -> when (id) {
-            PermissionId.ACCESSIBILITY -> strings.permStatusEnabled
-            PermissionId.NOTIFICATIONS, PermissionId.STORAGE_MEDIA -> strings.permStatusAllowed
-            PermissionId.BATTERY_OPTIMIZATION -> strings.permStatusIgnored
-            else -> strings.permStatusGranted // USAGE_ACCESS, OVERLAY
-        }
-        PermissionStatus.NOT_GRANTED -> strings.permStatusNeedsAttention
-        PermissionStatus.DISABLED -> strings.permStatusDenied
-        PermissionStatus.FUTURE -> strings.permStatusFuture
-        PermissionStatus.NOT_AVAILABLE -> strings.permStatusNotAvailable
+        PermissionStatus.GRANTED -> strings.permStatusEnabled
+        PermissionStatus.NOT_GRANTED,
+        PermissionStatus.DISABLED,
+        PermissionStatus.FUTURE,
+        PermissionStatus.NOT_AVAILABLE,
+        -> strings.permStatusDisabled
     }
 
 /**

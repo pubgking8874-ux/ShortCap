@@ -266,15 +266,11 @@ interface AppStrings {
     // ---- Permissions (status overview) ----
     val permissionsTitle: String
 
-    // Permission statuses
-    val permStatusGranted: String
+    // Permission statuses — ONE consistent system app-wide: Enabled (active /
+    // working) and Disabled (missing / denied / inactive). Nothing else is
+    // shown as a permission status.
     val permStatusEnabled: String
-    val permStatusAllowed: String
-    val permStatusIgnored: String
-    val permStatusNeedsAttention: String
-    val permStatusDenied: String
-    val permStatusNotAvailable: String
-    val permStatusFuture: String
+    val permStatusDisabled: String
 
     // Permission detail page
     val permLastChecked: String

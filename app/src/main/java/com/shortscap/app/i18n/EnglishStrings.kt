@@ -235,14 +235,8 @@ object EnglishStrings : AppStrings {
 
     // ---- Permissions ----
     override val permissionsTitle = "Permissions"
-    override val permStatusGranted = "Granted"
     override val permStatusEnabled = "Enabled"
-    override val permStatusAllowed = "Allowed"
-    override val permStatusIgnored = "Ignored"
-    override val permStatusNeedsAttention = "Needs Attention"
-    override val permStatusDenied = "Denied"
-    override val permStatusNotAvailable = "Not Available"
-    override val permStatusFuture = "Future Feature"
+    override val permStatusDisabled = "Disabled"
     override val permLastChecked = "Last checked"
     override val permNeverChecked = "Never"
     override val permDetailWhyTitle = "Why this permission is required"

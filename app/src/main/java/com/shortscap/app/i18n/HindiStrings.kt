@@ -235,14 +235,8 @@ object HindiStrings : AppStrings {
 
     // ---- Permissions ----
     override val permissionsTitle = "अनुमतियाँ"
-    override val permStatusGranted = "दी गई"
     override val permStatusEnabled = "सक्षम"
-    override val permStatusAllowed = "अनुमत"
-    override val permStatusIgnored = "अनदेखा"
-    override val permStatusNeedsAttention = "ध्यान आवश्यक"
-    override val permStatusDenied = "अस्वीकृत"
-    override val permStatusNotAvailable = "उपलब्ध नहीं"
-    override val permStatusFuture = "भविष्य की सुविधा"
+    override val permStatusDisabled = "अक्षम"
     override val permLastChecked = "अंतिम जाँच"
     override val permNeverChecked = "कभी नहीं"
     override val permDetailWhyTitle = "यह अनुमति क्यों आवश्यक है"

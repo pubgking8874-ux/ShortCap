@@ -104,7 +104,7 @@ fun PermissionDetailScreen(
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    permissionStatusLabel(permissionId, permission.status, strings),
+                    permissionStatusLabel(permission.status, strings),
                     color = permissionStatusColor(permission.status, colors),
                     style = ScTextStyles.BodySemiBold.copy(fontSize = 14.sp),
                     textAlign = TextAlign.Center,
