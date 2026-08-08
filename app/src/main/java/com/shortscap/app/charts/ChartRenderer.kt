@@ -1,5 +1,6 @@
 package com.shortscap.app.charts
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -807,6 +808,14 @@ fun ScDonutCenterTotal(
  * colour dot, time/date label, exact duration and share. Rows are tappable
  * when [onSliceClick] is provided (e.g. selecting a slice to surface its
  * exact date/time). Duration is the primary information; percent secondary.
+ *
+ * [maxVisible] caps the rows shown BY DEFAULT (e.g. 4 for a daily hourly
+ * timeline). When the legend has more entries than that, a Show More / Show
+ * Less toggle appears right after the last visible row and expands / collapses
+ * the list with a smooth size animation. The data is never filtered or
+ * removed — only its initial visibility is controlled, and the toggle
+ * disappears automatically when the legend has [maxVisible] or fewer entries.
+ * null (the default) shows every row, keeping non-hourly legends unchanged.
  */
 @Composable
 fun ScTimeLegend(
@@ -814,11 +823,25 @@ fun ScTimeLegend(
     valueFormatter: ((Float) -> String)? = null,
     onSliceClick: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    maxVisible: Int? = null,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
     val total: Float = slices.fold(0f) { acc, slice -> acc + slice.value }
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        slices.forEachIndexed { index, slice ->
+    // Collapsible only when a cap is set AND there is actually more data to
+    // reveal — 0, 1–4 entries never show the toggle. Keying `expanded` on the
+    // slices list resets it per dataset (each day/period starts compact).
+    var expanded by remember(slices) { mutableStateOf(false) }
+    val visibleSlices = when {
+        !expanded && maxVisible != null && maxVisible > 0 && slices.size > maxVisible -> slices.take(maxVisible)
+        else -> slices
+    }
+
+    Column(
+        modifier = modifier.animateContentSize(animationSpec = tween(220)),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        visibleSlices.forEachIndexed { index, slice ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -867,6 +890,30 @@ fun ScTimeLegend(
                         style = ScTextStyles.Caption,
                     )
                 }
+            }
+        }
+
+        if (maxVisible != null && maxVisible > 0 && slices.size > maxVisible) {
+            // Show More / Show Less — the app's accent-text action styling,
+            // centered so it reads as a natural part of the timeline.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { expanded = !expanded },
+                    )
+                    .padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (expanded) strings.chartShowLess else strings.chartShowMore,
+                    color = colors.Accent,
+                    fontWeight = FontWeight.SemiBold,
+                    style = ScTextStyles.Caption,
+                )
             }
         }
     }

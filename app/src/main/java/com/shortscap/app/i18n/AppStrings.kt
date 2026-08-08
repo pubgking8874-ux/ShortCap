@@ -66,6 +66,8 @@ interface AppStrings {
     val homeGreeting: String
     val homeQuickStats: String
     val homeAppsUsed: String
+    /** Home Quick Status card — today's total usage (same data as Activity → Daily). */
+    val homeTodayUsage: String
     val homeRestrictedApps: String
     val homeBlockedSites: String
     val homeFocusTime: String
@@ -209,30 +211,66 @@ interface AppStrings {
     /** "Switching to <language>…" shown while the new language applies. */
     fun switchingTo(languageName: String): String
 
+    // ---- Study Mode (General section) ----
+    val studyTitle: String
+    val studySessionSection: String
+    val studySettingsSection: String
+    val studyStatusLabel: String
+    val studyStatusActive: String
+    val studyStatusInactive: String
+    val studyRemaining: String
+    val studyRestrictionNote: String
+    val studyStartSession: String
+    val studyStartConfirmTitle: String
+    val studyStartConfirmMessage: String
+    val studyStartConfirmRestrictions: String
+    val studyStartConfirmStart: String
+    val studyDuration: String
+    val studyBreakReminder: String
+    val studyBreakDuration: String
+    val studySoundMode: String
+    val studySoundSound: String
+    val studySoundVibrate: String
+    val studySoundSilent: String
+    val studySchedule: String
+    val studyScheduleStart: String
+    val studyScheduleEnd: String
+    val studyAllowedItems: String
+    val studyAllowedItemsDesc: String
+    val studyAllowedApps: String
+    val studyAllowedWebsites: String
+    val studyAllowedWebsitePlaceholder: String
+    val studyAllowedAdd: String
+    val studyAllowedInvalid: String
+    val studyAllowedDuplicate: String
+    val studySummary: String
+    val studySummarySessionsToday: String
+    val studySummaryTimeToday: String
+    val studySummaryLastSession: String
+    val studySummaryNone: String
+    val studySessionStartedToast: String
+    val studySessionCompleteToast: String
+    val studyHomeTitle: String
+
     // ---- Monitoring ----
     val monitoringTitle: String
     val monitoringSection: String
-    val monitoringEnable: String
-    val monitoringEnableDesc: String
-    val monitoringAppBlocking: String
-    val monitoringEnableAppBlocking: String
-    val monitoringEnableAppBlockingDesc: String
-    val monitoringDailyLimit: String
+    val monitoringDevice: String
+    val monitoringDeviceDesc: String
+    val monitoringDeviceInfoTitle: String
+    val monitoringDeviceInfoMessage: String
+    val monitoringDeviceInfoPermission: String
+    val monitoringDeviceInfoDisabled: String
     val monitoringBlockedApps: String
     val monitoringAllowedApps: String
     val monitoringStrictMode: String
     val monitoringStrictModeDesc: String
-    val monitoringShortVideoPlatforms: String
+    val monitoringShortsSection: String
+    val monitoringShortsControl: String
+    val monitoringShortsControlDesc: String
     val monitoringBreakReminder: String
     val monitoringReminderInterval: String
     val monitoringSchedule: String
-    val monitoringStatistics: String
-    val monitoringTodayUsage: String
-    val monitoringBlockedAppsCount: String
-    val monitoringCurrentDailyLimit: String
-    val monitoringStatus: String
-    val monitoringActive: String
-    val monitoringPaused: String
 
     // ---- Home Monitoring Paused section (priority page) + resume popup ----
     val homeMonitoringPausedTitle: String
@@ -249,19 +287,11 @@ interface AppStrings {
     val monitoringStartedToast: String
 
     // ---- Time option labels ----
-    val time15Min: String
-    val time30Min: String
-    val time45Min: String
     val time1Hour: String
-    val time2Hours: String
-    val timeCustom: String
     val time15Minutes: String
     val time30Minutes: String
     val time45Minutes: String
-    val customLimitTitle: String
-    val customLimitDesc: String
     val minutesLabel: String
-    val setLabel: String
 
     // ---- Permissions (status overview) ----
     val permissionsTitle: String
@@ -289,12 +319,8 @@ interface AppStrings {
     val permNotificationsDesc: String
     val permBattery: String
     val permBatteryDesc: String
-    val permAutoStart: String
-    val permAutoStartDesc: String
     val permStorage: String
     val permStorageDesc: String
-    val permRoot: String
-    val permRootDesc: String
 
     // ---- Notifications ----
     val notificationsTitle: String
@@ -388,6 +414,9 @@ interface AppStrings {
     val chartTooltipUsage: String
     val chartViewDetails: String
     val chartTooltipClose: String
+    /** Compact timeline toggle — "Show more" / "Show less". */
+    val chartShowMore: String
+    val chartShowLess: String
 
     // ---- Icon Style (Settings → Appearance → Icons) ----
     val iconStyleTitle: String

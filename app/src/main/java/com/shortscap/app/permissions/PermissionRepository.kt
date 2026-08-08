@@ -26,16 +26,9 @@ import com.shortscap.app.accessibility.AccessibilityServiceStatus
  */
 object PermissionRepository {
 
-    /** Initial state for the 8 permission cards. */
+    /** Initial state for the 6 permission cards. */
     fun seedPermissions(): List<PermissionInfo> = PermissionId.entries.map { id ->
-        PermissionInfo(
-            id = id,
-            status = when (id) {
-                PermissionId.AUTO_START -> PermissionStatus.FUTURE
-                PermissionId.ROOT -> PermissionStatus.NOT_AVAILABLE
-                else -> PermissionStatus.NOT_GRANTED
-            },
-        )
+        PermissionInfo(id = id, status = PermissionStatus.NOT_GRANTED)
     }
 
     /**
@@ -58,9 +51,6 @@ object PermissionRepository {
         PermissionId.NOTIFICATIONS -> notificationsStatus(context)
         PermissionId.BATTERY_OPTIMIZATION -> batteryStatus(context)
         PermissionId.STORAGE_MEDIA -> storageStatus(context)
-        // Future features — no implementation, status is fixed for now.
-        PermissionId.AUTO_START -> PermissionStatus.FUTURE
-        PermissionId.ROOT -> PermissionStatus.NOT_AVAILABLE
     }
 
     // ---- Future backend seams (placeholders only — not implemented) ----

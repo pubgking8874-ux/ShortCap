@@ -101,11 +101,12 @@ fun PermissionsScreen(
                         info = info,
                         onClick = {
                             when (info.status) {
-                                PermissionStatus.GRANTED,
-                                PermissionStatus.FUTURE,
-                                PermissionStatus.NOT_AVAILABLE,
-                                -> onOpenDetail(id)
-                                else -> PermissionActions.open(context, id)
+                                // Enabled → opens the simple detail page;
+                                // Disabled → opens the Android settings screen.
+                                PermissionStatus.GRANTED -> onOpenDetail(id)
+                                PermissionStatus.NOT_GRANTED,
+                                PermissionStatus.DISABLED,
+                                -> PermissionActions.open(context, id)
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),

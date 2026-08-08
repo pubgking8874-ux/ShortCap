@@ -85,18 +85,26 @@ data class SettingsItem(
  * A short-video platform monitored by the app (YouTube Shorts, Instagram
  * Reels, ...). The list is data-driven in [MonitoringSettings.platforms] so
  * new platforms can be added dynamically without UI changes.
+ *
+ * [domain] is the platform's official website domain — the Shorts Control
+ * screen renders each platform's real brand icon through the centralized
+ * favicon system, so every platform is identified by its own domain, never a
+ * generic icon. Each platform carries its OWN independent [enabled] state
+ * (Shorts Monitoring data stays separate from Device Monitoring data), ready
+ * for a future backend to synchronize per-platform settings.
  */
 data class ShortVideoPlatform(
     val id: String,
     val name: String,
+    val domain: String,
     val enabled: Boolean,
 )
 
 val DefaultShortVideoPlatforms = listOf(
-    ShortVideoPlatform("youtube_shorts", "YouTube Shorts", true),
-    ShortVideoPlatform("instagram_reels", "Instagram Reels", true),
-    ShortVideoPlatform("facebook_reels", "Facebook Reels", false),
-    ShortVideoPlatform("snapchat_spotlight", "Snapchat Spotlight", false),
+    ShortVideoPlatform("youtube_shorts", "YouTube Shorts", "youtube.com", true),
+    ShortVideoPlatform("instagram_reels", "Instagram Reels", "instagram.com", true),
+    ShortVideoPlatform("facebook_reels", "Facebook Reels", "facebook.com", false),
+    ShortVideoPlatform("snapchat_spotlight", "Snapchat Spotlight", "snapchat.com", false),
 )
 
 /**
@@ -117,9 +125,6 @@ data class MonitoringSettings(
     val breakReminderIntervalMinutes: Int = 30,
     val platforms: List<ShortVideoPlatform> = DefaultShortVideoPlatforms,
     val schedule: Schedule = Schedule(),
-    // Read-only demo stats (placeholder values until Usage Stats / backend).
-    val todayUsage: String = "2h 45m",
-    val blockedAppsCount: Int = 12,
 ) {
     /**
      * Future Monitoring Schedule shape — active window (start/end time) and

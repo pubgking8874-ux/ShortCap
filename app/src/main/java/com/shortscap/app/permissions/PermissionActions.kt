@@ -16,8 +16,6 @@ import android.provider.Settings
  * — the one settings route that exists on every manufacturer (Pixel, Samsung,
  * Xiaomi, OnePlus, ...) — and never hardcodes a vendor-specific screen.
  *
- * Future entries (Auto Start, Root) have no system page yet and intentionally
- * do nothing (their UI buttons are disabled).
  */
 object PermissionActions {
 
@@ -59,10 +57,6 @@ object PermissionActions {
                     Uri.parse("package:$packageName"),
                 ),
             )
-            // Future features — no system settings page yet.
-            PermissionId.AUTO_START,
-            PermissionId.ROOT,
-            -> return false
         }
         for (intent in intents) {
             if (tryLaunch(context, intent)) return true

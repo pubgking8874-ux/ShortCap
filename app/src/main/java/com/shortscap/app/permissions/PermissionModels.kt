@@ -1,7 +1,7 @@
 package com.shortscap.app.permissions
 
 /**
- * The 8 permissions surfaced in Settings → Permissions.
+ * The 6 permissions surfaced in Settings → Permissions.
  *
  * Every id maps 1:1 to a future backend `GET /permissions` entry, so adding
  * or removing a permission only touches this enum + the i18n catalog.
@@ -12,9 +12,7 @@ enum class PermissionId {
     OVERLAY,
     NOTIFICATIONS,
     BATTERY_OPTIMIZATION,
-    AUTO_START,
     STORAGE_MEDIA,
-    ROOT,
 }
 
 /**
@@ -33,17 +31,14 @@ val MonitoringRequiredPermissionIds: Set<PermissionId> = setOf(
 )
 
 /**
- * Live status of a permission. [GRANTED] / [NOT_GRANTED] / [DISABLED] come
- * from real Android checks (see [PermissionRepository]); [FUTURE] and
- * [NOT_AVAILABLE] mark entries that exist in the UI but have no
- * implementation yet.
+ * Live status of a permission — all three come from real Android checks
+ * (see [PermissionRepository]). The UI normalizes them to just two visible
+ * labels: Enabled ([GRANTED]) / Disabled ([NOT_GRANTED], [DISABLED]).
  */
 enum class PermissionStatus {
     GRANTED,
     NOT_GRANTED,
     DISABLED,
-    FUTURE,
-    NOT_AVAILABLE,
 }
 
 /**

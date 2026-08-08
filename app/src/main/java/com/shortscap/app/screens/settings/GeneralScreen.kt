@@ -18,13 +18,16 @@ import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 
 /**
- * General — dedicated screen. Currently contains a single option:
- * Language (opens the full-screen Language picker). More general options
- * slot in here later without changing the navigation.
+ * General — dedicated screen. Options:
+ *   Language   → full-screen Language picker.
+ *   Study Mode → the complete Study Mode feature (duration, break, sound,
+ *                schedule, allowed apps/websites, summary, start session).
+ * More general options slot in here later without changing the navigation.
  */
 @Composable
 fun GeneralScreen(
     onOpenLanguage: () -> Unit,
+    onOpenStudyMode: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
@@ -40,6 +43,11 @@ fun GeneralScreen(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            ScPremiumNavCard(
+                iconKey = IconKey.STUDY_MODE,
+                title = strings.studyTitle,
+                onClick = onOpenStudyMode,
+            )
             ScPremiumNavCard(
                 iconKey = IconKey.LANGUAGE,
                 title = strings.languageTitle,

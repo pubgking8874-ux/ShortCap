@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.shortscap.app.icons.IconKey
@@ -189,7 +190,15 @@ fun ScStatCard(
             Icon(resolvedIcon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.height(10.dp))
-        Text(value, color = colors.TextPrimary, style = ScTextStyles.StatValue)
+        // Single-line value (ellipsized if ever long) so every Quick Status
+        // card keeps the EXACT same height regardless of value length.
+        Text(
+            value,
+            color = colors.TextPrimary,
+            style = ScTextStyles.StatValue,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Spacer(Modifier.height(2.dp))
         Text(label, color = colors.TextSecondary, style = ScTextStyles.Label)
         if (sub != null) {

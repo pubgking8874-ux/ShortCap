@@ -16,15 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,82 +34,80 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.components.ScSwitch
-import com.shortscap.app.i18n.AppStrings
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.icons.IconKey
 import com.shortscap.app.icons.IconTheme
 import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.theme.LocalScColors
-import com.shortscap.app.theme.ScCursorColor
 import com.shortscap.app.theme.ScTextStyles
 
 /**
  * Monitoring Settings — the dedicated screen for every monitoring feature.
  *
- * Sections: Enable Monitoring (master switch), App Blocking, Daily Screen
- * Time Limit (picker), Blocked Apps, Allowed Apps, Strict Mode, Short Video
- * Platforms (data-driven switches — unlimited platforms), Break Reminder,
- * Monitoring Schedule, and read-only Statistics.
+ * The page is a clean configuration hub (no statistics — Home holds the quick
+ * summary, Activity the detailed reports):
+ *
+ *   MONITORING       → Device Monitoring (master switch + Enabled/Disabled
+ *                      status + small circular info button that explains what
+ *                      is monitored and why permissions matter)
+ *   STRICT MODE      → Strict Mode switch
+ *   SHORTS           → Shorts Control (opens the dedicated per-platform screen)
+ *   BREAK REMINDER   → Break Reminder switch + Reminder Interval picker
+ *   MONITORING SCHEDULE → Monitoring Schedule page
+ *
+ * App Blocking, Daily Screen Time Limit, per-platform Shorts toggles and the
+ * read-only Statistics tiles no longer live here (their underlying concepts
+ * and infrastructure are preserved for the future Settings/Restriction
+ * section — only this page's dependency was removed).
  *
  * All state is driven by [MonitoringSettings] passed from the ViewModel; the
  * screen never hardcodes business logic or text (all labels come from the
  * active language catalog), so GET / UPDATE Monitoring Settings backend APIs
- * and new languages plug in without UI changes.
+ * and new languages plug in without UI changes. Device Monitoring uses the
+ * app-wide permission terminology — Enabled / Disabled — exactly like the
+ * Permissions screen.
  */
 @Composable
 fun MonitoringScreen(
     settings: MonitoringSettings,
     // Centralized paused state (derived from the live permission list in
-    // AppUiState) — the status tile reflects REAL monitoring status: Paused
-    // when a required permission is missing even if the master switch is on.
+    // AppUiState) — Device Monitoring shows Disabled whenever a required
+    // permission is missing, even if the master switch is on.
     monitoringPaused: Boolean = false,
     onToggleMonitoring: (Boolean) -> Unit,
-    onToggleAppBlocking: (Boolean) -> Unit,
-    onSetScreenTimeLimit: (Int) -> Unit,
     onToggleStrictMode: (Boolean) -> Unit,
-    onTogglePlatform: (String) -> Unit,
     onToggleBreakReminder: (Boolean) -> Unit,
     onSetBreakReminderInterval: (Int) -> Unit,
-    onOpenBlockedApps: () -> Unit,
-    onOpenAllowedApps: () -> Unit,
+    onOpenShortsControl: () -> Unit,
     onOpenSchedule: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
-    var limitDialogOpen by remember { mutableStateOf(false) }
-    var customLimitDialogOpen by remember { mutableStateOf(false) }
+    var deviceInfoDialogOpen by remember { mutableStateOf(false) }
     var intervalDialogOpen by remember { mutableStateOf(false) }
 
-    // Option lists and labels follow the active language catalog.
-    val screenTimePresets = listOf(
-        15 to strings.time15Min,
-        30 to strings.time30Min,
-        45 to strings.time45Min,
-        60 to strings.time1Hour,
-        120 to strings.time2Hours,
-    )
+    // Option lists follow the active language catalog.
     val breakIntervals = listOf(
         15 to strings.time15Minutes,
         30 to strings.time30Minutes,
         45 to strings.time45Minutes,
         60 to strings.time1Hour,
     )
-    fun formatLimit(minutes: Int): String =
-        screenTimePresets.firstOrNull { it.first == minutes }?.second
-            ?: "${strings.timeCustom} · $minutes ${strings.minutesLabel}"
     fun intervalLabel(minutes: Int): String =
         breakIntervals.firstOrNull { it.first == minutes }?.second
             ?: "$minutes ${strings.minutesLabel}"
+
+    // Device Monitoring state — the app-wide Enabled/Disabled vocabulary.
+    val deviceMonitoringEnabled = settings.enabled && !monitoringPaused
 
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
         ScSubScreenTopBar(title = strings.monitoringTitle, onBack = onBack)
@@ -123,56 +119,20 @@ fun MonitoringScreen(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // ---- Section 1 — Monitoring (master switch) ----
+            // ---- Section 1 — Device Monitoring (master switch + status) ----
             SectionTitle(strings.monitoringSection)
-            ScPremiumNavCard(
+            DeviceMonitoringCard(
                 iconKey = IconKey.MONITORING_ENABLE,
-                title = strings.monitoringEnable,
-                subtitle = strings.monitoringEnableDesc,
-                onClick = { onToggleMonitoring(!settings.enabled) },
-                trailing = {
-                    ScSwitch(on = settings.enabled, onToggle = { onToggleMonitoring(!settings.enabled) })
-                },
+                title = strings.monitoringDevice,
+                subtitle = strings.monitoringDeviceDesc,
+                statusText = if (deviceMonitoringEnabled) strings.permStatusEnabled else strings.permStatusDisabled,
+                statusColor = if (deviceMonitoringEnabled) colors.Success else colors.Warning,
+                enabled = settings.enabled,
+                onToggle = { onToggleMonitoring(!settings.enabled) },
+                onInfo = { deviceInfoDialogOpen = true },
             )
 
-            // ---- Section 2 — App Blocking ----
-            SectionTitle(strings.monitoringAppBlocking)
-            ScPremiumNavCard(
-                iconKey = IconKey.APP_BLOCKING,
-                title = strings.monitoringEnableAppBlocking,
-                subtitle = strings.monitoringEnableAppBlockingDesc,
-                onClick = { onToggleAppBlocking(!settings.appBlockingEnabled) },
-                trailing = {
-                    ScSwitch(on = settings.appBlockingEnabled, onToggle = { onToggleAppBlocking(!settings.appBlockingEnabled) })
-                },
-            )
-
-            // ---- Section 3 — Daily Screen Time Limit (picker dialog) ----
-            SectionTitle(strings.monitoringDailyLimit)
-            ScPremiumNavCard(
-                iconKey = IconKey.SCREEN_TIME_LIMIT,
-                title = strings.monitoringDailyLimit,
-                onClick = { limitDialogOpen = true },
-                trailing = { TrailingValue(formatLimit(settings.screenTimeLimitMinutes)) },
-            )
-
-            // ---- Section 4 — Blocked Apps (dedicated page, UI only) ----
-            SectionTitle(strings.monitoringBlockedApps)
-            ScPremiumNavCard(
-                iconKey = IconKey.BLOCKED_APPS,
-                title = strings.monitoringBlockedApps,
-                onClick = onOpenBlockedApps,
-            )
-
-            // ---- Section 5 — Allowed Apps (dedicated page, UI only) ----
-            SectionTitle(strings.monitoringAllowedApps)
-            ScPremiumNavCard(
-                iconKey = IconKey.ALLOWED_APPS,
-                title = strings.monitoringAllowedApps,
-                onClick = onOpenAllowedApps,
-            )
-
-            // ---- Section 6 — Strict Mode ----
+            // ---- Section 2 — Strict Mode ----
             SectionTitle(strings.monitoringStrictMode)
             ScPremiumNavCard(
                 iconKey = IconKey.STRICT_MODE,
@@ -184,20 +144,16 @@ fun MonitoringScreen(
                 },
             )
 
-            // ---- Section 7 — Short Video Platforms (data-driven switches) ----
-            SectionTitle(strings.monitoringShortVideoPlatforms)
-            settings.platforms.forEach { platform ->
-                ScPremiumNavCard(
-                    iconKey = IconKey.PLATFORM,
-                    title = platform.name,
-                    onClick = { onTogglePlatform(platform.id) },
-                    trailing = {
-                        ScSwitch(on = platform.enabled, onToggle = { onTogglePlatform(platform.id) })
-                    },
-                )
-            }
+            // ---- Section 3 — Shorts Control (dedicated screen) ----
+            SectionTitle(strings.monitoringShortsSection)
+            ScPremiumNavCard(
+                iconKey = IconKey.SHORTS_CONTROL,
+                title = strings.monitoringShortsControl,
+                subtitle = strings.monitoringShortsControlDesc,
+                onClick = onOpenShortsControl,
+            )
 
-            // ---- Section 8 — Break Reminder ----
+            // ---- Section 4 — Break Reminder ----
             SectionTitle(strings.monitoringBreakReminder)
             ScPremiumNavCard(
                 iconKey = IconKey.BREAK_REMINDER,
@@ -214,158 +170,40 @@ fun MonitoringScreen(
                 trailing = { TrailingValue(intervalLabel(settings.breakReminderIntervalMinutes)) },
             )
 
-            // ---- Section 9 — Monitoring Schedule (dedicated page, UI only) ----
+            // ---- Section 5 — Monitoring Schedule (dedicated page) ----
             SectionTitle(strings.monitoringSchedule)
             ScPremiumNavCard(
                 iconKey = IconKey.SCHEDULE,
                 title = strings.monitoringSchedule,
                 onClick = onOpenSchedule,
             )
-
-            // ---- Section 10 — Statistics (read-only demo values) ----
-            SectionTitle(strings.monitoringStatistics)
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    StatTile(
-                        iconKey = IconKey.STAT_TODAY_USAGE,
-                        label = strings.monitoringTodayUsage,
-                        value = settings.todayUsage,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StatTile(
-                        iconKey = IconKey.STAT_BLOCKED_COUNT,
-                        label = strings.monitoringBlockedAppsCount,
-                        value = settings.blockedAppsCount.toString(),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    StatTile(
-                        iconKey = IconKey.STAT_CURRENT_LIMIT,
-                        label = strings.monitoringCurrentDailyLimit,
-                        value = formatLimit(settings.screenTimeLimitMinutes),
-                        modifier = Modifier.weight(1f),
-                    )
-                    StatTile(
-                        iconKey = IconKey.STAT_MONITORING_STATUS,
-                        label = strings.monitoringStatus,
-                        value = when {
-                            monitoringPaused -> strings.monitoringPaused
-                            settings.enabled -> strings.monitoringActive
-                            else -> strings.monitoringPaused
-                        },
-                        valueColor = when {
-                            monitoringPaused -> colors.Warning
-                            settings.enabled -> colors.Success
-                            else -> colors.Warning
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
         }
     }
 
-    // ---- Picker dialogs ----
-    if (limitDialogOpen) {
+    // ---- Device Monitoring information dialog ----
+    if (deviceInfoDialogOpen) {
         AlertDialog(
-            onDismissRequest = { limitDialogOpen = false },
+            onDismissRequest = { deviceInfoDialogOpen = false },
             containerColor = colors.Card,
             titleContentColor = colors.TextPrimary,
             textContentColor = colors.TextSecondary,
-            title = { Text(strings.monitoringDailyLimit) },
+            title = { Text(strings.monitoringDeviceInfoTitle) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    screenTimePresets.forEach { (minutes, label) ->
-                        DialogOption(
-                            label = label,
-                            selected = settings.screenTimeLimitMinutes == minutes,
-                            onClick = {
-                                onSetScreenTimeLimit(minutes)
-                                limitDialogOpen = false
-                            },
-                        )
-                    }
-                    DialogOption(
-                        label = strings.timeCustom,
-                        selected = screenTimePresets.none { it.first == settings.screenTimeLimitMinutes },
-                        onClick = {
-                            limitDialogOpen = false
-                            customLimitDialogOpen = true
-                        },
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(strings.monitoringDeviceInfoMessage, style = ScTextStyles.Body)
+                    Text(strings.monitoringDeviceInfoPermission, style = ScTextStyles.Body)
+                    Text(strings.monitoringDeviceInfoDisabled, style = ScTextStyles.Body)
                 }
             },
             confirmButton = {
-                TextButton(onClick = { limitDialogOpen = false }) {
-                    Text(strings.cancel, color = colors.TextSecondary)
+                TextButton(onClick = { deviceInfoDialogOpen = false }) {
+                    Text(strings.ok, color = colors.Accent)
                 }
             },
         )
     }
 
-    if (customLimitDialogOpen) {
-        var input by remember {
-            mutableStateOf(
-                if (screenTimePresets.none { it.first == settings.screenTimeLimitMinutes }) {
-                    settings.screenTimeLimitMinutes.toString()
-                } else {
-                    ""
-                },
-            )
-        }
-        val minutes = input.toIntOrNull()
-        AlertDialog(
-            onDismissRequest = { customLimitDialogOpen = false },
-            containerColor = colors.Card,
-            titleContentColor = colors.TextPrimary,
-            textContentColor = colors.TextSecondary,
-            title = { Text(strings.customLimitTitle) },
-            text = {
-                Column {
-                    Text(strings.customLimitDesc, style = ScTextStyles.Body)
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = input,
-                        onValueChange = { input = it.filter(Char::isDigit).take(3) },
-                        label = { Text(strings.minutesLabel, color = colors.TextSecondary) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = colors.Accent,
-                            unfocusedBorderColor = colors.Divider,
-                            focusedLabelColor = colors.Accent,
-                            unfocusedLabelColor = colors.TextSecondary,
-                            cursorColor = ScCursorColor(),
-                            focusedTextColor = colors.TextPrimary,
-                            unfocusedTextColor = colors.TextPrimary,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        minutes?.let { onSetScreenTimeLimit(it.coerceIn(1, 720)) }
-                        customLimitDialogOpen = false
-                    },
-                    enabled = minutes != null && minutes > 0,
-                ) {
-                    Text(
-                        strings.setLabel,
-                        color = if (minutes != null && minutes > 0) colors.Accent else colors.TextDisabled,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { customLimitDialogOpen = false }) {
-                    Text(strings.cancel, color = colors.TextSecondary)
-                }
-            },
-        )
-    }
-
+    // ---- Reminder Interval picker dialog ----
     if (intervalDialogOpen) {
         AlertDialog(
             onDismissRequest = { intervalDialogOpen = false },
@@ -396,6 +234,91 @@ fun MonitoringScreen(
     }
 }
 
+/**
+ * Device Monitoring card — icon tile + title + small circular info button +
+ * one-line description + Enabled/Disabled status + master switch. The card
+ * body toggles monitoring; the info circle opens the information dialog.
+ */
+@Composable
+private fun DeviceMonitoringCard(
+    iconKey: IconKey,
+    title: String,
+    subtitle: String,
+    statusText: String,
+    statusColor: Color,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    onInfo: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val style = LocalIconStyle.current
+    val resolvedIcon = IconTheme.icon(style, iconKey)
+    val resolvedTint = IconTheme.tint(style, iconKey, colors.Accent)
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.Card, shape)
+            .border(1.dp, colors.Divider, shape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onToggle,
+            )
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // Compact rounded-square icon tile (44dp) — same premium proportions.
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .background(colors.CardHover),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(resolvedIcon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(24.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title,
+                    color = colors.TextPrimary,
+                    style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp),
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // Small circular information area — opens the info dialog.
+                Box(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(colors.CardHover)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onInfo,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = colors.TextSecondary,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(subtitle, color = colors.TextSecondary, style = ScTextStyles.Body, maxLines = 2)
+            Spacer(Modifier.height(6.dp))
+            Text(statusText, color = statusColor, style = ScTextStyles.Caption.copy(fontWeight = FontWeight.SemiBold))
+        }
+        ScSwitch(on = enabled, onToggle = onToggle)
+    }
+}
+
 /** Uppercased section heading, matching the app's section-title style. */
 @Composable
 private fun SectionTitle(text: String) {
@@ -404,50 +327,6 @@ private fun SectionTitle(text: String) {
         color = LocalScColors.current.TextSecondary,
         style = ScTextStyles.SectionTitle,
     )
-}
-
-/** Small read-only stat card used in the Statistics section. */
-@Composable
-private fun StatTile(
-    icon: ImageVector? = null,
-    iconKey: IconKey? = null,
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    valueColor: Color = LocalScColors.current.TextPrimary,
-) {
-    val colors = LocalScColors.current
-    val style = LocalIconStyle.current
-    val resolvedIcon = icon ?: iconKey?.let { IconTheme.icon(style, it) } ?: Icons.Filled.Info
-    val resolvedTint = if (iconKey != null) IconTheme.tint(style, iconKey, colors.Accent) else colors.Accent
-    val resolvedBg = colors.CardHover
-    val shape = RoundedCornerShape(22.dp)
-    Column(
-        modifier = modifier
-            .clip(shape)
-            .background(colors.Card, shape)
-            .border(1.dp, colors.Divider, shape)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(resolvedBg),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(resolvedIcon, contentDescription = null, tint = resolvedTint, modifier = Modifier.size(22.dp))
-        }
-        Text(
-            value,
-            color = valueColor,
-            style = ScTextStyles.StatValue.copy(fontSize = 17.sp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(label, color = colors.TextSecondary, style = ScTextStyles.Caption)
-    }
 }
 
 /** Right-aligned value + chevron used by picker rows. */

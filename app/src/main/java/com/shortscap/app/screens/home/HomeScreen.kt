@@ -34,6 +34,7 @@ import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.permissions.PermissionActions
 import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.screens.settings.permissionTitle
+import com.shortscap.app.screens.web.formatWebDuration
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScChrome
 import com.shortscap.app.theme.ScInstagram
@@ -71,11 +72,21 @@ private fun recentActivity(strings: com.shortscap.app.i18n.AppStrings) = listOf(
 fun HomeScreen(
     loading: Boolean,
     metrics: List<ScCircularMetric>,
+    // Today's total usage MINUTES — derived in AppUiState from the SAME
+    // ActivityRepository Daily report the Activity → Daily chart renders, so
+    // the Home card and the Daily Activity timeline can never disagree.
+    todayUsageMinutes: Int,
     appsUsedToday: Int,
     blockedWebCount: Int,
     allowedWebCount: Int,
     monitoringPaused: Boolean = false,
     missingRequiredPermissions: List<PermissionId> = emptyList(),
+    // Study Mode active state — timestamp-based remaining time from
+    // AppUiState; when a session runs, the carousel leads with the Study Mode
+    // page (countdown + study animation) and the Shorts pages move behind it.
+    studyModeActive: Boolean = false,
+    studyRemainingMillis: Long = 0L,
+    studyTotalMillis: Long = 0L,
     onRefreshPermissions: () -> Unit,
     // Fired when no Android settings screen could be opened for a missing
     // permission (e.g. the Accessibility settings screen is unavailable) —
@@ -114,7 +125,7 @@ fun HomeScreen(
         } else {
             ScCircularAnalyticsCarousel(
                 metrics = metrics,
-                // The Monitoring Paused section is injected as the FIRST
+                // The Monitoring Paused section is injected as a priority
                 // swipe page only while monitoring is genuinely paused; the
                 // existing Watch Time / Shorts Count pages remain untouched.
                 monitoringPaused = monitoringPaused,
@@ -126,6 +137,12 @@ fun HomeScreen(
                         resumeDialogOpen = true
                     }
                 } else null,
+                // While Study Mode is active, the Study Mode page (countdown
+                // + study animation) leads the carousel; the Shorts monitoring
+                // pages stay behind it and return to the front at 00:00.
+                studyModeActive = studyModeActive,
+                studyRemainingMillis = studyRemainingMillis,
+                studyTotalMillis = studyTotalMillis,
             )
         }
 
@@ -139,12 +156,21 @@ fun HomeScreen(
                     ScSkeleton(height = 100.dp, modifier = Modifier.weight(1f))
                 }
             } else {
-                // Three fully clickable cards (ripple feedback), each opening
-                // its real screen: Activity → Daily, Web → Allowed, Web →
-                // Blocked. Values come from the shared data layer — never
-                // hardcoded. (Focus Time is not implemented yet, so it is not
-                // shown instead of displaying incorrect data.)
+                // Four fully clickable Quick Status cards in a responsive 2x2
+                // grid (identical size/height/visual weight — ScStatCard gives
+                // every card the same fixed structure). Each card opens its
+                // real screen: Today Usage + Apps Used → Activity Daily (the
+                // Today Usage value is the SAME daily total the Activity chart
+                // renders), Allowed/Blocked Websites → their Web screens. All
+                // values come from the shared data layer — never hardcoded.
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ScStatCard(
+                        iconKey = IconKey.STAT_TODAY_USAGE,
+                        label = strings.homeTodayUsage,
+                        value = formatWebDuration(todayUsageMinutes, strings),
+                        onClick = onOpenActivityDaily,
+                        modifier = Modifier.weight(1f),
+                    )
                     ScStatCard(
                         iconKey = IconKey.STAT_APPS_USED,
                         label = strings.homeAppsUsed,
@@ -152,6 +178,9 @@ fun HomeScreen(
                         onClick = onOpenActivityDaily,
                         modifier = Modifier.weight(1f),
                     )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ScStatCard(
                         iconKey = IconKey.WEB_ALLOWED,
                         label = strings.webAllowedTitle,

@@ -337,23 +337,22 @@ Settings → **Permissions** is a clean, minimal **permission status overview** 
 
 | # | Permission | Purpose | Status when granted |
 | --- | --- | --- | --- |
-| 1 | **Usage Access** | Monitor application usage time | Granted |
+| 1 | **Usage Access** | Monitor application usage time | Enabled |
 | 2 | **Accessibility Service** | App blocking & restriction enforcement | Enabled |
-| 3 | **Display Over Other Apps** | Show blocking screens when restricted apps open | Granted |
-| 4 | **Notification Permission** | Reminders & monitoring alerts | Allowed |
-| 5 | **Ignore Battery Optimization** | Reliable background operation | Ignored |
-| 6 | **Auto Start** *(Future Ready)* | Start automatically after reboot — manufacturer-specific guide later | Future Feature |
-| 7 | **Storage / Media Access** | Profile image selection & future backups | Allowed |
-| 8 | **Root Access** *(Future)* | Reserved for future advanced enforcement | Not Available |
+| 3 | **Display Over Other Apps** | Show blocking screens when restricted apps open | Enabled |
+| 4 | **Notification Permission** | Reminders & monitoring alerts | Enabled |
+| 5 | **Ignore Battery Optimization** | Reliable background operation | Enabled |
+| 6 | **Storage / Media Access** | Profile image selection & future backups | Enabled |
 
 ## Tap behavior
 
-- **Granted** (or a future entry) → opens a simple **detail page** showing the permission's status and purpose (no actions there).
-- **Not granted / disabled** → opens the **corresponding Android Settings screen directly** so the user can enable it (`PermissionActions`): Usage Access, Accessibility, Overlay, Notification, Battery Optimization, and App-details (storage) pages.
+- **Enabled** → opens a simple **detail page** showing the permission's status and purpose (no actions there).
+- **Disabled** → opens the **corresponding Android Settings screen directly** so the user can enable it (`PermissionActions`): Usage Access, Accessibility, Overlay, Notification, Battery Optimization, and App-details (storage) pages.
 
 ## Permission Status System
 
-- **Status colors** — 🟢 green = Granted, 🟠 orange = Needs Attention (not granted), 🔴 red = Denied (disabled), ⚪ gray = Future Feature / Not Available.
+- **One consistent status vocabulary** — every permission shows only **Enabled** (active/working) or **Disabled** (missing, denied, or inactive); the underlying Android states are normalized in the UI.
+- **Status colors** — 🟢 green = Enabled; 🟠 orange / 🔴 red = Disabled (color reflects the internal state — not granted vs denied).
 - **Live OS checks** — `permissions/PermissionRepository.kt` resolves every status from the Android OS: Usage Access via `AppOpsManager`, Accessibility via `ENABLED_ACCESSIBILITY_SERVICES`, overlay via `Settings.canDrawOverlays`, notifications via `NotificationManagerCompat`, battery via `PowerManager`, storage via `ContextCompat.checkSelfPermission`.
 - **Automatic refresh** — `RefreshPermissionsOnResume` (a `LifecycleEventObserver`) re-checks all permissions every time a Permissions screen reaches `ON_RESUME`; returning from Android Settings updates the UI instantly.
 - **Last checked time** — every `PermissionInfo` stamps `lastCheckedAt`; the detail page shows it (or "Never").
@@ -361,14 +360,6 @@ Settings → **Permissions** is a clean, minimal **permission status overview** 
 ## Permission Detail Page
 
 A simple read-only page (opened only from an already-granted row) showing: permission icon + title, **current status** (colored), **why this permission is required** (purpose), and **last checked** time. No action buttons, no inline expansion.
-
-## Future Root Support
-
-`PermissionId.ROOT` is modeled (icon, title, description, status "Not Available") but intentionally has **no implementation**. Tapping it opens the simple detail page; when advanced enforcement ships, only the repository check changes — no UI redesign.
-
-## Future Auto Start Support
-
-`PermissionId.AUTO_START` renders with status "Future Feature". A manufacturer-specific guide (Xiaomi/MIUI, Oppo, Vivo, OnePlus, Samsung auto-start settings) will be added to the detail page later, behind the same row/detail architecture.
 
 ## Backend Integration Ready
 
@@ -782,20 +773,17 @@ Settings list (icon + title + chevron only):
 
 ### 2. New dedicated Monitoring screen
 
-The Monitoring screen (`screens/settings/MonitoringScreen.kt`) is a full page with its own back button and 10 premium sections:
+The Monitoring screen (`screens/settings/MonitoringScreen.kt`) is a full page with its own back button and a clean, configuration-only structure (Home holds the quick summary, Activity the detailed reports):
 
 | # | Section | Control |
 | --- | --- | --- |
-| 1 | Monitoring | **Enable Monitoring** master switch ("Master switch for all monitoring features.") |
-| 2 | App Blocking | **Enable App Blocking** switch ("If OFF, all blocking features become disabled.") |
-| 3 | Daily Screen Time Limit | Picker dialog — **15 min / 30 min / 45 min / 1 Hour / 2 Hours / Custom** (custom opens a numeric minutes dialog, 1–720) |
-| 4 | Blocked Apps | Dedicated page (UI only; app list comes later) |
-| 5 | Allowed Apps | Dedicated page (UI only; bypass list comes later) |
-| 6 | Strict Mode | Switch ("Prevent bypassing restrictions.") |
-| 7 | Short Video Platforms | **Data-driven per-platform switches** — YouTube Shorts, Instagram Reels, Facebook Reels, Snapchat Spotlight. Architecture supports unlimited platforms (just append to the list). |
-| 8 | Break Reminder | Switch + Reminder Interval picker (15 / 30 / 45 Minutes / 1 Hour) |
-| 9 | Monitoring Schedule | Dedicated page (UI only; start/end time + weekdays/weekends later) |
-| 10 | Statistics | Read-only demo cards — Today's Usage, Blocked Apps Count, Current Daily Limit, Monitoring Status |
+| 1 | Monitoring | **Device Monitoring** — master switch + **Enabled / Disabled** status (same vocabulary as the Permissions screen) + a small circular **info button** opening a dialog explaining what is monitored, why the required Android permissions matter, and what happens if one is disabled |
+| 2 | Strict Mode | Switch ("Prevent bypassing restrictions.") |
+| 3 | Shorts | **Shorts Control** — opens the dedicated per-platform screen (YouTube Shorts / Instagram Reels / Facebook Reels / Snapchat Spotlight, each with its own real brand icon + independent switch) |
+| 4 | Break Reminder | Switch + Reminder Interval picker (15 / 30 / 45 Minutes / 1 Hour) |
+| 5 | Monitoring Schedule | Dedicated page (UI only; start/end time + weekdays/weekends later) |
+
+Removed from Monitoring: **Enable App Blocking**, **Blocked Apps**, **Allowed Apps**, **Daily Screen Time Limit**, the per-platform Shorts toggles and the read-only Statistics tiles — the underlying concepts/models are preserved for the future Settings/Restriction section; only this page's dependency was removed.
 
 All pickers are clean Material 3 dialogs styled with the ShortsCap dark theme; the current selection is highlighted with a checkmark.
 
@@ -833,12 +821,12 @@ Settings → Monitoring → Blocked Apps
 
 - **No business logic is hardcoded in the UI.** Every setting lives in the `MonitoringSettings` model (`model/Models.kt`) held by `AppViewModel` as the single source of truth (`StateFlow<AppUiState>`). The Monitoring screen is a stateless composable receiving the model + callback lambdas.
 - **Placeholder API seams** (documented, not implemented) — ready for a `SettingsRepository`:
-  - `GET / UPDATE Monitoring Settings` → `MonitoringSettings` fields (master, app blocking, screen-time limit, strict mode, break reminder, platforms)
+  - `GET / UPDATE Monitoring Settings` → `MonitoringSettings` fields (master, strict mode, break reminder, per-platform Shorts, schedule; app blocking / screen-time limit fields remain reserved for the future Settings/Restriction section)
   - `GET / UPDATE Blocked Apps` → Blocked Apps page
   - `GET / UPDATE Allowed Apps` → Allowed Apps page
   - `GET / UPDATE Monitoring Schedule` → Schedule page (start/end time, weekdays/weekends)
 - **Future cloud integration:** the same seams support Firebase / AWS backend sync and a future local database (e.g. Room) — swapping the data source requires **no UI changes**.
-- Demo statistics are seeded in `MonitoringSettings`; real usage stats (Usage Access / Accessibility Service) will replace them in the ViewModel/repository layer only.
+- Monitoring statistics were removed from `MonitoringSettings` — Home's Quick Status derives **Today Usage** directly from the same `ActivityRepository` Daily report that powers Activity → Daily (one source of truth), and the Web counts come from the Web rule list.
 
 ## Files
 
@@ -906,6 +894,49 @@ Urdu also flips the app’s **layout direction to RTL** (`LocalLayoutDirection`)
 - `viewmodel/AppViewModel.kt` — settings navigation + monitoring state & setters, `resetAllSettings()`
 - `components/PremiumCards.kt` — `ScPremiumNavCard` gained optional `subtitle` + `trailing` slots (drawer pages unchanged)
 - `ShortsCapApp.kt`, `navigation/ScNavHost.kt` — wiring
+
+---
+
+# Study Mode (General section)
+
+## What was added
+
+**Study Mode** is a complete, connected study-focus feature living inside the **existing General settings section** (Settings → General → Study Mode). No new navigation item, no Journal section, and no duplicate Study Mode controls anywhere else in the app. It is fully separate from Device Monitoring, Shorts Monitoring, Activity and History data — it has its own `study/` package, its own models and its own `StudyRepository` backend seam.
+
+## Study Mode screen (General → Study Mode)
+
+| Section | Controls |
+| --- | --- |
+| Status | Active / Inactive + live remaining countdown while a session runs |
+| Session | **Start Study Session** (pre-start confirmation) → while active the button is replaced by the countdown — **no Stop/Cancel during a session** |
+| Settings | Study Duration (15/25/30/45/60/90 min) · Break Reminder switch · Break Duration (3/5/10/15 min) · Sound Mode (Sound/Vibrate/Silent) |
+| Study Schedule | Enabled switch + Start/End time pickers (configuration; future automation) |
+| Allowed Apps/Websites | Dedicated page — each allowed app/website keeps its own independent switch + add-website by domain |
+| Study Session Summary | Sessions today · study time today · last session (derived when sessions complete) |
+
+## Session behavior (one connected system)
+
+- **Start** → confirmation dialog clearly states: Study Mode stays active until the countdown reaches **00:00**, there is **no Stop/Cancel button** during a session, and **Restricted Mode stays on until the timer finishes** (Shorts platforms stay restricted; YouTube, Google, Calculator, Gallery and the user's allowed apps/websites remain accessible).
+- **Restricted Mode** is activated automatically: Strict Mode is forced ON for the session (the previous value is remembered), and while a session is active the user **cannot manually disable** Strict Mode or Monitoring — the ViewModel ignores those toggles until 00:00.
+- **Timestamp-based countdown** — the session stores `startTimeMillis`, `endTimeMillis` and a ticking `currentTimeMillis` (remaining = end − current), so the timer stays exact when the app goes to the background or is reopened. A one-second ticker + an on-resume expiry check end the session at 00:00, restore the normal Strict Mode state and update the summary.
+- **HOME** — while a session is active the existing circular analytics carousel leads with a dedicated **Study Mode page** ("Study Mode Active" + countdown ring + a subtle books/notebook/pen animation). The existing Watch Time / Shorts Count pages stay behind it, untouched, and return to the front automatically at 00:00.
+
+## Future backend readiness
+
+- `study/StudyModels.kt` — `StudyModeSettings`, `StudySchedule`, `StudySession` (sessionStartTime / sessionEndTime / currentTime / remainingDuration map 1:1 to a future API), `StudySummary`, allowed-items catalogs.
+- `study/StudyRepository.kt` — GET/PUT Study Settings, POST Study Session, GET Study Summary seams (mirrors the SettingsRepository pattern). Swapping local state for backend APIs requires **no UI changes**.
+- Study Mode never touches `MonitoringSettings`, `ActivityRepository` or Web rules — the two systems stay independently extendable.
+
+## Files
+
+- `study/StudyModels.kt`, `study/StudyRepository.kt` — Study Mode module (models + backend seam)
+- `screens/settings/StudyModeScreen.kt`, `screens/settings/StudyAllowedItemsScreen.kt` — **new** screens
+- `screens/settings/GeneralScreen.kt` — Study Mode row added inside the existing General section
+- `navigation/SettingsNavHost.kt` — `settings_study_mode` + `settings_study_allowed` routes
+- `components/CircularAnalytics.kt` — Study Mode page injected into the Home carousel (countdown + study animation)
+- `viewmodel/AppViewModel.kt` — `studySettings` / `activeStudySession` / `studySummary` + session lifecycle + Restricted Mode guards
+- `icons/` — `IconKey.STUDY_MODE`
+- `i18n/` — full catalog (EN / HI / UR / ZH / ES) for the screens, dialogs, toasts and Home page
 
 ---
 
@@ -1111,8 +1142,8 @@ A **centralized, app-wide icon system** was added to ShortsCap. Users pick an **
 - **Profile** — profile field icons (person / email / lock / calendar)
 - **Settings** — General, Monitoring, Permissions, Notifications, Appearance, Data Backup, About, Reset All Settings
 - **General** — Language
-- **Monitoring** — Monitoring, App Blocking, Daily Screen Time Limit, Blocked Apps, Allowed Apps, Strict Mode, Short Video Platforms, Break Reminder, Reminder Interval, Monitoring Schedule, Statistics tiles
-- **Permissions** — all 8 permission rows + detail page hero (each row keeps its recognizable icon and gains its own color in Vibrant)
+- **Monitoring** — Device Monitoring, Strict Mode, Shorts Control, Break Reminder, Reminder Interval, Monitoring Schedule
+- **Permissions** — all 6 permission rows + detail page hero (each row keeps its recognizable icon and gains its own color in Vibrant)
 - **Notifications** — the 6 categories + every option row (options inherit their category color in Vibrant)
 - **Appearance** — Theme, **Icons**, Text Size
 - **Help & Support** — FAQ, Contact Support, Report a Bug (+ FAQ accordion tiles)

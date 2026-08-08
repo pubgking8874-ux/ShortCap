@@ -12,8 +12,6 @@ import androidx.compose.material.icons.filled.DonutLarge
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Security
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.shortscap.app.i18n.AppStrings
@@ -29,9 +27,7 @@ fun permissionIcon(id: PermissionId): ImageVector = when (id) {
     PermissionId.OVERLAY -> Icons.Filled.Layers
     PermissionId.NOTIFICATIONS -> Icons.Filled.NotificationsActive
     PermissionId.BATTERY_OPTIMIZATION -> Icons.Filled.BatteryChargingFull
-    PermissionId.AUTO_START -> Icons.Filled.PowerSettingsNew
     PermissionId.STORAGE_MEDIA -> Icons.Filled.PhotoLibrary
-    PermissionId.ROOT -> Icons.Filled.Security
 }
 
 /**
@@ -45,9 +41,7 @@ fun permissionIconKey(id: PermissionId): IconKey = when (id) {
     PermissionId.OVERLAY -> IconKey.PERM_OVERLAY
     PermissionId.NOTIFICATIONS -> IconKey.PERM_NOTIFICATIONS
     PermissionId.BATTERY_OPTIMIZATION -> IconKey.PERM_BATTERY
-    PermissionId.AUTO_START -> IconKey.PERM_AUTO_START
     PermissionId.STORAGE_MEDIA -> IconKey.PERM_STORAGE
-    PermissionId.ROOT -> IconKey.PERM_ROOT
 }
 
 /** Localized title for a permission. */
@@ -57,9 +51,7 @@ fun permissionTitle(id: PermissionId, strings: AppStrings): String = when (id) {
     PermissionId.OVERLAY -> strings.permOverlay
     PermissionId.NOTIFICATIONS -> strings.permNotifications
     PermissionId.BATTERY_OPTIMIZATION -> strings.permBattery
-    PermissionId.AUTO_START -> strings.permAutoStart
     PermissionId.STORAGE_MEDIA -> strings.permStorage
-    PermissionId.ROOT -> strings.permRoot
 }
 
 /** Localized short description (purpose) for a permission. */
@@ -69,9 +61,7 @@ fun permissionDescription(id: PermissionId, strings: AppStrings): String = when 
     PermissionId.OVERLAY -> strings.permOverlayDesc
     PermissionId.NOTIFICATIONS -> strings.permNotificationsDesc
     PermissionId.BATTERY_OPTIMIZATION -> strings.permBatteryDesc
-    PermissionId.AUTO_START -> strings.permAutoStartDesc
     PermissionId.STORAGE_MEDIA -> strings.permStorageDesc
-    PermissionId.ROOT -> strings.permRootDesc
 }
 
 /**
@@ -88,20 +78,17 @@ fun permissionStatusLabel(status: PermissionStatus, strings: AppStrings): String
         PermissionStatus.GRANTED -> strings.permStatusEnabled
         PermissionStatus.NOT_GRANTED,
         PermissionStatus.DISABLED,
-        PermissionStatus.FUTURE,
-        PermissionStatus.NOT_AVAILABLE,
         -> strings.permStatusDisabled
     }
 
 /**
- * Status color: green = granted, orange = needs attention, red = denied,
- * gray = future / not available.
+ * Status color: green = enabled, orange = disabled (not granted), red =
+ * disabled (denied).
  */
 fun permissionStatusColor(status: PermissionStatus, colors: ScColors): Color = when (status) {
     PermissionStatus.GRANTED -> colors.Success
     PermissionStatus.NOT_GRANTED -> colors.Warning
     PermissionStatus.DISABLED -> colors.Danger
-    PermissionStatus.FUTURE, PermissionStatus.NOT_AVAILABLE -> colors.TextDisabled
 }
 
 /**

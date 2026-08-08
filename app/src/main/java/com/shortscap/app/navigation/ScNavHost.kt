@@ -45,6 +45,9 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
             ScScreen.HOME -> HomeScreen(
                 loading = state.homeLoading,
                 metrics = state.homeMetrics,
+                // Today's total usage — same ActivityRepository Daily data the
+                // Activity → Daily chart uses (Home stays in sync with it).
+                todayUsageMinutes = state.homeTodayUsageMinutes,
                 appsUsedToday = state.homeAppsUsedToday,
                 blockedWebCount = state.blockedWebCount,
                 allowedWebCount = state.allowedWebCount,
@@ -53,6 +56,12 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                 // the first swipe page and auto-clears once permissions return.
                 monitoringPaused = state.monitoringPaused,
                 missingRequiredPermissions = state.missingRequiredMonitoringPermissions,
+                // Study Mode — timestamp-based remaining time; the Home
+                // carousel leads with the study countdown while active and
+                // returns to the normal Shorts monitoring UI at 00:00.
+                studyModeActive = state.studyModeActive,
+                studyRemainingMillis = state.studyRemainingMillis,
+                studyTotalMillis = state.studyTotalMillis,
                 // Tapping the paused circle re-checks the required permissions
                 // before showing the resume popup.
                 onRefreshPermissions = viewModel::refreshPermissions,

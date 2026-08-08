@@ -271,10 +271,15 @@ fun ActivityScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(18.dp))
+                    // The Daily circle chart's hourly timeline stays compact by
+                    // default (first 4 entries + Show More) so the screen never
+                    // becomes one long list; Weekly/Monthly legends keep every
+                    // row visible exactly as before.
                     ScTimeLegend(
                         slices = timeSlices,
                         valueFormatter = valueFormatter,
                         onSliceClick = onDonutTap,
+                        maxVisible = if (period == ActivityPeriod.DAILY) 4 else null,
                     )
                 }
             }

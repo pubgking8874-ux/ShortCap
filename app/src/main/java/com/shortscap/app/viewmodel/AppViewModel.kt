@@ -30,6 +30,11 @@ import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.permissions.PermissionStatus
 import com.shortscap.app.settings.SettingsManager
+import com.shortscap.app.study.StudyModeSettings
+import com.shortscap.app.study.StudyPreferenceStore
+import com.shortscap.app.study.StudySession
+import com.shortscap.app.study.StudySoundMode
+import com.shortscap.app.study.StudySummary
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
@@ -43,6 +48,7 @@ import com.shortscap.app.web.PlaceholderBlockingEngine
 import com.shortscap.app.web.WebUsageRecord
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,6 +112,14 @@ data class AppUiState(
     // repository seam without UI changes).
     val settingsDestination: SettingsDestination? = null,
     val monitoring: MonitoringSettings = MonitoringSettings(),
+
+    // ---- Study Mode (General section) — SEPARATE from Device Monitoring,
+    // Shorts Monitoring, Activity and History data. Lives in its own
+    // study/ package with its own repository seam; the active session is
+    // timestamp-based so the countdown stays exact across backgrounding. ----
+    val studySettings: StudyModeSettings = StudyModeSettings(),
+    val activeStudySession: StudySession? = null,
+    val studySummary: StudySummary = StudySummary(),
 
     // Notifications module — every option's on/off state, persisted locally
     // by [NotificationRepository] (backend-ready: same shape maps 1:1 to a
@@ -178,6 +192,14 @@ data class AppUiState(
     val blockedWebCount: Int get() = webRules.count { it.status == WebRuleStatus.BLOCKED }
     val allowedWebCount: Int get() = webRules.count { it.status == WebRuleStatus.ALLOWED }
 
+    // Home Quick Stats "Today Usage" — today's TOTAL usage minutes, derived
+    // live from the exact same Daily report (ActivityRepository Daily
+    // aggregation) that powers Activity → Daily chart + timeline. Because it
+    // is a computed getter over the single data seam, the Home card always
+    // reflects the current-day total — never a separate hardcoded value.
+    val homeTodayUsageMinutes: Int
+        get() = ActivityRepository.reportFor(ActivityPeriod.DAILY).totalMinutes
+
     // ---- Centralized monitoring-paused state (derived, never stored) ----
     // Monitoring is considered PAUSED whenever it is switched on but a
     // required permission is missing. Both properties are derived from the
@@ -191,12 +213,29 @@ data class AppUiState(
 
     val monitoringPaused: Boolean get() =
         monitoring.enabled && missingRequiredMonitoringPermissions.isNotEmpty()
+
+    // ---- Study Mode derived state (timestamp-based, never a visual-only
+    //      countdown). The session carries wall-clock start/end; these are
+    //      pure derivations consumed by Home and the Study Mode screen. ----
+    val studyModeActive: Boolean get() = activeStudySession != null && !activeStudySession.finished
+
+    /** Exact remaining milliseconds (endTime - currentTime). */
+    val studyRemainingMillis: Long get() = activeStudySession?.remainingMillis ?: 0L
+
+    /** Total session length, used to draw the countdown ring progress. */
+    val studyTotalMillis: Long get() = (activeStudySession?.durationMinutes ?: 0) * 60_000L
+
+    // Restricted Mode is the enforcement state Study Mode activates: it is
+    // simply "Study Mode is active", and while it is on the user cannot
+    // disable the restriction controls (guarded in the setters below).
+    val restrictedModeActive: Boolean get() = studyModeActive
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val themeStore = ThemePreferenceStore(application)
     private val languageStore = LanguagePreferenceStore(application)
+    private val studyStore = StudyPreferenceStore(application)
     private val _uiState = MutableStateFlow(
         AppUiState(
             themeMode = themeStore.loadThemeMode(),
@@ -218,6 +257,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // (seeded placeholders are replaced by live OS checks before the Home
         // skeleton clears). The same refresh also runs on every app resume.
         refreshPermissions()
+
+        // Restore any Study Mode session that was running before the process
+        // died / app was reopened — the countdown is timestamp-based, so the
+        // remaining duration is still exact after reload. An already-expired
+        // session is ended immediately (summary recorded, restriction states
+        // restored); a live one resumes ticking. Mirrors the
+        // ThemePreferenceStore restore pattern.
+        studyStore.loadActiveSession()?.let { stored ->
+            strictModeBeforeStudy = stored.previousStrictMode
+            monitoringBeforeStudy = stored.previousMonitoringEnabled
+            _uiState.update { it.copy(activeStudySession = stored.session) }
+            if (stored.session.finished) finishStudySession()
+            else startStudyTicker()
+        }
 
         // Mirrors: useEffect(() => { setTimeout(() => setLoading(false), 900) }, [])
         viewModelScope.launch {
@@ -493,17 +546,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Monitoring settings (local today; GET/UPDATE Monitoring Settings
     //      backend APIs + SettingsRepository seam later) ----
-    fun setMonitoringEnabled(on: Boolean) =
+    // App Blocking / Daily Screen Time Limit settings no longer live on the
+    // Monitoring screen (moved off it as configuration-only UI). Their model
+    // fields stay reserved for the future Settings/Restriction section.
+    fun setMonitoringEnabled(on: Boolean) {
+        // Restricted Mode stays locked while a Study Mode session is active
+        // — monitoring cannot be switched off mid-session.
+        if (_uiState.value.studyModeActive && !on) return
         _uiState.update { it.copy(monitoring = it.monitoring.copy(enabled = on)) }
+    }
 
-    fun setAppBlockingEnabled(on: Boolean) =
-        _uiState.update { it.copy(monitoring = it.monitoring.copy(appBlockingEnabled = on)) }
-
-    fun setScreenTimeLimit(minutes: Int) =
-        _uiState.update { it.copy(monitoring = it.monitoring.copy(screenTimeLimitMinutes = minutes)) }
-
-    fun setStrictMode(on: Boolean) =
+    fun setStrictMode(on: Boolean) {
+        // The user must NOT be able to manually disable Restricted Mode
+        // (Strict Mode) while Study Mode is active — the toggle is ignored
+        // until the countdown finishes, so the switch visually stays on.
+        if (_uiState.value.studyModeActive && !on) return
         _uiState.update { it.copy(monitoring = it.monitoring.copy(strictModeEnabled = on)) }
+    }
 
     fun togglePlatform(id: String) = _uiState.update { state ->
         state.copy(
@@ -520,6 +579,184 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setBreakReminderInterval(minutes: Int) =
         _uiState.update { it.copy(monitoring = it.monitoring.copy(breakReminderIntervalMinutes = minutes)) }
+
+    // ---- Study Mode (General section; backend seam: StudyRepository) ----
+    // State is held in AppUiState (studySettings / activeStudySession /
+    // studySummary) and is fully separate from monitoring, shorts, activity
+    // and history data. The session is timestamp-based: remaining time is
+    // always derived from wall-clock start/end, never from a ticking UI.
+    // The ACTIVE session is additionally persisted by StudyPreferenceStore so
+    // a process restart / app reopen never loses or resets a running session.
+    private var studyTickerJob: Job? = null
+    private var strictModeBeforeStudy: Boolean? = null
+    private var monitoringBeforeStudy: Boolean? = null
+
+    fun setStudyDuration(minutes: Int) =
+        _uiState.update { it.copy(studySettings = it.studySettings.copy(studyDurationMinutes = minutes)) }
+
+    fun setStudyBreakReminder(on: Boolean) =
+        _uiState.update { it.copy(studySettings = it.studySettings.copy(breakReminderEnabled = on)) }
+
+    fun setStudyBreakDuration(minutes: Int) =
+        _uiState.update { it.copy(studySettings = it.studySettings.copy(breakDurationMinutes = minutes)) }
+
+    fun setStudySoundMode(mode: StudySoundMode) =
+        _uiState.update { it.copy(studySettings = it.studySettings.copy(soundMode = mode)) }
+
+    fun setStudyScheduleEnabled(on: Boolean) =
+        _uiState.update {
+            it.copy(studySettings = it.studySettings.copy(schedule = it.studySettings.schedule.copy(enabled = on)))
+        }
+
+    fun setStudyScheduleStart(minutes: Int) =
+        _uiState.update {
+            it.copy(studySettings = it.studySettings.copy(schedule = it.studySettings.schedule.copy(startMinutes = minutes)))
+        }
+
+    fun setStudyScheduleEnd(minutes: Int) =
+        _uiState.update {
+            it.copy(studySettings = it.studySettings.copy(schedule = it.studySettings.schedule.copy(endMinutes = minutes)))
+        }
+
+    /** Removes/restores one app in the Study Mode allowed-app list. */
+    fun toggleStudyAllowedApp(id: String) = _uiState.update { state ->
+        val current = state.studySettings.allowedApps
+        state.copy(
+            studySettings = state.studySettings.copy(
+                allowedApps = if (id in current) current - id else current + id,
+            ),
+        )
+    }
+
+    /** Removes/restores one domain in the Study Mode allowed-websites list. */
+    fun toggleStudyAllowedWebsite(domain: String) = _uiState.update { state ->
+        val current = state.studySettings.allowedWebsites
+        state.copy(
+            studySettings = state.studySettings.copy(
+                allowedWebsites = if (domain in current) current - domain else current + domain,
+            ),
+        )
+    }
+
+    /**
+     * Adds an allowed website domain. Returns false for invalid input or a
+     * duplicate — the UI surfaces the reason inline.
+     */
+    fun addStudyAllowedWebsite(domain: String): Boolean {
+        val d = domain.trim().lowercase()
+        if (d.isBlank() || !d.contains(".")) return false
+        if (d in _uiState.value.studySettings.allowedWebsites) return false
+        _uiState.update {
+            it.copy(studySettings = it.studySettings.copy(allowedWebsites = it.studySettings.allowedWebsites + d))
+        }
+        return true
+    }
+
+    /**
+     * Starts a Study Mode session. Records wall-clock start/end timestamps,
+     * snapshots the session configuration, and activates Restricted Mode by
+     * forcing Strict Mode ON (the previous value is restored when the
+     * session finishes). There is intentionally NO stop/cancel — the session
+     * only ends when the countdown reaches 00:00.
+     */
+    fun startStudySession() {
+        if (_uiState.value.studyModeActive) return
+        val settings = _uiState.value.studySettings
+        val now = System.currentTimeMillis()
+        // Snapshot the pre-session restriction states so the normal state is
+        // restored exactly when the countdown finishes.
+        val previousStrict = _uiState.value.monitoring.strictModeEnabled
+        val previousMonitoring = _uiState.value.monitoring.enabled
+        strictModeBeforeStudy = previousStrict
+        monitoringBeforeStudy = previousMonitoring
+        val session = StudySession(
+            startTimeMillis = now,
+            endTimeMillis = now + settings.studyDurationMinutes * 60_000L,
+            durationMinutes = settings.studyDurationMinutes,
+            breakReminderEnabled = settings.breakReminderEnabled,
+            breakDurationMinutes = settings.breakDurationMinutes,
+            soundMode = settings.soundMode,
+            allowedApps = settings.allowedApps,
+            allowedWebsites = settings.allowedWebsites,
+            currentTimeMillis = now,
+        )
+        _uiState.update { state ->
+            state.copy(
+                activeStudySession = session,
+                // Restricted Mode: Strict Mode AND Device Monitoring are forced
+                // ON for the session — the user cannot switch either off while
+                // Study Mode is active (guarded in the setters below).
+                monitoring = state.monitoring.copy(strictModeEnabled = true, enabled = true),
+            )
+        }
+        // Persist across process death / app reopen (timestamp-based restore).
+        studyStore.saveActiveSession(session, previousStrict, previousMonitoring)
+        startStudyTicker()
+        showToast { it.studySessionStartedToast }
+    }
+
+    /**
+     * One-second ticker while a session is active: refreshes the session's
+     * currentTime from the wall clock and auto-ends the session at 00:00
+     * (restoring the normal Strict Mode state and updating the summary).
+     */
+    private fun startStudyTicker() {
+        studyTickerJob?.cancel()
+        studyTickerJob = viewModelScope.launch {
+            while (isActive) {
+                delay(1000)
+                val now = System.currentTimeMillis()
+                val session = _uiState.value.activeStudySession ?: break
+                if (now >= session.endTimeMillis) {
+                    finishStudySession()
+                    break
+                }
+                _uiState.update { it.copy(activeStudySession = session.copy(currentTimeMillis = now)) }
+            }
+        }
+    }
+
+    /** Ends the session (only reachable when the countdown reached 00:00). */
+    private fun finishStudySession() {
+        studyTickerJob?.cancel()
+        studyTickerJob = null
+        // Restore the exact restriction states the user had before the session.
+        val restoreStrict = strictModeBeforeStudy ?: false
+        val restoreMonitoring = monitoringBeforeStudy ?: true
+        strictModeBeforeStudy = null
+        monitoringBeforeStudy = null
+        _uiState.update { state ->
+            val session = state.activeStudySession
+            state.copy(
+                activeStudySession = null,
+                // Restore the normal Restricted Mode state the user had before.
+                monitoring = state.monitoring.copy(
+                    strictModeEnabled = restoreStrict,
+                    enabled = restoreMonitoring,
+                ),
+                studySummary = state.studySummary.copy(
+                    sessionsToday = state.studySummary.sessionsToday + 1,
+                    minutesToday = state.studySummary.minutesToday + (session?.durationMinutes ?: 0),
+                    lastSessionDurationMinutes = session?.durationMinutes,
+                ),
+            )
+        }
+        // The session is over — nothing to persist anymore.
+        studyStore.clearActiveSession()
+        showToast { it.studySessionCompleteToast }
+    }
+
+    /**
+     * Called on every app resume (via refreshPermissions): if a session
+     * expired while the app was backgrounded, it is ended immediately and
+     * the normal restriction state is restored — no visual-only countdown
+     * drift, because everything is timestamp-based.
+     */
+    fun checkStudySessionExpiry() {
+        val session = _uiState.value.activeStudySession ?: return
+        if (System.currentTimeMillis() >= session.endTimeMillis) finishStudySession()
+        else startStudyTicker() // resume ticking after backgrounding
+    }
 
     // ---- Notifications (local persistence today; future: NotificationRepository
     //      cloud sync / analytics seams) ----
@@ -548,6 +785,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             state.copy(permissions = PermissionRepository.checkAll(getApplication(), state.permissions))
         }
+        // Study Mode runs on every resume too: an expired session ends and
+        // restores the normal restriction state the moment the app returns.
+        checkStudySessionExpiry()
         // Success feedback: monitoring automatically resumes the moment the
         // required permissions are re-verified as granted (paused → active),
         // with no extra button press — e.g. after returning from Android
@@ -565,9 +805,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Future: SettingsManager.resetCloudSettings() clears backend/cloud too.
     fun resetAllSettings() {
         SettingsManager.restoreDefaults(getApplication())
+        // Study Mode state is deliberately NOT reset (separate feature), but
+        // while a session is ACTIVE the user must not be able to disable
+        // Restricted Mode through any path — so the defaults reset must not
+        // wipe the forced Strict Mode / Monitoring ON. The pre-session states
+        // are still restored exactly at 00:00 (finishStudySession).
+        val studyActive = _uiState.value.studyModeActive
         _uiState.update {
             it.copy(
-                monitoring = SettingsManager.defaultMonitoring(),
+                monitoring = if (studyActive) {
+                    SettingsManager.defaultMonitoring().copy(strictModeEnabled = true, enabled = true)
+                } else SettingsManager.defaultMonitoring(),
                 notificationSettings = SettingsManager.defaultNotificationSettings(),
                 themeMode = SettingsManager.defaultThemeMode(),
                 textSizeMode = SettingsManager.defaultTextSizeMode(),

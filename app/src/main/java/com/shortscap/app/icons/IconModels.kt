@@ -66,6 +66,7 @@ enum class IconKey {
 
     // ---- General ----
     LANGUAGE,
+    STUDY_MODE,
 
     // ---- Appearance ----
     THEME,
@@ -76,12 +77,10 @@ enum class IconKey {
 
     // ---- Monitoring ----
     MONITORING_ENABLE,
-    APP_BLOCKING,
-    SCREEN_TIME_LIMIT,
     BLOCKED_APPS,
     ALLOWED_APPS,
     STRICT_MODE,
-    PLATFORM,
+    SHORTS_CONTROL,
     BREAK_REMINDER,
     REMINDER_INTERVAL,
     SCHEDULE,
@@ -100,9 +99,7 @@ enum class IconKey {
     PERM_OVERLAY,
     PERM_NOTIFICATIONS,
     PERM_BATTERY,
-    PERM_AUTO_START,
     PERM_STORAGE,
-    PERM_ROOT,
 
     // ---- Dashboard drawer ----
     HELP_SUPPORT,
@@ -145,12 +142,7 @@ enum class IconKey {
     STAT_RESTRICTED,
     STAT_BLOCKED_SITES,
     STAT_FOCUS_TIME,
-
-    // ---- Monitoring statistics tiles ----
     STAT_TODAY_USAGE,
-    STAT_BLOCKED_COUNT,
-    STAT_CURRENT_LIMIT,
-    STAT_MONITORING_STATUS,
 
     // ---- Profile ----
     PROFILE_PERSON,

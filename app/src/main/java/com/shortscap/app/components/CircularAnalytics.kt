@@ -3,7 +3,11 @@ package com.shortscap.app.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -34,10 +38,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.ScCircularMetric
+import com.shortscap.app.study.formatStudyCountdown
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
@@ -120,12 +127,21 @@ fun ScCircularMetricRing(
  * (one metric per page, smooth pager transition) with animated page-indicator
  * dots below. Passing more metrics to the list adds pages with no new UI.
  *
+ * Study Mode (priority state): while a Study Mode session is active
+ * ([studyModeActive]), a Study Mode page — "Study Mode Active" + the exact
+ * timestamp-based remaining countdown + a study-focused animation — is
+ * injected as the FIRST page. The existing metric pages (Watch Time, Shorts
+ * Count) move behind it but remain reachable by horizontal swiping; the
+ * Shorts monitoring system itself is never touched and returns to the front
+ * automatically when the session ends.
+ *
  * Monitoring Paused (priority/exception state): when [monitoringPaused] is
- * true, a Monitoring Paused page is injected as the FIRST page — the existing
- * metric pages (Watch Time, Shorts Count) move behind it but remain reachable
- * by horizontal swiping. The page appears/disappears automatically from the
- * derived AppUiState.monitoringPaused flag (real permission state), so the
- * existing metric pages and their design are never touched.
+ * true, a Monitoring Paused page is injected after the Study Mode page (or
+ * as the first page when no session is active) — the existing metric pages
+ * move behind it but remain reachable by horizontal swiping. Both injected
+ * pages appear/disappear automatically from derived AppUiState flags (real
+ * permission + session state), so the existing metric pages and their design
+ * are never touched.
  */
 @Composable
 fun ScCircularAnalyticsCarousel(
@@ -133,15 +149,31 @@ fun ScCircularAnalyticsCarousel(
     modifier: Modifier = Modifier,
     monitoringPaused: Boolean = false,
     onResumeMonitoring: (() -> Unit)? = null,
+    studyModeActive: Boolean = false,
+    studyRemainingMillis: Long = 0L,
+    studyTotalMillis: Long = 0L,
 ) {
     if (metrics.isEmpty()) return
     val colors = LocalScColors.current
-    val totalPages = metrics.size + if (monitoringPaused) 1 else 0
+    val totalPages = metrics.size + (if (studyModeActive) 1 else 0) + (if (monitoringPaused) 1 else 0)
     val pagerState = rememberPagerState(pageCount = { totalPages })
 
-    // Paused page sits at index 0; the metric pages shift right by one while
-    // it is shown (Watch Time → page 1, Shorts Count → page 2).
-    fun metricFor(page: Int): ScCircularMetric = metrics[if (monitoringPaused) page - 1 else page]
+    // When Study Mode activates (or monitoring becomes paused), its priority
+    // page appears at index 0 — snap the pager to it so the user immediately
+    // sees the new state instead of whatever metric page they were on.
+    // Fires only on an actual state CHANGE, so it never yanks the user back
+    // while they are deliberately swiping through the metric pages.
+    LaunchedEffect(studyModeActive, monitoringPaused) {
+        if (studyModeActive || monitoringPaused) pagerState.scrollToPage(0)
+    }
+
+    // Study page leads (index 0), Monitoring Paused follows it, then the
+    // existing metric pages — so the explicit Study Mode state is always the
+    // first thing the user sees while it is active.
+    fun isStudyPage(page: Int) = studyModeActive && page == 0
+    fun isPausedPage(page: Int) = monitoringPaused && page == (if (studyModeActive) 1 else 0)
+    fun metricFor(page: Int): ScCircularMetric =
+        metrics[page - (if (studyModeActive) 1 else 0) - (if (monitoringPaused) 1 else 0)]
 
     Column(
         modifier = modifier
@@ -153,8 +185,11 @@ fun ScCircularAnalyticsCarousel(
         HorizontalPager(
             state = pagerState,
             key = { page ->
-                if (monitoringPaused && page == 0) "monitoring-paused"
-                else metricFor(page).id
+                when {
+                    isStudyPage(page) -> "study-mode-active"
+                    isPausedPage(page) -> "monitoring-paused"
+                    else -> metricFor(page).id
+                }
             },
             modifier = Modifier.fillMaxWidth(),
         ) { page ->
@@ -164,10 +199,13 @@ fun ScCircularAnalyticsCarousel(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                if (monitoringPaused && page == 0) {
-                    ScMonitoringPausedPage(onResumeMonitoring = onResumeMonitoring)
-                } else {
-                    ScCircularMetricRing(metric = metricFor(page))
+                when {
+                    isStudyPage(page) -> ScStudyModePage(
+                        remainingMillis = studyRemainingMillis,
+                        totalMillis = studyTotalMillis,
+                    )
+                    isPausedPage(page) -> ScMonitoringPausedPage(onResumeMonitoring = onResumeMonitoring)
+                    else -> ScCircularMetricRing(metric = metricFor(page))
                 }
             }
         }
@@ -193,6 +231,98 @@ fun ScCircularAnalyticsCarousel(
                 )
             }
         }
+    }
+}
+
+/**
+ * The Study Mode page injected as the first carousel page while a session is
+ * active: a countdown ring (progress toward 00:00) with the exact remaining
+ * time in the center, a gentle study-focused animation (books, notebook and
+ * pen bobbing subtly), and the "Study Mode Active" label — a distinct visual
+ * from the normal Shorts monitoring pages, which stay untouched and reachable
+ * by swiping.
+ */
+@Composable
+private fun ScStudyModePage(remainingMillis: Long, totalMillis: Long) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    val ringBrush = Brush.linearGradient(
+        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary),
+    )
+    // Progress toward the end: 0 at start → 1 at 00:00.
+    val progress = if (totalMillis > 0) {
+        (1f - remainingMillis.toFloat() / totalMillis).coerceIn(0f, 1f)
+    } else 0f
+
+    // Gentle, endless bob for the study icons so the page feels alive.
+    val transition = rememberInfiniteTransition(label = "studyIconTransition")
+    val bob by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Reverse),
+        label = "studyIconBob",
+    )
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier.size(190.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokeWidth = 14.dp.toPx()
+                val diameter = size.minDimension - strokeWidth
+                val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+                val arcSize = Size(diameter, diameter)
+                // Subtle full track so progress toward 00:00 is always visible.
+                drawArc(
+                    color = colors.Divider,
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+                )
+                if (progress > 0f) {
+                    drawArc(
+                        brush = ringBrush,
+                        startAngle = -90f,
+                        sweepAngle = 360f * progress,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+                    )
+                }
+            }
+            Text(
+                formatStudyCountdown(remainingMillis),
+                color = colors.TextPrimary,
+                style = ScTextStyles.BigStat,
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        // Study-focused visual elements — books, notebook and pen.
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf("📚", "📓", "✏️").forEachIndexed { index, emoji ->
+                Text(
+                    text = emoji,
+                    fontSize = 26.sp,
+                    modifier = Modifier.graphicsLayer {
+                        translationY = bob * 5.dp.toPx() * (if (index % 2 == 0) 1f else -1f)
+                    },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Text(
+            strings.studyHomeTitle,
+            color = colors.TextPrimary,
+            style = ScTextStyles.SectionTitle,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

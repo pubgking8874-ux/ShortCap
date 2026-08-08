@@ -36,6 +36,9 @@ import com.shortscap.app.screens.settings.NotificationCategoryScreen
 import com.shortscap.app.screens.settings.NotificationsScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
+import com.shortscap.app.screens.settings.ShortsControlScreen
+import com.shortscap.app.screens.settings.StudyAllowedItemsScreen
+import com.shortscap.app.screens.settings.StudyModeScreen
 import com.shortscap.app.screens.settings.TextSizeScreen
 import com.shortscap.app.screens.settings.ThemeScreen
 import com.shortscap.app.viewmodel.AppUiState
@@ -62,6 +65,9 @@ object SettingsDestinations {
     const val BLOCKED_APPS = "settings_blocked_apps"
     const val ALLOWED_APPS = "settings_allowed_apps"
     const val SCHEDULE = "settings_schedule"
+    const val SHORTS_CONTROL = "settings_shorts_control"
+    const val STUDY_MODE = "settings_study_mode"
+    const val STUDY_ALLOWED = "settings_study_allowed"
 
     /** Route with the [PermissionId] name appended, e.g. settings_permission_detail/USAGE_ACCESS. */
     fun permissionDetailRoute(permissionId: PermissionId): String =
@@ -123,6 +129,43 @@ fun SettingsNavHost(
         composable(SettingsDestinations.GENERAL) {
             GeneralScreen(
                 onOpenLanguage = { navController.navigate(SettingsDestinations.LANGUAGE) },
+                onOpenStudyMode = { navController.navigate(SettingsDestinations.STUDY_MODE) },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.STUDY_MODE) {
+            // Study Mode — complete feature inside the existing General
+            // section. State flows from AppUiState (StudyModeSettings /
+            // StudySession / StudySummary); the timestamp-based session keeps
+            // the countdown exact across backgrounding, and a future backend
+            // syncs through the StudyRepository seam behind the same shapes.
+            StudyModeScreen(
+                settings = state.studySettings,
+                studyModeActive = state.studyModeActive,
+                studyRemainingMillis = state.studyRemainingMillis,
+                studyTotalMillis = state.studyTotalMillis,
+                summary = state.studySummary,
+                onStartSession = viewModel::startStudySession,
+                onSetStudyDuration = viewModel::setStudyDuration,
+                onSetStudyBreakReminder = viewModel::setStudyBreakReminder,
+                onSetStudyBreakDuration = viewModel::setStudyBreakDuration,
+                onSetStudySoundMode = viewModel::setStudySoundMode,
+                onSetStudyScheduleEnabled = viewModel::setStudyScheduleEnabled,
+                onSetStudyScheduleStart = viewModel::setStudyScheduleStart,
+                onSetStudyScheduleEnd = viewModel::setStudyScheduleEnd,
+                onOpenAllowed = { navController.navigate(SettingsDestinations.STUDY_ALLOWED) },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.STUDY_ALLOWED) {
+            StudyAllowedItemsScreen(
+                allowedApps = state.studySettings.allowedApps,
+                allowedWebsites = state.studySettings.allowedWebsites,
+                onToggleApp = viewModel::toggleStudyAllowedApp,
+                onToggleWebsite = viewModel::toggleStudyAllowedWebsite,
+                onAddWebsite = viewModel::addStudyAllowedWebsite,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -139,18 +182,25 @@ fun SettingsNavHost(
             MonitoringScreen(
                 settings = state.monitoring,
                 // Same derived permission-based paused state the Home section
-                // uses — the Monitoring status tile can never disagree with it.
+                // uses — Device Monitoring can never disagree with it.
                 monitoringPaused = state.monitoringPaused,
                 onToggleMonitoring = viewModel::setMonitoringEnabled,
-                onToggleAppBlocking = viewModel::setAppBlockingEnabled,
-                onSetScreenTimeLimit = viewModel::setScreenTimeLimit,
                 onToggleStrictMode = viewModel::setStrictMode,
-                onTogglePlatform = viewModel::togglePlatform,
                 onToggleBreakReminder = viewModel::setBreakReminderEnabled,
                 onSetBreakReminderInterval = viewModel::setBreakReminderInterval,
-                onOpenBlockedApps = { navController.navigate(SettingsDestinations.BLOCKED_APPS) },
-                onOpenAllowedApps = { navController.navigate(SettingsDestinations.ALLOWED_APPS) },
+                onOpenShortsControl = { navController.navigate(SettingsDestinations.SHORTS_CONTROL) },
                 onOpenSchedule = { navController.navigate(SettingsDestinations.SCHEDULE) },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.SHORTS_CONTROL) {
+            // Shorts Control — per-platform Shorts monitoring switches. State
+            // comes from the same MonitoringSettings.platforms the backend
+            // GET/UPDATE APIs will feed; the screen never hardcodes values.
+            ShortsControlScreen(
+                platforms = state.monitoring.platforms,
+                onTogglePlatform = viewModel::togglePlatform,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

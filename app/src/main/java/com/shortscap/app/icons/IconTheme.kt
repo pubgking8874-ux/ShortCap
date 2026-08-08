@@ -82,6 +82,7 @@ object IconTheme {
 
         // General
         IconKey.LANGUAGE -> Icons.Filled.Language
+        IconKey.STUDY_MODE -> Icons.Filled.School
 
         // Appearance
         IconKey.THEME -> Icons.Filled.Palette
@@ -92,12 +93,10 @@ object IconTheme {
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> Icons.Filled.Insights
-        IconKey.APP_BLOCKING -> Icons.Filled.Block
-        IconKey.SCREEN_TIME_LIMIT -> Icons.Filled.Timer
         IconKey.BLOCKED_APPS -> Icons.Filled.DoNotDisturbOn
         IconKey.ALLOWED_APPS -> Icons.Filled.CheckCircle
         IconKey.STRICT_MODE -> Icons.Filled.GppMaybe
-        IconKey.PLATFORM -> Icons.Filled.SmartDisplay
+        IconKey.SHORTS_CONTROL -> Icons.Filled.SmartDisplay
         IconKey.BREAK_REMINDER -> Icons.Filled.SelfImprovement
         IconKey.REMINDER_INTERVAL -> Icons.Filled.Alarm
         IconKey.SCHEDULE -> Icons.Filled.CalendarMonth
@@ -116,9 +115,7 @@ object IconTheme {
         IconKey.PERM_OVERLAY -> Icons.Filled.Layers
         IconKey.PERM_NOTIFICATIONS -> Icons.Filled.NotificationsActive
         IconKey.PERM_BATTERY -> Icons.Filled.BatteryChargingFull
-        IconKey.PERM_AUTO_START -> Icons.Filled.PowerSettingsNew
         IconKey.PERM_STORAGE -> Icons.Filled.PhotoLibrary
-        IconKey.PERM_ROOT -> Icons.Filled.Security
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> Icons.Filled.HelpOutline
@@ -161,12 +158,7 @@ object IconTheme {
         IconKey.STAT_RESTRICTED -> Icons.Filled.Block
         IconKey.STAT_BLOCKED_SITES -> Icons.Filled.Language
         IconKey.STAT_FOCUS_TIME -> Icons.Filled.Timer
-
-        // Monitoring statistics tiles
         IconKey.STAT_TODAY_USAGE -> Icons.Filled.Schedule
-        IconKey.STAT_BLOCKED_COUNT -> Icons.Filled.Block
-        IconKey.STAT_CURRENT_LIMIT -> Icons.Filled.Timer
-        IconKey.STAT_MONITORING_STATUS -> Icons.Filled.MonitorHeart
 
         // Profile
         IconKey.PROFILE_PERSON -> Icons.Filled.Person
@@ -246,6 +238,7 @@ private object VibrantPalette {
 
         // General
         IconKey.LANGUAGE -> violet
+        IconKey.STUDY_MODE -> indigo
 
         // Appearance
         IconKey.THEME -> violet
@@ -256,12 +249,10 @@ private object VibrantPalette {
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> blue
-        IconKey.APP_BLOCKING -> red
-        IconKey.SCREEN_TIME_LIMIT -> amber
         IconKey.BLOCKED_APPS -> orange
         IconKey.ALLOWED_APPS -> green
         IconKey.STRICT_MODE -> red
-        IconKey.PLATFORM -> cyan
+        IconKey.SHORTS_CONTROL -> cyan
         IconKey.BREAK_REMINDER -> teal
         IconKey.REMINDER_INTERVAL -> purple
         IconKey.SCHEDULE -> indigo
@@ -280,9 +271,7 @@ private object VibrantPalette {
         IconKey.PERM_OVERLAY -> purple
         IconKey.PERM_NOTIFICATIONS -> pink
         IconKey.PERM_BATTERY -> lime
-        IconKey.PERM_AUTO_START -> amber
         IconKey.PERM_STORAGE -> cyan
-        IconKey.PERM_ROOT -> red
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> blue
@@ -325,12 +314,7 @@ private object VibrantPalette {
         IconKey.STAT_RESTRICTED -> red
         IconKey.STAT_BLOCKED_SITES -> amber
         IconKey.STAT_FOCUS_TIME -> green
-
-        // Monitoring statistics tiles
         IconKey.STAT_TODAY_USAGE -> blue
-        IconKey.STAT_BLOCKED_COUNT -> red
-        IconKey.STAT_CURRENT_LIMIT -> amber
-        IconKey.STAT_MONITORING_STATUS -> green
 
         // Profile
         IconKey.PROFILE_PERSON -> blue
