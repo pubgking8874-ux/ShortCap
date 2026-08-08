@@ -1,10 +1,14 @@
 package com.shortscap.app.permissions
 
 /**
- * The 6 permissions surfaced in Settings → Permissions.
+ * The permissions surfaced in Settings → Permissions.
  *
  * Every id maps 1:1 to a future backend `GET /permissions` entry, so adding
  * or removing a permission only touches this enum + the i18n catalog.
+ * [SYSTEM_AUDIO_ACCESS] is the Android Notification Policy Access that
+ * Study Mode's Sound Mode needs to change the real device ringer mode
+ * (Sound / Vibrate / Silent) — it lives here as a central, one-time grant
+ * instead of being asked for repeatedly inside Study Mode.
  */
 enum class PermissionId {
     USAGE_ACCESS,
@@ -13,6 +17,7 @@ enum class PermissionId {
     NOTIFICATIONS,
     BATTERY_OPTIMIZATION,
     STORAGE_MEDIA,
+    SYSTEM_AUDIO_ACCESS,
 }
 
 /**

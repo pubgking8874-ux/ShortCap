@@ -22,10 +22,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -59,6 +58,7 @@ import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.study.FocusCountry
+import com.shortscap.app.study.FocusPasscodeIcon
 import com.shortscap.app.study.FocusRecoveryMethod
 import com.shortscap.app.study.FocusSupportedCountries
 import com.shortscap.app.study.formatPasscodeSetAt
@@ -72,7 +72,7 @@ import kotlinx.coroutines.delay
  *
  * These pages are a dedicated "Exit Passcode Protection & Recovery" system:
  * they deliberately look NOTHING like the Sign In / Sign Up / auth OTP
- * screens. They reuse the Study Mode visual identity (lock/focus/book icon,
+ * screens. They reuse the Study Mode visual identity (book/exit icon,
  * clean card, ShortsCap dark theme, ScTextStyles) and every label comes from
  * the i18n catalog.
  *
@@ -137,6 +137,38 @@ private fun FocusHero(icon: ImageVector, title: String, subtitle: String) {
             style = ScTextStyles.Body,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+/**
+ * Small vertical three-dot (⋮) overflow menu for the saved Exit Passcode.
+ * Contains a single "Delete" action that removes ONLY the Exit Passcode
+ * configuration (never any other app data). Shared by the Study Mode card
+ * row and the passcode status screen so there is exactly one delete UI.
+ */
+@Composable
+internal fun ExitPasscodeOverflowMenu(
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    var menuOpen by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(
+                Icons.Filled.MoreVert,
+                contentDescription = strings.focusPasscodeDelete,
+                tint = colors.TextSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(strings.focusPasscodeDelete, color = colors.Danger) },
+                onClick = { menuOpen = false; onDelete() },
+            )
+        }
     }
 }
 
@@ -231,7 +263,7 @@ fun FocusPasscodeSetupScreen(
     var error by remember { mutableStateOf<String?>(null) }
 
     FocusPage(title = strings.focusPasscodeSetupTitle, onBack = onBack) {
-        FocusHero(icon = Icons.Filled.Lock, title = strings.focusPasscodeSetupTitle, subtitle = strings.focusPasscodeSetupDesc)
+        FocusHero(icon = FocusPasscodeIcon, title = strings.focusPasscodeSetupTitle, subtitle = strings.focusPasscodeSetupDesc)
 
         FocusTextField(
             value = passcode,
@@ -279,7 +311,7 @@ fun FocusPasscodeVerifyScreen(
     var error by remember { mutableStateOf<String?>(null) }
 
     FocusPage(title = strings.focusPasscodeVerifyTitle, onBack = onBack) {
-        FocusHero(icon = Icons.Filled.Lock, title = strings.focusPasscodeVerifyTitle, subtitle = strings.focusPasscodeVerifyDesc)
+        FocusHero(icon = FocusPasscodeIcon, title = strings.focusPasscodeVerifyTitle, subtitle = strings.focusPasscodeVerifyDesc)
 
         FocusTextField(
             value = passcode,
@@ -324,12 +356,14 @@ fun FocusPasscodeVerifyScreen(
  * row after a passcode has been created. Shows ONLY the green success status
  * plus the device date/time it was set ("Set on / Set at"); the passcode
  * itself is NEVER displayed (the store keeps only a salted hash).
+ * The three-dot menu (⋮) deletes ONLY the Exit Passcode configuration;
  * "Change Passcode" routes to the existing recovery flow.
  */
 @Composable
 fun FocusPasscodeStatusScreen(
     setAtMillis: Long,
     onRecover: () -> Unit,
+    onDelete: () -> Unit,
     onBack: () -> Unit,
 ) {
     val strings = LocalAppStrings.current
@@ -337,7 +371,7 @@ fun FocusPasscodeStatusScreen(
     val shape = RoundedCornerShape(18.dp)
     FocusPage(title = strings.focusPasscodeTitle, onBack = onBack) {
         FocusHero(
-            icon = Icons.Filled.Lock,
+            icon = FocusPasscodeIcon,
             title = strings.focusPasscodeTitle,
             subtitle = strings.focusPasscodeLockedNote,
         )
@@ -351,9 +385,17 @@ fun FocusPasscodeStatusScreen(
                 .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = colors.Success, modifier = Modifier.size(16.dp))
-                Text(strings.focusPasscodeSetStatus, color = colors.Success, style = ScTextStyles.BodySemiBold)
+            // Green success status + the three-dot (⋮) delete menu on the far
+            // right — no checkmark icon (the green styling already reads as
+            // "configured", and the passcode itself is never displayed).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    strings.focusPasscodeSetStatus,
+                    color = colors.Success,
+                    style = ScTextStyles.BodySemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                ExitPasscodeOverflowMenu(onDelete = onDelete)
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -393,7 +435,7 @@ fun FocusPasscodeRecoverScreen(
 ) {
     val strings = LocalAppStrings.current
     FocusPage(title = strings.focusPasscodeRecoverTitle, onBack = onBack) {
-        FocusHero(icon = Icons.Filled.Lock, title = strings.focusPasscodeRecoverTitle, subtitle = strings.focusPasscodeRecoverDesc)
+        FocusHero(icon = FocusPasscodeIcon, title = strings.focusPasscodeRecoverTitle, subtitle = strings.focusPasscodeRecoverDesc)
 
         RecoveryMethodCard(
             icon = Icons.Filled.Email,
@@ -601,7 +643,7 @@ fun FocusPasscodeOtpScreen(
 
     FocusPage(title = strings.focusPasscodeOtpTitle, onBack = onBack) {
         FocusHero(
-            icon = Icons.Filled.Lock,
+            icon = FocusPasscodeIcon,
             title = strings.focusPasscodeOtpTitle,
             subtitle = if (method == FocusRecoveryMethod.EMAIL) strings.focusPasscodeOtpEmailSent else strings.focusPasscodeOtpMobileSent,
         )
@@ -707,7 +749,7 @@ fun FocusPasscodeCreateScreen(
     var error by remember { mutableStateOf<String?>(null) }
 
     FocusPage(title = strings.focusPasscodeCreateTitle, onBack = onBack) {
-        FocusHero(icon = Icons.Filled.Lock, title = strings.focusPasscodeCreateTitle, subtitle = strings.focusPasscodeRecoverDesc)
+        FocusHero(icon = FocusPasscodeIcon, title = strings.focusPasscodeCreateTitle, subtitle = strings.focusPasscodeRecoverDesc)
 
         FocusTextField(
             value = passcode,

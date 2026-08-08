@@ -101,6 +101,7 @@ enum class IconKey {
     PERM_NOTIFICATIONS,
     PERM_BATTERY,
     PERM_STORAGE,
+    PERM_SYSTEM_AUDIO,
 
     // ---- Dashboard drawer ----
     HELP_SUPPORT,

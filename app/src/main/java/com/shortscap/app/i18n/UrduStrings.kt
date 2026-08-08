@@ -194,10 +194,19 @@ object UrduStrings : AppStrings {
     override val studyRemaining = "باقی"
     override val studyRestrictionNote = "محدود موڈ فعال ہے اور الٹی گنتی 00:00 تک پہنچنے سے پہلے بند نہیں کیا جا سکتا۔ آپ صرف اپنے ایگزٹ پاس کوڈ سے جلد ختم کر سکتے ہیں۔ شارٹس پلیٹ فارمز محدود رہتے ہیں؛ آپ کی اجازت یافتہ ایپس اور ویب سائٹس قابل رسائی رہتی ہیں۔"
     override val studyStartSession = "اسٹڈی سیشن شروع کریں"
-    override val studyStartConfirmTitle = "اسٹڈی سیشن شروع کریں؟"
-    override val studyStartConfirmMessage = "اسٹڈی موڈ الٹی گنتی 00:00 تک پہنچنے تک فعال رہتا ہے۔ سیشن کے دوران کوئی روکنے یا منسوخ کرنے کا بٹن نہیں ہوتا — آپ صرف اپنے ایگزٹ پاس کوڈ سے جلد ختم کر سکتے ہیں — اور ٹائمر ختم ہونے تک محدود موڈ جاری رہتا ہے۔"
-    override val studyStartConfirmRestrictions = "یوٹیوب شارٹس، انسٹاگرام ریلز، فیس بک ریلز اور سنیپ چیٹ اسپاٹ لائٹ محدود رہتے ہیں۔ یوٹیوب، گوگل، کیلکولیٹر، گیلری اور آپ کی اجازت یافتہ ایپس/ویب سائٹس قابل رسائی رہتی ہیں۔"
+    override val studyStartConfirmTitle = "اسٹڈی موڈ شروع کریں؟"
+    override val studyStartConfirmRestrictions = "اس سیشن کے دوران، آپ کی ترتیب کردہ اسٹڈی پابندیاں ٹائمر ختم ہونے تک فعال رہیں گی۔"
     override val studyStartConfirmStart = "اسٹڈی شروع کریں"
+    override val studyDurationLabel = "مدت"
+    override fun studyDurationText(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> if (h == 1) "1 گھنٹہ" else "$h گھنٹے"
+            h == 0 -> "$m منٹ"
+            else -> "${if (h == 1) "1 گھنٹہ" else "$h گھنٹے"} $m منٹ"
+        }
+    }
     override val studyDuration = "اسٹڈی کی مدت"
     override val studyBreakReminder = "بریک ریمائنڈر"
     override val studyBreakDuration = "بریک کی مدت"
@@ -205,6 +214,10 @@ object UrduStrings : AppStrings {
     override val studySoundSound = "آواز"
     override val studySoundVibrate = "وائبریشن"
     override val studySoundSilent = "خاموش"
+    override val soundModeAccessRequiredTitle = "سسٹم آڈیو رسائی درکار ہے"
+    override val soundModeAccessRequiredDesc = "ساؤنڈ موڈ کو آپ کے فون کو ساؤنڈ، وائبریٹ اور سائلنٹ موڈز کے درمیان تبدیل کرنے کے لیے سسٹم آڈیو رسائی درکار ہے۔"
+    override val soundModeOpenSettings = "سیٹنگز کھولیں"
+    override val soundModeChangeFailedToast = "اینڈرائیڈ نے ساؤنڈ موڈ تبدیل کرنے کی اجازت نہیں دی۔"
     override val studySchedule = "اسٹڈی شیڈول"
     override val studyScheduleStart = "شروع کا وقت"
     override val studyScheduleEnd = "اختتام کا وقت"
@@ -236,7 +249,7 @@ object UrduStrings : AppStrings {
     override val focusPasscodeSetupFieldLabel = "ایگزٹ پاس کوڈ"
     override val focusPasscodeSetupSave = "پاس کوڈ بنائیں"
     override val focusPasscodeNotSet = "پاس کوڈ سیٹ نہیں"
-    override val focusPasscodeSetStatus = "پاس کوڈ سیٹ ✓"
+    override val focusPasscodeSetStatus = "پاس کوڈ سیٹ"
     override val focusPasscodeChange = "پاس کوڈ تبدیل کریں"
     override val focusPasscodeCreatedToast = "ایگزٹ پاس کوڈ کامیابی سے بن گیا۔"
     override val focusPasscodeVerifyTitle = "ایگزٹ پاس کوڈ درج کریں"
@@ -275,6 +288,8 @@ object UrduStrings : AppStrings {
     override val focusPasscodeConfirmLabel = "پاس کوڈ کی تصدیق کریں"
     override val focusPasscodeCreateSave = "نیا پاس کوڈ محفوظ کریں"
     override val focusPasscodeUpdatedToast = "ایگزٹ پاس کوڈ کامیابی سے اپ ڈیٹ ہو گیا۔"
+    override val focusPasscodeDelete = "حذف کریں"
+    override val focusPasscodeDeletedToast = "ایگزٹ پاس کوڈ حذف کر دیا گیا۔"
     override val focusPasscodeTooShort = "پاس کوڈ کم از کم 8 حروف کا ہونا چاہیے۔"
     override val focusPasscodeMismatch = "پاس کوڈ مماثل نہیں ہیں۔"
     override fun focusPasscodeSetOn(date: String) = "سیٹ کی تاریخ: $date"
@@ -333,6 +348,8 @@ object UrduStrings : AppStrings {
     override val permBatteryDesc = "شورٹس کیپ کو پس منظر میں قابل اعتماد طریقے سے چلاتا رکھتا ہے۔"
     override val permStorage = "اسٹوریج / میڈیا تک رسائی"
     override val permStorageDesc = "صرف پروفائل تصویر کے انتخاب اور مستقبل کے بیک اپ کے لیے استعمال ہوتا ہے۔"
+    override val permSystemAudioAccess = "سسٹم آڈیو رسائی"
+    override val permSystemAudioAccessDesc = "اسٹڈی موڈ کے ساؤنڈ موڈ کے لیے فون کو ساؤنڈ، وائبریشن اور خاموش موڈ کے درمیان تبدیل کرنے کے لیے درکار ہے۔"
 
     // ---- Notifications ----
     override val notificationsTitle = "اطلاعات"

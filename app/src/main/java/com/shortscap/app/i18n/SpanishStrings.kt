@@ -194,10 +194,19 @@ object SpanishStrings : AppStrings {
     override val studyRemaining = "Restante"
     override val studyRestrictionNote = "El modo restringido está activo y no se puede desactivar hasta que la cuenta atrás llegue a 00:00. Solo puedes finalizar antes con tu código de salida. Las plataformas de Shorts permanecen restringidas; tus apps y sitios web permitidos siguen accesibles."
     override val studyStartSession = "Iniciar sesión de estudio"
-    override val studyStartConfirmTitle = "¿Iniciar sesión de estudio?"
-    override val studyStartConfirmMessage = "El modo estudio permanece activo hasta que la cuenta atrás llegue a 00:00. No hay botón de Detener ni Cancelar durante una sesión — solo puedes finalizar antes con tu código de salida — y el modo restringido se mantiene hasta que termine el temporizador."
-    override val studyStartConfirmRestrictions = "YouTube Shorts, Instagram Reels, Facebook Reels y Snapchat Spotlight permanecen restringidos. YouTube, Google, Calculadora, Galería y tus apps/sitios permitidos siguen accesibles."
+    override val studyStartConfirmTitle = "¿Iniciar el Modo Estudio?"
+    override val studyStartConfirmRestrictions = "Durante esta sesión, tus restricciones de estudio configuradas permanecerán activas hasta que termine el temporizador."
     override val studyStartConfirmStart = "Iniciar estudio"
+    override val studyDurationLabel = "Duración"
+    override fun studyDurationText(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> if (h == 1) "1 hora" else "$h horas"
+            h == 0 -> "$m minutos"
+            else -> "${if (h == 1) "1 hora" else "$h horas"} y $m minutos"
+        }
+    }
     override val studyDuration = "Duración del estudio"
     override val studyBreakReminder = "Recordatorio de pausas"
     override val studyBreakDuration = "Duración de la pausa"
@@ -205,6 +214,10 @@ object SpanishStrings : AppStrings {
     override val studySoundSound = "Sonido"
     override val studySoundVibrate = "Vibración"
     override val studySoundSilent = "Silencio"
+    override val soundModeAccessRequiredTitle = "Acceso de audio del sistema requerido"
+    override val soundModeAccessRequiredDesc = "El modo de sonido requiere acceso de audio del sistema para cambiar tu teléfono entre los modos Sonido, Vibrar y Silencio."
+    override val soundModeOpenSettings = "Abrir ajustes"
+    override val soundModeChangeFailedToast = "Android no permitió el cambio del modo de sonido."
     override val studySchedule = "Horario de estudio"
     override val studyScheduleStart = "Hora de inicio"
     override val studyScheduleEnd = "Hora de fin"
@@ -236,7 +249,7 @@ object SpanishStrings : AppStrings {
     override val focusPasscodeSetupFieldLabel = "Código de salida"
     override val focusPasscodeSetupSave = "Crear código"
     override val focusPasscodeNotSet = "Código no establecido"
-    override val focusPasscodeSetStatus = "Código establecido ✓"
+    override val focusPasscodeSetStatus = "Código establecido"
     override val focusPasscodeChange = "Cambiar código"
     override val focusPasscodeCreatedToast = "Código de salida creado correctamente."
     override val focusPasscodeVerifyTitle = "Introduce tu código de salida"
@@ -275,6 +288,8 @@ object SpanishStrings : AppStrings {
     override val focusPasscodeConfirmLabel = "Confirmar código"
     override val focusPasscodeCreateSave = "Guardar nuevo código"
     override val focusPasscodeUpdatedToast = "Código de salida actualizado correctamente."
+    override val focusPasscodeDelete = "Eliminar"
+    override val focusPasscodeDeletedToast = "Código de salida eliminado."
     override val focusPasscodeTooShort = "El código debe tener al menos 8 caracteres."
     override val focusPasscodeMismatch = "Los códigos no coinciden."
     override fun focusPasscodeSetOn(date: String) = "Establecido el: $date"
@@ -333,6 +348,8 @@ object SpanishStrings : AppStrings {
     override val permBatteryDesc = "Mantiene ShortsCap funcionando de forma fiable en segundo plano."
     override val permStorage = "Acceso a almacenamiento / medios"
     override val permStorageDesc = "Se usa solo para seleccionar la imagen de perfil y futuras funciones de respaldo."
+    override val permSystemAudioAccess = "Acceso de audio del sistema"
+    override val permSystemAudioAccessDesc = "Necesario para que el Modo Estudio cambie el teléfono entre los modos de sonido, vibración y silencio."
 
     // ---- Notifications ----
     override val notificationsTitle = "Notificaciones"

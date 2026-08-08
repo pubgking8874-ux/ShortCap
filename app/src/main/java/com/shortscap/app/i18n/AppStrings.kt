@@ -221,10 +221,15 @@ interface AppStrings {
     val studyRemaining: String
     val studyRestrictionNote: String
     val studyStartSession: String
+    // Study Mode activation confirmation dialog (shown when the user turns the
+    // toggle ON — the session starts only after "Start Study" is confirmed).
     val studyStartConfirmTitle: String
-    val studyStartConfirmMessage: String
     val studyStartConfirmRestrictions: String
     val studyStartConfirmStart: String
+    /** "Duration" — label for the selected-duration row inside the start dialog. */
+    val studyDurationLabel: String
+    /** Formats the selected Study Duration, e.g. "45 Minutes" / "1 Hour 30 Minutes". */
+    fun studyDurationText(minutes: Int): String
     val studyDuration: String
     val studyBreakReminder: String
     val studyBreakDuration: String
@@ -232,6 +237,11 @@ interface AppStrings {
     val studySoundSound: String
     val studySoundVibrate: String
     val studySoundSilent: String
+    // Sound Mode → Android device ringer mode (system audio access)
+    val soundModeAccessRequiredTitle: String
+    val soundModeAccessRequiredDesc: String
+    val soundModeOpenSettings: String
+    val soundModeChangeFailedToast: String
     val studySchedule: String
     val studyScheduleStart: String
     val studyScheduleEnd: String
@@ -267,7 +277,7 @@ interface AppStrings {
     val focusPasscodeSetupSave: String
     /** Status shown on the Study Mode card when no Exit Passcode exists yet. */
     val focusPasscodeNotSet: String
-    /** Green success status — "Passcode Set ✓" on the card + status screen. */
+    /** Green success status — "Passcode Set" on the card + status screen (no checkmark glyph — the green styling alone communicates success). */
     val focusPasscodeSetStatus: String
     /** "Change Passcode" — opens the existing recovery flow from the status screen. */
     val focusPasscodeChange: String
@@ -310,6 +320,10 @@ interface AppStrings {
     val focusPasscodeUpdatedToast: String
     val focusPasscodeTooShort: String
     val focusPasscodeMismatch: String
+    /** "Delete" — three-dot menu action that removes the Exit Passcode configuration. */
+    val focusPasscodeDelete: String
+    /** Toast after the Exit Passcode configuration is deleted. */
+    val focusPasscodeDeletedToast: String
 
     /** "Set on: Aug 8, 2026" — device-local date the Exit Passcode was set. */
     fun focusPasscodeSetOn(date: String): String
@@ -386,6 +400,10 @@ interface AppStrings {
     val permBatteryDesc: String
     val permStorage: String
     val permStorageDesc: String
+    /** "System Audio Access" — Android Notification Policy Access needed by Study Mode's Sound Mode (ring mode control). */
+    val permSystemAudioAccess: String
+    /** Purpose shown on the System Audio Access permission detail page. */
+    val permSystemAudioAccessDesc: String
 
     // ---- Notifications ----
     val notificationsTitle: String

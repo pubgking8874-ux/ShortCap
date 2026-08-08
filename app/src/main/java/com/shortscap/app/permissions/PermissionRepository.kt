@@ -2,6 +2,7 @@ package com.shortscap.app.permissions
 
 import android.Manifest
 import android.app.AppOpsManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -26,7 +27,7 @@ import com.shortscap.app.accessibility.AccessibilityServiceStatus
  */
 object PermissionRepository {
 
-    /** Initial state for the 6 permission cards. */
+    /** Initial state for every permission card. */
     fun seedPermissions(): List<PermissionInfo> = PermissionId.entries.map { id ->
         PermissionInfo(id = id, status = PermissionStatus.NOT_GRANTED)
     }
@@ -51,6 +52,7 @@ object PermissionRepository {
         PermissionId.NOTIFICATIONS -> notificationsStatus(context)
         PermissionId.BATTERY_OPTIMIZATION -> batteryStatus(context)
         PermissionId.STORAGE_MEDIA -> storageStatus(context)
+        PermissionId.SYSTEM_AUDIO_ACCESS -> systemAudioAccessStatus(context)
     }
 
     // ---- Future backend seams (placeholders only — not implemented) ----
@@ -63,6 +65,19 @@ object PermissionRepository {
     /** FUTURE: analytics event fired when a permission status changes. */
     fun trackPermissionAnalytics(permissionId: PermissionId, status: PermissionStatus) {
         // TODO: analytics SDK call.
+    }
+
+    /**
+     * Notification Policy Access — the Android system authorization required
+     * to change the device ringer mode (Sound / Vibrate / Silent). This is
+     * the SINGLE source of truth for that OS state: the Permissions screen
+     * (System Audio Access) and Study Mode's Sound Mode flow both read it
+     * here, so they can never disagree. Granted by the user once in the
+     * system settings page (see PermissionActions), not a runtime permission.
+     */
+    fun isNotificationPolicyAccessGranted(context: Context): Boolean {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return false
+        return nm.isNotificationPolicyAccessGranted
     }
 
     // ---- Real OS checks ----
@@ -139,4 +154,18 @@ object PermissionRepository {
             PackageManager.PERMISSION_GRANTED
         return if (granted) PermissionStatus.GRANTED else PermissionStatus.NOT_GRANTED
     }
+
+    /**
+     * System Audio Access — the REAL Android Notification Policy Access that
+     * Study Mode's Sound Mode requires to change the device ringer mode
+     * (Sound / Vibrate / Silent). Not a runtime permission: it is granted by
+     * the user once in the Android system settings page (see
+     * PermissionActions) and re-checked automatically on every resume.
+     */
+    private fun systemAudioAccessStatus(context: Context): PermissionStatus =
+        if (isNotificationPolicyAccessGranted(context)) {
+            PermissionStatus.GRANTED
+        } else {
+            PermissionStatus.NOT_GRANTED
+        }
 }

@@ -2,10 +2,12 @@ package com.shortscap.app.screens.settings
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,10 +26,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,15 +41,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.shortscap.app.components.ScDivider
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.components.ScSwitch
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.icons.IconKey
+import com.shortscap.app.study.DeviceSoundModeResult
+import com.shortscap.app.study.FocusPasscodeIcon
 import com.shortscap.app.study.StudyModeSettings
 import com.shortscap.app.study.StudySoundMode
 import com.shortscap.app.study.StudySummary
@@ -65,11 +72,13 @@ import com.shortscap.app.theme.ScTextStyles
  *
  * Sections:
  *   STATUS     — Active / Inactive + the ON/OFF activation toggle (the single
- *                control for starting Study Mode). While a session runs it
- *                shows the live countdown.
+ *                control for starting Study Mode — turning it ON opens a
+ *                Start confirmation first). While a session runs it shows the
+ *                live countdown.
  *   SESSION    — Live countdown card shown ONLY while a session is running;
- *                there is no Start button (the Status toggle starts sessions),
- *                and the only way to end early is the Exit Passcode.
+ *                there is no Start button (the Status toggle opens the Start
+ *                confirmation), and the only way to end early is the Exit
+ *                Passcode.
  *   SETTINGS   — Study Duration, Break Reminder, Break Duration, Sound Mode.
  *   EXIT PASSCODE   — Exit Passcode (Not Set / Set + device date-time; the
  *                      ONLY way to end an active session early — via the
@@ -101,7 +110,8 @@ fun StudyModeScreen(
     onSetStudyDuration: (Int) -> Unit,
     onSetStudyBreakReminder: (Boolean) -> Unit,
     onSetStudyBreakDuration: (Int) -> Unit,
-    onSetStudySoundMode: (StudySoundMode) -> Unit,
+    onSetStudySoundMode: (StudySoundMode) -> DeviceSoundModeResult,
+    onOpenSoundModeAccessSettings: () -> Unit,
     onSetStudyScheduleEnabled: (Boolean) -> Unit,
     onSetStudyScheduleStart: (Int) -> Unit,
     onSetStudyScheduleEnd: (Int) -> Unit,
@@ -109,11 +119,14 @@ fun StudyModeScreen(
     onOpenFocusPasscodeSetup: () -> Unit,
     onOpenFocusPasscodeVerify: () -> Unit,
     onOpenFocusPasscodeStatus: () -> Unit,
+    onDeleteFocusPasscode: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
+    var startDialogOpen by remember { mutableStateOf(false) }
     var stopDialogOpen by remember { mutableStateOf(false) }
+    var soundAccessDialogOpen by remember { mutableStateOf(false) }
     var durationDialogOpen by remember { mutableStateOf(false) }
     var breakDurationDialogOpen by remember { mutableStateOf(false) }
     var soundDialogOpen by remember { mutableStateOf(false) }
@@ -144,15 +157,17 @@ fun StudyModeScreen(
             StudyStatusCard(
                 active = studyModeActive,
                 remainingText = formatStudyCountdown(studyRemainingMillis),
-                // The toggle is the SINGLE activation control: OFF → start a
-                // session; ON → the only way to end early is the Focus Exit
-                // Passcode verification (never deactivates directly).
+                // The toggle is the SINGLE activation control: turning it ON
+                // opens the Start confirmation dialog (Study Mode starts only
+                // after the user confirms); while active the only way to end
+                // early is the Exit Passcode verification (never deactivates
+                // directly).
                 onToggle = {
                     if (studyModeActive) {
                         if (focusPasscodeSet) onOpenFocusPasscodeVerify()
                         else onOpenFocusPasscodeSetup()
                     } else {
-                        onStartSession()
+                        startDialogOpen = true
                     }
                 },
             )
@@ -179,7 +194,7 @@ fun StudyModeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(onClick = { stopDialogOpen = true }) {
-                        Icon(Icons.Filled.Lock, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(14.dp))
+                        Icon(FocusPasscodeIcon, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(strings.focusPasscodeVerifyButton, color = colors.TextSecondary, style = ScTextStyles.Caption)
                     }
@@ -220,9 +235,11 @@ fun StudyModeScreen(
             // ---- Exit Passcode (Study Mode protection) ----
             SectionTitle(strings.studyFocusProtection)
             if (focusPasscodeSet) {
-                // Set state — green "Passcode Set ✓" + the device date/time it
-                // was set. Tapping opens the passcode STATUS screen (never an
-                // "enter your password" field; the passcode is not displayed).
+                // Set state — green "Passcode Set" status + the device
+                // date/time it was set, plus a three-dot (⋮) menu to delete
+                // the configuration. Tapping the card opens the passcode
+                // STATUS screen (never an "enter your password" field; the
+                // passcode is not displayed).
                 ScPremiumNavCard(
                     iconKey = IconKey.FOCUS_PASSCODE,
                     title = strings.focusPasscodeTitle,
@@ -230,14 +247,16 @@ fun StudyModeScreen(
                         strings.focusPasscodeSetAt(formatPasscodeSetAt(focusPasscodeSetAtMillis)),
                     onClick = onOpenFocusPasscodeStatus,
                     trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.Success, modifier = Modifier.size(14.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 strings.focusPasscodeSetStatus,
                                 color = colors.Success,
                                 style = ScTextStyles.BodySemiBold,
                                 maxLines = 1,
                             )
+                            // Three-dot menu — the ONLY way to remove the saved
+                            // Exit Passcode configuration (returns to Not Set).
+                            ExitPasscodeOverflowMenu(onDelete = onDeleteFocusPasscode)
                         }
                     },
                 )
@@ -318,6 +337,56 @@ fun StudyModeScreen(
         )
     }
 
+    // ---- Sound Mode: system audio access required — explains why and offers
+    //      "Open Settings" (Notification Policy Access). The selection is NOT
+    //      applied until Android confirms the access; no false success. ----
+    if (soundAccessDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { soundAccessDialogOpen = false },
+            containerColor = colors.Card,
+            titleContentColor = colors.TextPrimary,
+            textContentColor = colors.TextSecondary,
+            title = { Text(strings.soundModeAccessRequiredTitle) },
+            text = { Text(strings.soundModeAccessRequiredDesc, style = ScTextStyles.Body) },
+            confirmButton = {
+                TextButton(onClick = {
+                    soundAccessDialogOpen = false
+                    onOpenSoundModeAccessSettings()
+                }) {
+                    Text(strings.soundModeOpenSettings, color = colors.Accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { soundAccessDialogOpen = false }) {
+                    Text(strings.cancel, color = colors.TextSecondary)
+                }
+            },
+        )
+    }
+
+    // ---- Study Mode activation confirmation — the toggle only opens this
+    //      dialog; Study Mode actually starts AFTER the user confirms. Cancel /
+    //      back / outside-tap simply close it (the toggle stays OFF because it
+    //      is bound to the real session state, which never changed). ----
+    if (startDialogOpen) {
+        Dialog(
+            onDismissRequest = { startDialogOpen = false },
+            properties = DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+            ),
+        ) {
+            StudyStartConfirmDialog(
+                durationMinutes = settings.studyDurationMinutes,
+                onConfirm = {
+                    startDialogOpen = false
+                    onStartSession()
+                },
+                onCancel = { startDialogOpen = false },
+            )
+        }
+    }
+
     // ---- Picker dialogs ----
     PickerDialog(
         title = strings.studyDuration,
@@ -341,7 +410,14 @@ fun StudyModeScreen(
         onDismiss = { soundDialogOpen = false },
         options = soundOptions.map { (mode, label) -> mode.ordinal to label },
         selected = settings.soundMode.ordinal,
-        onSelect = { soundDialogOpen = false; onSetStudySoundMode(StudySoundMode.entries[it]) },
+        onSelect = { index ->
+            soundDialogOpen = false
+            when (onSetStudySoundMode(StudySoundMode.entries[index])) {
+                DeviceSoundModeResult.APPLIED -> Unit // UI updates via the verified Android state
+                DeviceSoundModeResult.POLICY_ACCESS_REQUIRED -> soundAccessDialogOpen = true
+                DeviceSoundModeResult.FAILED -> Unit // ViewModel already toasted the failure
+            }
+        },
     )
     PickerDialog(
         title = strings.studyScheduleStart,
@@ -370,10 +446,146 @@ fun StudyModeScreen(
 private val StudyInactiveRed = Color(0xFF9A4A4A)
 
 /**
+ * Premium Study Mode activation confirmation — shown when the user turns the
+ * toggle ON. Study Mode starts ONLY when "Start Study" (the green primary
+ * action) is confirmed; Cancel / back / outside-tap close it without starting
+ * anything (the toggle stays OFF because it is bound to the real session
+ * state). The duration row always reflects the selected Study Duration.
+ */
+@Composable
+private fun StudyStartConfirmDialog(
+    durationMinutes: Int,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    val shape = RoundedCornerShape(28.dp)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp),
+        shape = shape,
+        color = colors.Card,
+        shadowElevation = 24.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Small study icon tile — "Study Mode is about to start."
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.Accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.MenuBook,
+                    contentDescription = null,
+                    tint = colors.Accent,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            Text(
+                strings.studyStartConfirmTitle,
+                color = colors.TextPrimary,
+                style = ScTextStyles.BodySemiBold.copy(fontSize = 18.sp),
+                textAlign = TextAlign.Center,
+            )
+
+            // Selected duration — always matches the current Study Duration.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.CardHover)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(strings.studyDurationLabel, color = colors.TextSecondary, style = ScTextStyles.Body)
+                Text(strings.studyDurationText(durationMinutes), color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
+            }
+
+            Text(
+                strings.studyStartConfirmRestrictions,
+                color = colors.TextSecondary,
+                style = ScTextStyles.Caption,
+                textAlign = TextAlign.Center,
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            // Actions — Cancel (secondary) on the LEFT, Start Study (primary
+            // green) on the RIGHT.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                StudyDialogButton(
+                    label = strings.cancel,
+                    variant = StudyDialogButtonVariant.SECONDARY,
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f),
+                )
+                StudyDialogButton(
+                    label = strings.studyStartConfirmStart,
+                    variant = StudyDialogButtonVariant.PRIMARY,
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+private enum class StudyDialogButtonVariant { PRIMARY, SECONDARY }
+
+/**
+ * Polished dialog button — rounded, easy to tap, with subtle press feedback
+ * (scale + a soft background shift on the secondary button).
+ */
+@Composable
+private fun StudyDialogButton(
+    label: String,
+    variant: StudyDialogButtonVariant,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalScColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "studyDialogBtnScale")
+    val shape = RoundedCornerShape(14.dp)
+    val bg = when (variant) {
+        // Primary = the positive/confirm action — professional theme green.
+        StudyDialogButtonVariant.PRIMARY -> colors.Success
+        StudyDialogButtonVariant.SECONDARY -> if (pressed) colors.CardHover else colors.Card
+    }
+    val fg = if (variant == StudyDialogButtonVariant.PRIMARY) Color.White else colors.TextPrimary
+    Row(
+        modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(shape)
+            .background(bg, shape)
+            .then(if (variant == StudyDialogButtonVariant.SECONDARY) Modifier.border(1.dp, colors.Divider, shape) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(vertical = 14.dp, horizontal = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = fg, style = ScTextStyles.ButtonLabel, maxLines = 1)
+    }
+}
+
+/**
  * Status header — Active/Inactive + the ON/OFF activation toggle. The switch is
  * the single source of truth for Study Mode's active/inactive UI state: it is
- * bound to the real session state, so it can never flip OFF before the Focus
- * Exit Passcode is verified (or the countdown reaches 00:00).
+ * bound to the real session state, so it can never flip OFF before the Exit
+ * Passcode is verified (or the countdown reaches 00:00).
  */
 @Composable
 private fun StudyStatusCard(
@@ -519,7 +731,7 @@ private fun ActiveSessionCard(
         if (passcodeProtected) {
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Filled.Lock, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(14.dp))
+                Icon(FocusPasscodeIcon, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(14.dp))
                 Text(
                     strings.focusPasscodeLockedNote,
                     color = colors.TextSecondary,

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.DonutLarge
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.shortscap.app.i18n.AppStrings
@@ -28,6 +29,7 @@ fun permissionIcon(id: PermissionId): ImageVector = when (id) {
     PermissionId.NOTIFICATIONS -> Icons.Filled.NotificationsActive
     PermissionId.BATTERY_OPTIMIZATION -> Icons.Filled.BatteryChargingFull
     PermissionId.STORAGE_MEDIA -> Icons.Filled.PhotoLibrary
+    PermissionId.SYSTEM_AUDIO_ACCESS -> Icons.Filled.VolumeUp
 }
 
 /**
@@ -42,6 +44,7 @@ fun permissionIconKey(id: PermissionId): IconKey = when (id) {
     PermissionId.NOTIFICATIONS -> IconKey.PERM_NOTIFICATIONS
     PermissionId.BATTERY_OPTIMIZATION -> IconKey.PERM_BATTERY
     PermissionId.STORAGE_MEDIA -> IconKey.PERM_STORAGE
+    PermissionId.SYSTEM_AUDIO_ACCESS -> IconKey.PERM_SYSTEM_AUDIO
 }
 
 /** Localized title for a permission. */
@@ -52,6 +55,7 @@ fun permissionTitle(id: PermissionId, strings: AppStrings): String = when (id) {
     PermissionId.NOTIFICATIONS -> strings.permNotifications
     PermissionId.BATTERY_OPTIMIZATION -> strings.permBattery
     PermissionId.STORAGE_MEDIA -> strings.permStorage
+    PermissionId.SYSTEM_AUDIO_ACCESS -> strings.permSystemAudioAccess
 }
 
 /** Localized short description (purpose) for a permission. */
@@ -62,6 +66,7 @@ fun permissionDescription(id: PermissionId, strings: AppStrings): String = when 
     PermissionId.NOTIFICATIONS -> strings.permNotificationsDesc
     PermissionId.BATTERY_OPTIMIZATION -> strings.permBatteryDesc
     PermissionId.STORAGE_MEDIA -> strings.permStorageDesc
+    PermissionId.SYSTEM_AUDIO_ACCESS -> strings.permSystemAudioAccessDesc
 }
 
 /**

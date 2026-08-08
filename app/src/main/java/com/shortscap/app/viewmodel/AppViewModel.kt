@@ -1,6 +1,8 @@
 package com.shortscap.app.viewmodel
 
 import android.app.Application
+import android.content.Intent
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shortscap.app.activity.ActivityPeriod
@@ -30,6 +32,7 @@ import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.permissions.PermissionStatus
 import com.shortscap.app.settings.SettingsManager
+import com.shortscap.app.study.DeviceSoundModeResult
 import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.study.FocusPasscodePreferenceStore
 import com.shortscap.app.study.FocusPasscodeRepository
@@ -39,6 +42,9 @@ import com.shortscap.app.study.StudyPreferenceStore
 import com.shortscap.app.study.StudySession
 import com.shortscap.app.study.StudySoundMode
 import com.shortscap.app.study.StudySummary
+import com.shortscap.app.study.applySoundMode
+import com.shortscap.app.study.currentSoundMode
+import com.shortscap.app.study.hasSoundModeAccess
 import com.shortscap.app.study.maskContact
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
@@ -635,8 +641,90 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setStudyBreakDuration(minutes: Int) =
         _uiState.update { it.copy(studySettings = it.studySettings.copy(breakDurationMinutes = minutes)) }
 
-    fun setStudySoundMode(mode: StudySoundMode) =
-        _uiState.update { it.copy(studySettings = it.studySettings.copy(soundMode = mode)) }
+    // ---- Sound Mode → REAL Android device ringer mode ----
+    // Changing the ringer requires Notification Policy Access (system
+    // authorization). A pending selection is remembered so that returning from
+    // the system settings page (after granting access) applies the requested
+    // mode automatically; the ACTUAL Android state is the source of truth.
+
+    // The pending selection is in-memory ONLY: if the OS kills the process
+    // while the user is in system settings, it is lost and the UI re-syncs
+    // to the real Android state on next launch (never restores a stale
+    // ShortsCap value over the user's newer system setting).
+    private var pendingSoundMode: StudySoundMode? = null
+    private var pendingSoundModeAtMillis: Long = 0L
+    private val pendingSoundModeTtlMillis = 5 * 60_000L
+
+    /**
+     * Applies the selected Sound Mode to the ACTUAL Android ringer mode.
+     * Returns the result so the UI can react: APPLIED (verified against
+     * getRingerMode), POLICY_ACCESS_REQUIRED (the UI explains why + offers
+     * "Open Settings"), or FAILED (nothing changed; a clear error is toasted
+     * — success is never claimed before Android confirms the new state).
+     */
+    fun setStudySoundMode(mode: StudySoundMode): DeviceSoundModeResult {
+        val app = getApplication<Application>()
+        if (!app.hasSoundModeAccess()) {
+            // Remember the request; it is applied automatically once the user
+            // returns from system settings with access granted (see
+            // syncSoundModeWithSystem). No state changes until then.
+            pendingSoundMode = mode
+            pendingSoundModeAtMillis = System.currentTimeMillis()
+            return DeviceSoundModeResult.POLICY_ACCESS_REQUIRED
+        }
+        pendingSoundMode = null
+        return when (app.applySoundMode(mode)) {
+            DeviceSoundModeResult.APPLIED -> {
+                _uiState.update { it.copy(studySettings = it.studySettings.copy(soundMode = mode)) }
+                DeviceSoundModeResult.APPLIED
+            }
+            DeviceSoundModeResult.FAILED -> {
+                showToast { it.soundModeChangeFailedToast }
+                DeviceSoundModeResult.FAILED
+            }
+            DeviceSoundModeResult.POLICY_ACCESS_REQUIRED -> DeviceSoundModeResult.POLICY_ACCESS_REQUIRED
+        }
+    }
+
+    /** Opens the system settings page where Notification Policy Access is granted. */
+    fun openSoundModeAccessSettings() {
+        val app = getApplication<Application>()
+        val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (app.packageManager.resolveActivity(intent, 0) == null) {
+            showToast { it.permissionSettingsUnavailableToast }
+            return
+        }
+        if (!runCatching { app.startActivity(intent) }.isSuccess) {
+            showToast { it.permissionSettingsUnavailableToast }
+        }
+    }
+
+    /**
+     * Re-synchronizes Sound Mode with the REAL Android ringer state. Runs on
+     * every app launch + resume: (1) a pending selection is applied once the
+     * user has granted policy access (within a short freshness window — a
+     * stale pending request is never applied over newer system state), and
+     * (2) the UI mirrors the actual ringer mode, so external changes (e.g.
+     * Android Quick Settings) are reflected automatically.
+     */
+    private fun syncSoundModeWithSystem() {
+        val app = getApplication<Application>()
+        val pending = pendingSoundMode
+        val fresh = pending != null && System.currentTimeMillis() - pendingSoundModeAtMillis <= pendingSoundModeTtlMillis
+        if (pending != null && fresh && app.hasSoundModeAccess()) {
+            pendingSoundMode = null
+            if (app.applySoundMode(pending) == DeviceSoundModeResult.FAILED) {
+                showToast { it.soundModeChangeFailedToast }
+            }
+        } else if (pending != null && !fresh) {
+            pendingSoundMode = null // stale — never override the user's newer state
+        }
+        // Source of truth: the actual Android ringer mode.
+        _uiState.update {
+            it.copy(studySettings = it.studySettings.copy(soundMode = app.currentSoundMode()))
+        }
+    }
 
     fun setStudyScheduleEnabled(on: Boolean) =
         _uiState.update {
@@ -815,6 +903,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun updateFocusPasscode(passcode: String): Boolean =
         saveFocusPasscode(passcode) { it.focusPasscodeUpdatedToast }
 
+    /**
+     * Deletes ONLY the Exit Passcode configuration (the salted hash + the
+     * set-at timestamp). The Study Mode section returns to its normal
+     * "not configured" state and the user can create a new passcode again.
+     * No account, Study Mode settings, history, monitoring data or any other
+     * app data is touched. While a session is active, ending it early still
+     * requires creating a new passcode first (protection is never weakened).
+     */
+    fun deleteFocusPasscode() {
+        focusPasscodeStore.clearPasscode()
+        _uiState.update { it.copy(focusPasscodeSet = false, focusPasscodeSetAtMillis = 0L) }
+        showToast { it.focusPasscodeDeletedToast }
+    }
+
     /** Checks an entry against the stored hash (used by the verify screen). */
     fun verifyFocusPasscode(passcode: String): Boolean = focusPasscodeStore.verifyPasscode(passcode)
 
@@ -895,6 +997,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Study Mode runs on every resume too: an expired session ends and
         // restores the normal restriction state the moment the app returns.
         checkStudySessionExpiry()
+        // Sound Mode runs on every resume too: a pending selection is applied
+        // once policy access is granted, and the UI mirrors the ACTUAL Android
+        // ringer mode (external changes via Quick Settings are picked up).
+        syncSoundModeWithSystem()
         // Success feedback: monitoring automatically resumes the moment the
         // required permissions are re-verified as granted (paused → active),
         // with no extra button press — e.g. after returning from Android

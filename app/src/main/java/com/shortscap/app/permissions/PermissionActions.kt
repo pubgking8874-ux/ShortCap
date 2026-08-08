@@ -57,6 +57,12 @@ object PermissionActions {
                     Uri.parse("package:$packageName"),
                 ),
             )
+            // System Audio Access — the official Android page where the user
+            // grants Notification Policy Access (required by Study Mode's
+            // Sound Mode to change the device ringer mode).
+            PermissionId.SYSTEM_AUDIO_ACCESS -> listOf(
+                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
+            )
         }
         for (intent in intents) {
             if (tryLaunch(context, intent)) return true

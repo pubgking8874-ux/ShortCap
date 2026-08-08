@@ -98,12 +98,18 @@ fun FocusPasscodeNavHost(
         }
 
         // 2b. Passcode status — opened from the Study Mode row once a passcode
-        //     exists. Shows the green "Passcode Set ✓" status + device date/time
-        //     only (the passcode itself is never displayed).
+        //     exists. Shows the green "Passcode Set" status + device date/time
+        //     only (the passcode itself is never displayed). The three-dot
+        //     menu deletes ONLY the Exit Passcode configuration and returns
+        //     to the screen that opened the flow (now in its Not Set state).
         composable(FocusPasscodeDestinations.STATUS) {
             FocusPasscodeStatusScreen(
                 setAtMillis = state.focusPasscodeSetAtMillis,
                 onRecover = { navController.navigate(FocusPasscodeDestinations.RECOVER) },
+                onDelete = {
+                    viewModel.deleteFocusPasscode()
+                    navController.backOrClose(onClose)
+                },
                 onBack = { navController.backOrClose(onClose) },
             )
         }

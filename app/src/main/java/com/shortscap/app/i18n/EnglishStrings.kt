@@ -194,10 +194,19 @@ object EnglishStrings : AppStrings {
     override val studyRemaining = "Remaining"
     override val studyRestrictionNote = "Restricted Mode is active and can't be turned off until the countdown reaches 00:00. You can end early only with your Exit Passcode. Shorts platforms stay restricted; your allowed apps and websites remain accessible."
     override val studyStartSession = "Start Study Session"
-    override val studyStartConfirmTitle = "Start Study Session?"
-    override val studyStartConfirmMessage = "Study Mode stays active until the countdown reaches 00:00. There is no Stop or Cancel button during a session — you can end early only with your Exit Passcode — and Restricted Mode remains on until the timer finishes."
-    override val studyStartConfirmRestrictions = "YouTube Shorts, Instagram Reels, Facebook Reels and Snapchat Spotlight stay restricted. YouTube, Google, Calculator, Gallery and your allowed apps/websites remain accessible."
+    override val studyStartConfirmTitle = "Start Study Mode?"
+    override val studyStartConfirmRestrictions = "During this session, your configured study restrictions will remain active until the timer ends."
     override val studyStartConfirmStart = "Start Study"
+    override val studyDurationLabel = "Duration"
+    override fun studyDurationText(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> if (h == 1) "1 Hour" else "$h Hours"
+            h == 0 -> "$m Minutes"
+            else -> "${if (h == 1) "1 Hour" else "$h Hours"} $m Minutes"
+        }
+    }
     override val studyDuration = "Study Duration"
     override val studyBreakReminder = "Break Reminder"
     override val studyBreakDuration = "Break Duration"
@@ -205,6 +214,10 @@ object EnglishStrings : AppStrings {
     override val studySoundSound = "Sound"
     override val studySoundVibrate = "Vibrate"
     override val studySoundSilent = "Silent"
+    override val soundModeAccessRequiredTitle = "System Audio Access Required"
+    override val soundModeAccessRequiredDesc = "Sound Mode requires system audio access to change your phone between Sound, Vibrate and Silent modes."
+    override val soundModeOpenSettings = "Open Settings"
+    override val soundModeChangeFailedToast = "Android did not allow the Sound Mode change."
     override val studySchedule = "Study Schedule"
     override val studyScheduleStart = "Start Time"
     override val studyScheduleEnd = "End Time"
@@ -236,7 +249,7 @@ object EnglishStrings : AppStrings {
     override val focusPasscodeSetupFieldLabel = "Exit Passcode"
     override val focusPasscodeSetupSave = "Create Passcode"
     override val focusPasscodeNotSet = "Passcode Not Set"
-    override val focusPasscodeSetStatus = "Passcode Set ✓"
+    override val focusPasscodeSetStatus = "Passcode Set"
     override val focusPasscodeChange = "Change Passcode"
     override val focusPasscodeCreatedToast = "Exit Passcode created successfully."
     override val focusPasscodeVerifyTitle = "Enter Exit Passcode"
@@ -275,6 +288,8 @@ object EnglishStrings : AppStrings {
     override val focusPasscodeConfirmLabel = "Confirm Passcode"
     override val focusPasscodeCreateSave = "Save New Passcode"
     override val focusPasscodeUpdatedToast = "Exit Passcode updated successfully."
+    override val focusPasscodeDelete = "Delete"
+    override val focusPasscodeDeletedToast = "Exit Passcode deleted."
     override val focusPasscodeTooShort = "Passcode must be at least 8 characters."
     override val focusPasscodeMismatch = "Passcodes do not match."
     override fun focusPasscodeSetOn(date: String) = "Set on: $date"
@@ -333,6 +348,8 @@ object EnglishStrings : AppStrings {
     override val permBatteryDesc = "Keeps ShortsCap running reliably in the background."
     override val permStorage = "Storage / Media Access"
     override val permStorageDesc = "Used only for profile image selection and future backup features."
+    override val permSystemAudioAccess = "System Audio Access"
+    override val permSystemAudioAccessDesc = "Required by Study Mode's Sound Mode to change your phone between Sound, Vibrate and Silent modes."
 
     // ---- Notifications ----
     override val notificationsTitle = "Notifications"

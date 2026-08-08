@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.shortscap.app.study.FocusPasscodeIcon
 
 /**
  * IconTheme — the single, centralized icon manager of ShortsCap.
@@ -83,7 +84,10 @@ object IconTheme {
         // General
         IconKey.LANGUAGE -> Icons.Filled.Language
         IconKey.STUDY_MODE -> Icons.Filled.School
-        IconKey.FOCUS_PASSCODE -> Icons.Filled.Lock
+        // Exit Passcode — study/book + outward exit arrow ("use a passcode to
+        // EXIT Study Mode"), NOT a padlock: the feature gates leaving a
+        // session, it does not lock the device.
+        IconKey.FOCUS_PASSCODE -> FocusPasscodeIcon
 
         // Appearance
         IconKey.THEME -> Icons.Filled.Palette
@@ -117,6 +121,7 @@ object IconTheme {
         IconKey.PERM_NOTIFICATIONS -> Icons.Filled.NotificationsActive
         IconKey.PERM_BATTERY -> Icons.Filled.BatteryChargingFull
         IconKey.PERM_STORAGE -> Icons.Filled.PhotoLibrary
+        IconKey.PERM_SYSTEM_AUDIO -> Icons.Filled.VolumeUp
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> Icons.Filled.HelpOutline
@@ -274,6 +279,7 @@ private object VibrantPalette {
         IconKey.PERM_NOTIFICATIONS -> pink
         IconKey.PERM_BATTERY -> lime
         IconKey.PERM_STORAGE -> cyan
+        IconKey.PERM_SYSTEM_AUDIO -> orange
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> blue

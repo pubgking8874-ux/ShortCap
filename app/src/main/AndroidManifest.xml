@@ -12,6 +12,13 @@
          downloads a site's official favicon.ico (with a public lookup
          fallback) and caches it locally. No other network use today. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+        Sound Mode → Android device ringer mode (Sound / Vibrate / Silent).
+        Changing the ringer via AudioManager.setRingerMode requires this
+        manifest permission AND Notification Policy Access granted by the user
+        in system settings (checked via isNotificationPolicyAccessGranted).
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

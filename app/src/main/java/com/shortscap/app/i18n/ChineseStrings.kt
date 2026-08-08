@@ -194,10 +194,19 @@ object ChineseStrings : AppStrings {
     override val studyRemaining = "剩余"
     override val studyRestrictionNote = "受限模式已激活，在倒计时到达 00:00 前无法关闭。您只能使用退出密码提前结束。短视频平台保持受限；您允许的应用和网站仍可访问。"
     override val studyStartSession = "开始学习会话"
-    override val studyStartConfirmTitle = "开始学习会话？"
-    override val studyStartConfirmMessage = "学习模式将保持激活，直到倒计时到达 00:00。会话期间没有停止或取消按钮 — 您只能使用退出密码提前结束 — 且计时结束前受限模式保持开启。"
-    override val studyStartConfirmRestrictions = "YouTube Shorts、Instagram Reels、Facebook Reels 和 Snapchat Spotlight 保持受限。YouTube、Google、计算器、图库以及您允许的应用/网站仍可访问。"
+    override val studyStartConfirmTitle = "开始专注模式？"
+    override val studyStartConfirmRestrictions = "在此会话期间，您配置的学习限制将在计时器结束前保持激活。"
     override val studyStartConfirmStart = "开始学习"
+    override val studyDurationLabel = "时长"
+    override fun studyDurationText(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> if (h == 1) "1 小时" else "$h 小时"
+            h == 0 -> "$m 分钟"
+            else -> "${if (h == 1) "1 小时" else "$h 小时"} $m 分钟"
+        }
+    }
     override val studyDuration = "学习时长"
     override val studyBreakReminder = "休息提醒"
     override val studyBreakDuration = "休息时长"
@@ -205,6 +214,10 @@ object ChineseStrings : AppStrings {
     override val studySoundSound = "声音"
     override val studySoundVibrate = "振动"
     override val studySoundSilent = "静音"
+    override val soundModeAccessRequiredTitle = "需要系统音频访问权限"
+    override val soundModeAccessRequiredDesc = "声音模式需要系统音频访问权限，才能在声音、振动和静音模式之间切换您的手机。"
+    override val soundModeOpenSettings = "打开设置"
+    override val soundModeChangeFailedToast = "Android 不允许更改声音模式。"
     override val studySchedule = "学习计划"
     override val studyScheduleStart = "开始时间"
     override val studyScheduleEnd = "结束时间"
@@ -236,7 +249,7 @@ object ChineseStrings : AppStrings {
     override val focusPasscodeSetupFieldLabel = "退出密码"
     override val focusPasscodeSetupSave = "创建密码"
     override val focusPasscodeNotSet = "密码未设置"
-    override val focusPasscodeSetStatus = "密码已设置 ✓"
+    override val focusPasscodeSetStatus = "密码已设置"
     override val focusPasscodeChange = "更改密码"
     override val focusPasscodeCreatedToast = "退出密码创建成功。"
     override val focusPasscodeVerifyTitle = "输入退出密码"
@@ -275,6 +288,8 @@ object ChineseStrings : AppStrings {
     override val focusPasscodeConfirmLabel = "确认密码"
     override val focusPasscodeCreateSave = "保存新密码"
     override val focusPasscodeUpdatedToast = "退出密码更新成功。"
+    override val focusPasscodeDelete = "删除"
+    override val focusPasscodeDeletedToast = "退出密码已删除。"
     override val focusPasscodeTooShort = "密码长度至少为 8 个字符。"
     override val focusPasscodeMismatch = "两次输入的密码不一致。"
     override fun focusPasscodeSetOn(date: String) = "设置于: $date"
@@ -333,6 +348,8 @@ object ChineseStrings : AppStrings {
     override val permBatteryDesc = "让 ShortsCap 在后台稳定运行。"
     override val permStorage = "存储 / 媒体访问"
     override val permStorageDesc = "仅用于个人资料图片选择和未来的备份功能。"
+    override val permSystemAudioAccess = "系统音频访问"
+    override val permSystemAudioAccessDesc = "学习模式的“声音模式”需要在声音、振动和静音模式之间切换手机。"
 
     // ---- Notifications ----
     override val notificationsTitle = "通知"

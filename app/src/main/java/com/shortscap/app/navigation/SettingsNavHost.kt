@@ -154,6 +154,7 @@ fun SettingsNavHost(
                 onSetStudyBreakReminder = viewModel::setStudyBreakReminder,
                 onSetStudyBreakDuration = viewModel::setStudyBreakDuration,
                 onSetStudySoundMode = viewModel::setStudySoundMode,
+                onOpenSoundModeAccessSettings = viewModel::openSoundModeAccessSettings,
                 onSetStudyScheduleEnabled = viewModel::setStudyScheduleEnabled,
                 onSetStudyScheduleStart = viewModel::setStudyScheduleStart,
                 onSetStudyScheduleEnd = viewModel::setStudyScheduleEnd,
@@ -166,6 +167,9 @@ fun SettingsNavHost(
                 // Card tap with a passcode set opens the STATUS screen (green
                 // status + device date/time) — never a create/verify field.
                 onOpenFocusPasscodeStatus = { viewModel.openFocusPasscodeFlow(FocusPasscodeEntry.STATUS) },
+                // Three-dot (⋮) menu on the card deletes ONLY the Exit Passcode
+                // configuration — the section returns to its Not Set state.
+                onDeleteFocusPasscode = viewModel::deleteFocusPasscode,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
