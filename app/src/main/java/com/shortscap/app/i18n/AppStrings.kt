@@ -242,6 +242,9 @@ interface AppStrings {
     val resumeMonitoringDialogContinue: String
     val resumeMonitoringDialogNotNow: String
 
+    /** Toast when no Android settings screen could be opened for a missing permission. */
+    val permissionSettingsUnavailableToast: String
+
     /** Toast when monitoring auto-resumes after the required permissions return. */
     val monitoringStartedToast: String
 

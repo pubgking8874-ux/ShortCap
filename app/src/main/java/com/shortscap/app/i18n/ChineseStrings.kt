@@ -215,6 +215,7 @@ object ChineseStrings : AppStrings {
     override val resumeMonitoringDialogRequired = "必需权限："
     override val resumeMonitoringDialogContinue = "继续"
     override val resumeMonitoringDialogNotNow = "暂不"
+    override val permissionSettingsUnavailableToast = "无法打开设置界面。请在设备设置中手动启用所需权限。"
     override val monitoringStartedToast = "监控已启动"
 
     // ---- Time option labels ----

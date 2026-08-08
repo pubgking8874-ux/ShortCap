@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Shown in Android Settings → Accessibility for ShortsCap's own service.
+        The label is the app name so Android displays ShortsCap as its own
+        accessibility service; the description explains the minimum-access,
+        monitoring-only purpose shown to the user before they enable it.
+    -->
+    <string name="accessibility_service_label">ShortsCap</string>
+    <string name="accessibility_service_description">ShortsCap uses this service to detect which app is currently open so it can monitor your short-video usage. It does not read, store, or share any content from other apps.</string>
+</resources>

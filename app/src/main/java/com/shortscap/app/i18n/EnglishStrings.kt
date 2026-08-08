@@ -215,6 +215,7 @@ object EnglishStrings : AppStrings {
     override val resumeMonitoringDialogRequired = "Required permissions:"
     override val resumeMonitoringDialogContinue = "Continue"
     override val resumeMonitoringDialogNotNow = "Not Now"
+    override val permissionSettingsUnavailableToast = "Couldn't open the settings screen. Please enable the required permission manually in your device's Settings."
     override val monitoringStartedToast = "Monitoring Started"
 
     // ---- Time option labels ----

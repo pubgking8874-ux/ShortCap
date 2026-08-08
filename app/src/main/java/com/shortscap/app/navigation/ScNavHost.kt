@@ -56,6 +56,11 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                 // Tapping the paused circle re-checks the required permissions
                 // before showing the resume popup.
                 onRefreshPermissions = viewModel::refreshPermissions,
+                // Localized fallback when no Android settings screen could be
+                // opened for a missing permission (e.g. Accessibility Settings).
+                onPermissionSettingsUnavailable = {
+                    viewModel.showToast { it.permissionSettingsUnavailableToast }
+                },
                 onOpenActivityDaily = viewModel::openActivityDaily,
                 onOpenWebAllowed = { viewModel.openWebSection(WebDestinations.ALLOWED) },
                 onOpenWebBlocked = { viewModel.openWebSection(WebDestinations.BLOCKED) },

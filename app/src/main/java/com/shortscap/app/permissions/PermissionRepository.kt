@@ -10,6 +10,7 @@ import android.os.Process
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.shortscap.app.accessibility.AccessibilityServiceStatus
 
 /**
  * PermissionRepository — the single data seam for the Permissions module.
@@ -100,19 +101,20 @@ object PermissionRepository {
     }
 
     /**
-     * Accessibility Service status. Reads the enabled-accessibility-services
-     * list and checks whether any entry belongs to this package. ShortsCap
-     * does not ship a service yet, so this honestly reports NOT_GRANTED until
-     * the service lands — the check is forward-compatible.
+     * Accessibility Service status — the REAL OS state of ShortsCap's OWN
+     * accessibility service, resolved by the centralized
+     * [com.shortscap.app.accessibility.AccessibilityServiceStatus] checker
+     * (exact ComponentName match against ENABLED_ACCESSIBILITY_SERVICES).
+     * GRANTED only when the user actually enabled the service — never assumed
+     * from merely opening the Settings screen. The derived monitoring-paused
+     * state on Home reads this same result automatically.
      */
-    private fun accessibilityStatus(context: Context): PermissionStatus {
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ) ?: return PermissionStatus.NOT_GRANTED
-        val ours = enabledServices.split(':').any { it.startsWith(context.packageName) }
-        return if (ours) PermissionStatus.GRANTED else PermissionStatus.NOT_GRANTED
-    }
+    private fun accessibilityStatus(context: Context): PermissionStatus =
+        if (AccessibilityServiceStatus.isEnabled(context)) {
+            PermissionStatus.GRANTED
+        } else {
+            PermissionStatus.NOT_GRANTED
+        }
 
     private fun overlayStatus(context: Context): PermissionStatus =
         if (Settings.canDrawOverlays(context)) {

@@ -215,6 +215,7 @@ object HindiStrings : AppStrings {
     override val resumeMonitoringDialogRequired = "आवश्यक अनुमतियाँ:"
     override val resumeMonitoringDialogContinue = "जारी रखें"
     override val resumeMonitoringDialogNotNow = "अभी नहीं"
+    override val permissionSettingsUnavailableToast = "सेटिंग्स स्क्रीन नहीं खुल सकी। कृपया आवश्यक अनुमति अपने डिवाइस की सेटिंग्स में मैन्युअली सक्षम करें।"
     override val monitoringStartedToast = "निगरानी शुरू हो गई"
 
     // ---- Time option labels ----

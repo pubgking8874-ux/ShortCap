@@ -215,6 +215,7 @@ object UrduStrings : AppStrings {
     override val resumeMonitoringDialogRequired = "ضروری اجازتیں:"
     override val resumeMonitoringDialogContinue = "جاری رکھیں"
     override val resumeMonitoringDialogNotNow = "ابھی نہیں"
+    override val permissionSettingsUnavailableToast = "سیٹنگز اسکرین نہیں کھل سکی۔ براہ کرم اپنے آلے کی سیٹنگز میں درکار اجازت دستی طور پر فعال کریں۔"
     override val monitoringStartedToast = "نگرانی شروع ہو گئی"
 
     // ---- Time option labels ----

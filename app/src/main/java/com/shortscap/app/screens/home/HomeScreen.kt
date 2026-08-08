@@ -77,6 +77,10 @@ fun HomeScreen(
     monitoringPaused: Boolean = false,
     missingRequiredPermissions: List<PermissionId> = emptyList(),
     onRefreshPermissions: () -> Unit,
+    // Fired when no Android settings screen could be opened for a missing
+    // permission (e.g. the Accessibility settings screen is unavailable) —
+    // the UI shows a professional fallback message instead of failing.
+    onPermissionSettingsUnavailable: () -> Unit,
     onOpenActivityDaily: () -> Unit,
     onOpenWebAllowed: () -> Unit,
     onOpenWebBlocked: () -> Unit,
@@ -247,10 +251,13 @@ fun HomeScreen(
                 TextButton(
                     onClick = {
                         // Open the Android settings page for the first missing
-                        // required permission; the popup itself only closes.
-                        missingRequiredPermissions.firstOrNull()?.let {
+                        // required permission (Accessibility falls back to the
+                        // app-details route automatically). If NOTHING could
+                        // be opened, inform the user with a fallback message.
+                        val opened = missingRequiredPermissions.firstOrNull()?.let {
                             PermissionActions.open(context, it)
-                        }
+                        } ?: false
+                        if (!opened) onPermissionSettingsUnavailable()
                         resumeDialogOpen = false
                     },
                 ) {

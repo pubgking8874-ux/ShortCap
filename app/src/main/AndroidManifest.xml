@@ -58,6 +58,31 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            ShortsCap's OWN Accessibility Service (monitoring component, not UI
+            automation). Declared so ShortsCap appears as its own service under
+            Android Settings → Accessibility and the app can detect its real
+            enabled/disabled state (AccessibilityServiceStatus).
+
+            exported=true: on Android 12+ every service with an intent-filter
+            must declare it, and the system AccessibilityManager needs to
+            discover this service. Binding is still safe — only the system can
+            bind, because BIND_ACCESSIBILITY_SERVICE is a signature-level
+            permission no third-party app can hold.
+        -->
+        <service
+            android:name=".accessibility.ShortsCapAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
     </application>
 
 </manifest>
