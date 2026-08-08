@@ -19,6 +19,7 @@ import com.shortscap.app.screens.settings.FocusPasscodeMobileScreen
 import com.shortscap.app.screens.settings.FocusPasscodeOtpScreen
 import com.shortscap.app.screens.settings.FocusPasscodeRecoverScreen
 import com.shortscap.app.screens.settings.FocusPasscodeSetupScreen
+import com.shortscap.app.screens.settings.FocusPasscodeStatusScreen
 import com.shortscap.app.screens.settings.FocusPasscodeVerifyScreen
 import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.study.FocusRecoveryMethod
@@ -26,22 +27,23 @@ import com.shortscap.app.viewmodel.AppUiState
 import com.shortscap.app.viewmodel.AppViewModel
 
 /**
- * Focus Exit Passcode flow — ONE shared overlay NavHost for the entire
- * passcode UI (setup, verification, recovery, email/mobile, OTP, create).
+ * Exit Passcode flow — ONE shared overlay NavHost for the entire passcode UI
+ * (setup, verification, status, recovery, email/mobile, OTP, create).
  *
  * It is rendered at the app root (ShortsCapApp) as a full-screen overlay and
- * is opened from BOTH the Home page (tap active Study Mode → \"Stop Study
- * Mode?\" → verify) and General → Study Mode (active card / Focus Protection
- * row). Both entry points land on the exact same screens, so there is exactly
- * ONE verification UI, ONE passcode and ONE recovery system in the app — and
- * both callers observe the SAME global Study Mode state, so they can never
- * disagree. Closing the overlay returns to whatever screen opened it.
+ * is opened from BOTH the Home page (tap active Study Mode → verify) and
+ * General → Study Mode (active card / Exit Passcode row). Both entry points
+ * land on the exact same screens, so there is exactly ONE verification UI,
+ * ONE passcode and ONE recovery system in the app — and both callers observe
+ * the SAME global Study Mode state, so they can never disagree. Closing the
+ * overlay returns to whatever screen opened it.
  *
  * It deliberately does NOT look like the Sign In / Sign Up / auth OTP flows.
  */
 object FocusPasscodeDestinations {
     const val SETUP = "focus_passcode_setup"
     const val VERIFY = "focus_passcode_verify"
+    const val STATUS = "focus_passcode_status"
     const val RECOVER = "focus_passcode_recover"
     const val EMAIL = "focus_passcode_email"
     const val MOBILE = "focus_passcode_mobile"
@@ -68,10 +70,10 @@ fun FocusPasscodeNavHost(
     onClose: () -> Unit,
 ) {
     val navController = rememberNavController()
-    val startRoute = if (entry == FocusPasscodeEntry.SETUP) {
-        FocusPasscodeDestinations.SETUP
-    } else {
-        FocusPasscodeDestinations.VERIFY
+    val startRoute = when (entry) {
+        FocusPasscodeEntry.SETUP -> FocusPasscodeDestinations.SETUP
+        FocusPasscodeEntry.STATUS -> FocusPasscodeDestinations.STATUS
+        FocusPasscodeEntry.VERIFY -> FocusPasscodeDestinations.VERIFY
     }
 
     NavHost(
@@ -91,6 +93,17 @@ fun FocusPasscodeNavHost(
                         true
                     } else false
                 },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        // 2b. Passcode status — opened from the Study Mode row once a passcode
+        //     exists. Shows the green "Passcode Set ✓" status + device date/time
+        //     only (the passcode itself is never displayed).
+        composable(FocusPasscodeDestinations.STATUS) {
+            FocusPasscodeStatusScreen(
+                setAtMillis = state.focusPasscodeSetAtMillis,
+                onRecover = { navController.navigate(FocusPasscodeDestinations.RECOVER) },
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -178,16 +191,20 @@ fun FocusPasscodeNavHost(
         }
 
         // 7. Create new passcode after successful OTP — then return to the
-        //    ORIGINAL verification screen (single VERIFY entry) so the new
-        //    passcode can be used immediately. Popping back (rather than
-        //    navigating + popUpTo) keeps exactly one VERIFY on the stack, so
-        //    ending the session there closes the overlay cleanly instead of
-        //    landing on a stale second verify screen.
+        //    screen that STARTED recovery (VERIFY for an active-session exit,
+        //    or STATUS for passcode management) so the new passcode can be
+        //    used / seen immediately. Popping back (rather than navigating +
+        //    popUpTo) keeps exactly one start screen on the stack, so ending
+        //    a session there closes the overlay cleanly instead of landing on
+        //    a stale second verify screen.
         composable(FocusPasscodeDestinations.CREATE) {
             FocusPasscodeCreateScreen(
                 onSave = { passcode ->
                     if (viewModel.updateFocusPasscode(passcode)) {
-                        navController.popBackStack(FocusPasscodeDestinations.VERIFY, inclusive = false)
+                        val poppedVerify = navController.popBackStack(FocusPasscodeDestinations.VERIFY, inclusive = false)
+                        if (!poppedVerify) {
+                            navController.popBackStack(FocusPasscodeDestinations.STATUS, inclusive = false)
+                        }
                         true
                     } else false
                 },

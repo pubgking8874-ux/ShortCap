@@ -148,6 +148,7 @@ fun SettingsNavHost(
                 studyTotalMillis = state.studyTotalMillis,
                 summary = state.studySummary,
                 focusPasscodeSet = state.focusPasscodeSet,
+                focusPasscodeSetAtMillis = state.focusPasscodeSetAtMillis,
                 onStartSession = viewModel::startStudySession,
                 onSetStudyDuration = viewModel::setStudyDuration,
                 onSetStudyBreakReminder = viewModel::setStudyBreakReminder,
@@ -157,11 +158,14 @@ fun SettingsNavHost(
                 onSetStudyScheduleStart = viewModel::setStudyScheduleStart,
                 onSetStudyScheduleEnd = viewModel::setStudyScheduleEnd,
                 onOpenAllowed = { navController.navigate(SettingsDestinations.STUDY_ALLOWED) },
-                // Focus Exit Passcode flows live in their own root overlay
+                // Exit Passcode flows live in their own root overlay
                 // (FocusPasscodeNavHost) — shared by Home AND Study Mode, so
                 // both exit paths use the exact same verification/recovery UI.
                 onOpenFocusPasscodeSetup = { viewModel.openFocusPasscodeFlow(FocusPasscodeEntry.SETUP) },
                 onOpenFocusPasscodeVerify = { viewModel.openFocusPasscodeFlow(FocusPasscodeEntry.VERIFY) },
+                // Card tap with a passcode set opens the STATUS screen (green
+                // status + device date/time) — never a create/verify field.
+                onOpenFocusPasscodeStatus = { viewModel.openFocusPasscodeFlow(FocusPasscodeEntry.STATUS) },
                 onBack = { navController.backOrClose(onClose) },
             )
         }

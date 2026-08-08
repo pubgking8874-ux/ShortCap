@@ -258,11 +258,11 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                         }
                     }
 
-                    // Focus Exit Passcode flow — ONE shared overlay rendered on
-                    // top of everything, opened from BOTH the Home page (tap
-                    // active Study Mode → Stop Study Mode?) and General → Study
-                    // Mode. Both callers land on the exact same verification +
-                    // recovery screens and observe the SAME Study Mode state.
+                    // Exit Passcode flow — ONE shared overlay rendered on top
+                    // of everything, opened from BOTH the Home page (tap active
+                    // Study Mode) and General → Study Mode. Both callers land on
+                    // the exact same verification / status / recovery screens
+                    // and observe the SAME Study Mode state.
                     state.focusPasscodeFlow?.let { entry ->
                         key(entry) {
                             FocusPasscodeNavHost(

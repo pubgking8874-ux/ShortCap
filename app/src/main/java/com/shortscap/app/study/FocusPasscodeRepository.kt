@@ -1,7 +1,7 @@
 package com.shortscap.app.study
 
 /**
- * FocusPasscodeRepository — backend seam for the Focus Exit Passcode
+ * FocusPasscodeRepository — backend seam for the Exit Passcode
  * recovery flow (mirrors the SettingsRepository / StudyRepository pattern).
  *
  * Today this holds the LOCAL MOCK OTP implementation (in-memory, per-flow):

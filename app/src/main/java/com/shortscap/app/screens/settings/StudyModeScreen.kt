@@ -1,5 +1,7 @@
 package com.shortscap.app.screens.settings
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,8 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.shortscap.app.components.ScButton
-import com.shortscap.app.components.ScButtonVariant
 import com.shortscap.app.components.ScDivider
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
@@ -50,6 +51,8 @@ import com.shortscap.app.icons.IconKey
 import com.shortscap.app.study.StudyModeSettings
 import com.shortscap.app.study.StudySoundMode
 import com.shortscap.app.study.StudySummary
+import com.shortscap.app.study.formatPasscodeSetAt
+import com.shortscap.app.study.formatPasscodeSetOn
 import com.shortscap.app.study.formatStudyClock
 import com.shortscap.app.study.formatStudyCountdown
 import com.shortscap.app.theme.LocalScColors
@@ -61,15 +64,16 @@ import com.shortscap.app.theme.ScTextStyles
  * no duplicate controls anywhere else in the app.
  *
  * Sections:
- *   STATUS     — Active / Inactive + live countdown while a session runs.
- *   SESSION    — Start Study Session (with a pre-start confirmation that
- *                clearly states there is NO Stop/Cancel during a session and
- *                that Restricted Mode stays on until 00:00). While active the
- *                button is replaced by the live countdown — there is no way
- *                to stop early.
+ *   STATUS     — Active / Inactive + the ON/OFF activation toggle (the single
+ *                control for starting Study Mode). While a session runs it
+ *                shows the live countdown.
+ *   SESSION    — Live countdown card shown ONLY while a session is running;
+ *                there is no Start button (the Status toggle starts sessions),
+ *                and the only way to end early is the Exit Passcode.
  *   SETTINGS   — Study Duration, Break Reminder, Break Duration, Sound Mode.
- *   FOCUS PROTECTION — Focus Exit Passcode (set/status; the ONLY way to end
- *                      an active session early — via the verify screen).
+ *   EXIT PASSCODE   — Exit Passcode (Not Set / Set + device date-time; the
+ *                      ONLY way to end an active session early — via the
+ *                      verify screen).
  *   SCHEDULE   — Study Schedule (enabled + start/end window).
  *   ALLOWED    — Allowed Apps/Websites (stays accessible during sessions).
  *   SUMMARY    — Study Session Summary (derived when sessions complete).
@@ -87,10 +91,12 @@ fun StudyModeScreen(
     studyRemainingMillis: Long,
     studyTotalMillis: Long,
     summary: StudySummary,
-    // Focus Exit Passcode — set/status shown in the Focus Protection section;
-    // while a session is active the ONLY way to end early is the passcode
-    // verification screen (the subtle exit below the countdown).
+    // Exit Passcode — set/status shown in the Exit Passcode section; while a
+    // session is active the ONLY way to end early is the passcode verification
+    // screen (the subtle exit below the countdown).
     focusPasscodeSet: Boolean,
+    /** Device wall-clock millis when the Exit Passcode was set (shown as "Set on/at"). */
+    focusPasscodeSetAtMillis: Long,
     onStartSession: () -> Unit,
     onSetStudyDuration: (Int) -> Unit,
     onSetStudyBreakReminder: (Boolean) -> Unit,
@@ -102,11 +108,11 @@ fun StudyModeScreen(
     onOpenAllowed: () -> Unit,
     onOpenFocusPasscodeSetup: () -> Unit,
     onOpenFocusPasscodeVerify: () -> Unit,
+    onOpenFocusPasscodeStatus: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
-    var startDialogOpen by remember { mutableStateOf(false) }
     var stopDialogOpen by remember { mutableStateOf(false) }
     var durationDialogOpen by remember { mutableStateOf(false) }
     var breakDurationDialogOpen by remember { mutableStateOf(false) }
@@ -138,15 +144,27 @@ fun StudyModeScreen(
             StudyStatusCard(
                 active = studyModeActive,
                 remainingText = formatStudyCountdown(studyRemainingMillis),
-                note = strings.studyRestrictionNote,
+                // The toggle is the SINGLE activation control: OFF → start a
+                // session; ON → the only way to end early is the Focus Exit
+                // Passcode verification (never deactivates directly).
+                onToggle = {
+                    if (studyModeActive) {
+                        if (focusPasscodeSet) onOpenFocusPasscodeVerify()
+                        else onOpenFocusPasscodeSetup()
+                    } else {
+                        onStartSession()
+                    }
+                },
             )
 
-            // ---- Session ----
-            SectionTitle(strings.studySessionSection)
+            // ---- Session (only while a session is running — the Status
+            //      toggle above is the single activation control; there is no
+            //      separate Start button) ----
             if (studyModeActive) {
+                SectionTitle(strings.studySessionSection)
                 // The whole active session card is TAPPABLE: it opens the
                 // "Stop Study Mode?" confirmation (never stops directly) whose
-                // confirm leads to the SHARED Focus Exit Passcode verification.
+                // confirm leads to the SHARED Exit Passcode verification.
                 ActiveSessionCard(
                     remainingMillis = studyRemainingMillis,
                     totalMillis = studyTotalMillis,
@@ -166,13 +184,6 @@ fun StudyModeScreen(
                         Text(strings.focusPasscodeVerifyButton, color = colors.TextSecondary, style = ScTextStyles.Caption)
                     }
                 }
-            } else {
-                ScButton(
-                    label = strings.studyStartSession,
-                    variant = ScButtonVariant.PRIMARY,
-                    onClick = { startDialogOpen = true },
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
 
             // ---- Settings ----
@@ -206,21 +217,36 @@ fun StudyModeScreen(
                 },
             )
 
-            // ---- Focus Protection (Focus Exit Passcode) ----
+            // ---- Exit Passcode (Study Mode protection) ----
             SectionTitle(strings.studyFocusProtection)
             if (focusPasscodeSet) {
+                // Set state — green "Passcode Set ✓" + the device date/time it
+                // was set. Tapping opens the passcode STATUS screen (never an
+                // "enter your password" field; the passcode is not displayed).
                 ScPremiumNavCard(
                     iconKey = IconKey.FOCUS_PASSCODE,
                     title = strings.focusPasscodeTitle,
-                    subtitle = strings.focusPasscodeLockedNote,
-                    onClick = onOpenFocusPasscodeVerify,
-                    trailing = { TrailingValue(strings.focusPasscodeSetStatus) },
+                    subtitle = "${strings.focusPasscodeSetOn(formatPasscodeSetOn(focusPasscodeSetAtMillis))}\n" +
+                        strings.focusPasscodeSetAt(formatPasscodeSetAt(focusPasscodeSetAtMillis)),
+                    onClick = onOpenFocusPasscodeStatus,
+                    trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.Success, modifier = Modifier.size(14.dp))
+                            Text(
+                                strings.focusPasscodeSetStatus,
+                                color = colors.Success,
+                                style = ScTextStyles.BodySemiBold,
+                                maxLines = 1,
+                            )
+                        }
+                    },
                 )
             } else {
+                // Not set — neutral state; tapping opens the create flow.
                 ScPremiumNavCard(
                     iconKey = IconKey.FOCUS_PASSCODE,
-                    title = strings.focusPasscodeSetupTitle,
-                    subtitle = strings.focusPasscodeSetupDesc,
+                    title = strings.focusPasscodeTitle,
+                    subtitle = strings.focusPasscodeNotSet,
                     onClick = onOpenFocusPasscodeSetup,
                 )
             }
@@ -264,7 +290,7 @@ fun StudyModeScreen(
     }
 
     // ---- "Stop Study Mode?" confirmation (active session) — opens the
-    //      SHARED Focus Exit Passcode verification; without a passcode set the
+    //      SHARED Exit Passcode verification; without a passcode set the
     //      user is routed to first-time setup. Study Mode itself is only ended
     //      after the passcode is verified (or 00:00 reached naturally). ----
     if (stopDialogOpen) {
@@ -286,36 +312,6 @@ fun StudyModeScreen(
             },
             dismissButton = {
                 TextButton(onClick = { stopDialogOpen = false }) {
-                    Text(strings.cancel, color = colors.TextSecondary)
-                }
-            },
-        )
-    }
-
-    // ---- Pre-start confirmation: no stop/cancel, Restricted Mode until 00:00 ----
-    if (startDialogOpen) {
-        AlertDialog(
-            onDismissRequest = { startDialogOpen = false },
-            containerColor = colors.Card,
-            titleContentColor = colors.TextPrimary,
-            textContentColor = colors.TextSecondary,
-            title = { Text(strings.studyStartConfirmTitle) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(strings.studyStartConfirmMessage, style = ScTextStyles.Body)
-                    Text(strings.studyStartConfirmRestrictions, style = ScTextStyles.Body)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    startDialogOpen = false
-                    onStartSession()
-                }) {
-                    Text(strings.studyStartConfirmStart, color = colors.Accent)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { startDialogOpen = false }) {
                     Text(strings.cancel, color = colors.TextSecondary)
                 }
             },
@@ -365,12 +361,30 @@ fun StudyModeScreen(
     )
 }
 
-/** Status header — Active with the live countdown, or Inactive. */
+/**
+ * Muted brick red used for the Study Mode INACTIVE state (status text, icon
+ * tile and toggle track). Deliberately NOT the bright theme Danger red — a
+ * professional, subdued warning tone that fits the dark theme, stays legible
+ * against the card background, and clearly contrasts with the Active green.
+ */
+private val StudyInactiveRed = Color(0xFF9A4A4A)
+
+/**
+ * Status header — Active/Inactive + the ON/OFF activation toggle. The switch is
+ * the single source of truth for Study Mode's active/inactive UI state: it is
+ * bound to the real session state, so it can never flip OFF before the Focus
+ * Exit Passcode is verified (or the countdown reaches 00:00).
+ */
 @Composable
-private fun StudyStatusCard(active: Boolean, remainingText: String, note: String) {
+private fun StudyStatusCard(
+    active: Boolean,
+    remainingText: String,
+    onToggle: () -> Unit,
+) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
     val shape = RoundedCornerShape(22.dp)
+    val statusColor = if (active) colors.Success else StudyInactiveRed
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -385,20 +399,20 @@ private fun StudyStatusCard(active: Boolean, remainingText: String, note: String
             modifier = Modifier
                 .size(44.dp)
                 .clip(RoundedCornerShape(13.dp))
-                .background(if (active) colors.Success.copy(alpha = 0.16f) else colors.CardHover),
+                .background(statusColor.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Filled.MenuBook,
                 contentDescription = null,
-                tint = if (active) colors.Success else colors.TextSecondary,
+                tint = statusColor,
                 modifier = Modifier.size(24.dp),
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 if (active) strings.studyStatusActive else strings.studyStatusInactive,
-                color = if (active) colors.Success else colors.TextPrimary,
+                color = statusColor,
                 style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp),
             )
             if (active) {
@@ -410,6 +424,43 @@ private fun StudyStatusCard(active: Boolean, remainingText: String, note: String
                 )
             }
         }
+        StudyModeToggle(on = active, onToggle = onToggle)
+    }
+}
+
+/**
+ * Polished Android-style switch with a clear thumb/track (same compact 42x24
+ * footprint as [com.shortscap.app.components.ScSwitch]). The track color
+ * animates smoothly between professional green (Active) and the muted inactive
+ * red (Inactive); the thumb stays white for a clean, balanced look.
+ */
+@Composable
+private fun StudyModeToggle(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalScColors.current
+    val knobOffset by animateDpAsState(if (on) 21.dp else 3.dp, label = "studyToggleKnob")
+    val trackColor by animateColorAsState(
+        if (on) colors.Success else StudyInactiveRed,
+        label = "studyToggleTrack",
+    )
+    Box(
+        modifier = modifier
+            .width(42.dp)
+            .height(24.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(trackColor)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onToggle,
+            ),
+    ) {
+        Box(
+            Modifier
+                .padding(top = 3.dp, start = knobOffset)
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(Color.White),
+        )
     }
 }
 

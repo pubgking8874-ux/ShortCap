@@ -5,7 +5,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * FocusPasscodePreferenceStore — local storage for the Focus Exit Passcode.
+ * FocusPasscodePreferenceStore — local storage for the Exit Passcode.
  *
  * SECURITY: the passcode is NEVER stored as plain text. A per-install random
  * salt is generated once and persisted, and only
@@ -24,6 +24,13 @@ class FocusPasscodePreferenceStore(context: Context) {
 
     /** True once a passcode has been created (never cleared by Reset All). */
     fun isPasscodeSet(): Boolean = prefs.contains(KEY_HASH)
+
+    /**
+     * Wall-clock millis (device time source) when the passcode was last set.
+     * Only the timestamp is exposed — never the passcode or its hash.
+     */
+    fun getPasscodeSetAtMillis(): Long? =
+        if (prefs.contains(KEY_UPDATED_AT)) prefs.getLong(KEY_UPDATED_AT, 0L) else null
 
     /** Hashes and stores a NEW passcode (the old one becomes invalid). */
     fun savePasscode(passcode: String) {

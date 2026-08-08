@@ -253,19 +253,24 @@ interface AppStrings {
     val studyHomeTitle: String
 
     // "Stop Study Mode?" confirmation — the shared early-exit gate on the Home
-    // page AND General → Study Mode (leads to the Focus Exit Passcode).
+    // page AND General → Study Mode (leads to the Exit Passcode).
     val studyStopTitle: String
     val studyStopMessage: String
     val studyStopAction: String
 
-    // ---- Focus Exit Passcode (Study Mode protection & recovery) ----
+    // ---- Exit Passcode (Study Mode protection & recovery) ----
     val studyFocusProtection: String
     val focusPasscodeTitle: String
     val focusPasscodeSetupTitle: String
     val focusPasscodeSetupDesc: String
     val focusPasscodeSetupFieldLabel: String
     val focusPasscodeSetupSave: String
+    /** Status shown on the Study Mode card when no Exit Passcode exists yet. */
+    val focusPasscodeNotSet: String
+    /** Green success status — "Passcode Set ✓" on the card + status screen. */
     val focusPasscodeSetStatus: String
+    /** "Change Passcode" — opens the existing recovery flow from the status screen. */
+    val focusPasscodeChange: String
     val focusPasscodeCreatedToast: String
     val focusPasscodeVerifyTitle: String
     val focusPasscodeVerifyDesc: String
@@ -305,6 +310,12 @@ interface AppStrings {
     val focusPasscodeUpdatedToast: String
     val focusPasscodeTooShort: String
     val focusPasscodeMismatch: String
+
+    /** "Set on: Aug 8, 2026" — device-local date the Exit Passcode was set. */
+    fun focusPasscodeSetOn(date: String): String
+
+    /** "Set at: 7:42 PM" — device-local time the Exit Passcode was set. */
+    fun focusPasscodeSetAt(time: String): String
 
     /** "Resend code in 45s" — resend countdown on the OTP page. */
     fun focusPasscodeOtpResendIn(seconds: Int): String

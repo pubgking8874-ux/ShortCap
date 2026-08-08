@@ -60,8 +60,8 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                 // Study Mode — timestamp-based remaining time; the Home
                 // carousel leads with the study countdown while active and
                 // returns to the normal Shorts monitoring UI at 00:00. Tapping
-                // the active Study Mode page opens the SHARED Focus Exit
-                // Passcode verification (same screen as General → Study Mode).
+                // the active Study Mode page opens the SHARED Exit Passcode
+                // verification (same screen as General → Study Mode).
                 studyModeActive = state.studyModeActive,
                 studyRemainingMillis = state.studyRemainingMillis,
                 studyTotalMillis = state.studyTotalMillis,

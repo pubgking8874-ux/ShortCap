@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
@@ -60,14 +61,16 @@ import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.study.FocusCountry
 import com.shortscap.app.study.FocusRecoveryMethod
 import com.shortscap.app.study.FocusSupportedCountries
+import com.shortscap.app.study.formatPasscodeSetAt
+import com.shortscap.app.study.formatPasscodeSetOn
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 import kotlinx.coroutines.delay
 
 /**
- * Focus Exit Passcode — Study Mode protection & recovery screens.
+ * Exit Passcode — Study Mode protection & recovery screens.
  *
- * These pages are a dedicated "Study Focus Protection & Recovery" system:
+ * These pages are a dedicated "Exit Passcode Protection & Recovery" system:
  * they deliberately look NOTHING like the Sign In / Sign Up / auth OTP
  * screens. They reuse the Study Mode visual identity (lock/focus/book icon,
  * clean card, ShortsCap dark theme, ScTextStyles) and every label comes from
@@ -76,8 +79,10 @@ import kotlinx.coroutines.delay
  * Flow (routes in SettingsNavHost):
  *   Setup   → verify → (Forgot Passcode?) → Recover → Email | Mobile
  *           → OTP (6-digit, resend countdown, demo code in the mock) → Create new
+ *   Status  → the Study Mode row once a passcode exists (green status +
+ *           device date/time only — the passcode is never displayed).
  * The ONLY way to end an active Study Mode session early is a correct
- * Focus Exit Passcode ([FocusPasscodeVerifyScreen]); natural completion at
+ * Exit Passcode ([FocusPasscodeVerifyScreen]); natural completion at
  * 00:00 never requires one.
  */
 
@@ -209,11 +214,11 @@ private fun FocusError(text: String) {
 }
 
 // =====================================================================
-// 1. First-time setup — Set Focus Exit Passcode
+// 1. First-time setup — Set Exit Passcode
 // =====================================================================
 
 /**
- * First-time setup. Shown when no Focus Exit Passcode exists yet. There is
+ * First-time setup. Shown when no Exit Passcode exists yet. There is
  * deliberately NO "Forgot Passcode?" here — the user has not created one.
  */
 @Composable
@@ -252,13 +257,14 @@ fun FocusPasscodeSetupScreen(
 }
 
 // =====================================================================
-// 2. Verification — Enter Focus Exit Passcode (gated session end)
+// 2. Verification — Enter Exit Passcode (gated session end)
 // =====================================================================
 
 /**
  * The ONLY way to manually end an active Study Mode session. Incorrect
  * entries keep Study Mode fully active (countdown + restrictions untouched)
- * and simply show a calm error so the user can try again.
+ * and simply show a calm error so the user can try again. Opened when the
+ * user attempts to turn Study Mode off (toggle / active card / Home).
  */
 @Composable
 fun FocusPasscodeVerifyScreen(
@@ -310,7 +316,72 @@ fun FocusPasscodeVerifyScreen(
 }
 
 // =====================================================================
-// 3. Recovery method — Recover Focus Exit Passcode
+// 2b. Passcode Status — opened from the Study Mode row once a passcode exists
+// =====================================================================
+
+/**
+ * Exit Passcode status/management screen — opened by tapping the Study Mode
+ * row after a passcode has been created. Shows ONLY the green success status
+ * plus the device date/time it was set ("Set on / Set at"); the passcode
+ * itself is NEVER displayed (the store keeps only a salted hash).
+ * "Change Passcode" routes to the existing recovery flow.
+ */
+@Composable
+fun FocusPasscodeStatusScreen(
+    setAtMillis: Long,
+    onRecover: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val strings = LocalAppStrings.current
+    val colors = LocalScColors.current
+    val shape = RoundedCornerShape(18.dp)
+    FocusPage(title = strings.focusPasscodeTitle, onBack = onBack) {
+        FocusHero(
+            icon = Icons.Filled.Lock,
+            title = strings.focusPasscodeTitle,
+            subtitle = strings.focusPasscodeLockedNote,
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(colors.Card, shape)
+                .border(1.dp, colors.Divider, shape)
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = colors.Success, modifier = Modifier.size(16.dp))
+                Text(strings.focusPasscodeSetStatus, color = colors.Success, style = ScTextStyles.BodySemiBold)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                strings.focusPasscodeSetOn(formatPasscodeSetOn(setAtMillis)),
+                color = colors.TextSecondary,
+                style = ScTextStyles.Body,
+            )
+            Text(
+                strings.focusPasscodeSetAt(formatPasscodeSetAt(setAtMillis)),
+                color = colors.TextSecondary,
+                style = ScTextStyles.Body,
+            )
+        }
+
+        // "Change Passcode" → the SAME recovery flow as "Forgot Passcode?".
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            TextButton(onClick = onRecover) {
+                Text(strings.focusPasscodeChange, color = colors.Accent)
+            }
+        }
+    }
+}
+
+// =====================================================================
+// 3. Recovery method — Recover Exit Passcode
 // =====================================================================
 
 /** Step 1 of recovery: choose Email OR Mobile (two separate cards). */
@@ -621,7 +692,7 @@ fun FocusPasscodeOtpScreen(
 }
 
 // =====================================================================
-// 7. Create New Focus Exit Passcode (after successful OTP)
+// 7. Create New Exit Passcode (after successful OTP)
 // =====================================================================
 
 /** New + Confirm passcode with eye toggles; both must match (min 8 chars). */

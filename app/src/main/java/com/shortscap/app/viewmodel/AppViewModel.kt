@@ -126,13 +126,18 @@ data class AppUiState(
     val activeStudySession: StudySession? = null,
     val studySummary: StudySummary = StudySummary(),
 
-    // Focus Exit Passcode (Study Mode protection) — controls ONLY the
+    // Exit Passcode (Study Mode protection) — controls ONLY the
     // ability to end an active session early. [focusPasscodeSet] is loaded
-    // from the salted-hash store; [focusOtpDemoCode] / [focusOtpContactMasked]
-    // exist purely for the LOCAL MOCK recovery flow (the UI shows the demo
-    // code + masked contact because there is no email/SMS backend yet) and
-    // disappear when the backend OTP APIs land — the UI code does not change.
+    // from the salted-hash store; [focusPasscodeSetAtMillis] is the device
+    // wall-clock timestamp of when it was set (displayed as "Set on / Set at"
+    // — never the credential itself); [focusOtpDemoCode] /
+    // [focusOtpContactMasked] exist purely for the LOCAL MOCK recovery flow
+    // (the UI shows the demo code + masked contact because there is no
+    // email/SMS backend yet) and disappear when the backend OTP APIs land —
+    // the UI code does not change.
     val focusPasscodeSet: Boolean = false,
+    /** Device wall-clock millis when the Exit Passcode was last set. */
+    val focusPasscodeSetAtMillis: Long = 0L,
     val focusOtpDemoCode: String? = null,
     val focusOtpContactMasked: String? = null,
 
@@ -258,12 +263,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val themeStore = ThemePreferenceStore(application)
     private val languageStore = LanguagePreferenceStore(application)
     private val studyStore = StudyPreferenceStore(application)
-    // Focus Exit Passcode — salted-hash storage + mock OTP repository seam.
+    // Exit Passcode — salted-hash storage + mock OTP repository seam.
     private val focusPasscodeStore = FocusPasscodePreferenceStore(application)
     private val focusPasscodeRepo = FocusPasscodeRepository()
     private val _uiState = MutableStateFlow(
         AppUiState(
             focusPasscodeSet = focusPasscodeStore.isPasscodeSet(),
+            focusPasscodeSetAtMillis = focusPasscodeStore.getPasscodeSetAtMillis() ?: 0L,
             themeMode = themeStore.loadThemeMode(),
             appLanguage = languageStore.loadLanguage(),
             notificationSettings = NotificationRepository.loadSettings(application),
@@ -748,7 +754,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Ends the session. Reachable naturally when the countdown reaches 00:00
      * ([manualEnd] = false, no passcode involved) or manually when the user
-     * enters the correct Focus Exit Passcode ([manualEnd] = true). Both paths
+     * enters the correct Exit Passcode ([manualEnd] = true). Both paths
      * restore the exact pre-session restriction states and update the summary
      * — the user's permanent restriction configuration is never changed.
      */
@@ -781,7 +787,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         showToast { if (manualEnd) it.focusPasscodeEndedToast else it.studySessionCompleteToast }
     }
 
-    // ---- Focus Exit Passcode (Study Mode protection; local mock today,
+    // ---- Exit Passcode (Study Mode protection; local mock today,
     //      backend seams: FocusPasscodeRepository / FocusPasscodePreferenceStore) ----
 
     /**
@@ -792,12 +798,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun saveFocusPasscode(passcode: String, toast: (AppStrings) -> String): Boolean {
         if (passcode.length < 8) return false
         focusPasscodeStore.savePasscode(passcode)
-        _uiState.update { it.copy(focusPasscodeSet = true) }
+        // Set-at timestamp comes straight from the device clock (System.currentTimeMillis)
+        // so the Study Mode card + status screen always show the real device date/time.
+        _uiState.update {
+            it.copy(focusPasscodeSet = true, focusPasscodeSetAtMillis = System.currentTimeMillis())
+        }
         showToast(toast)
         return true
     }
 
-    /** Creates the Focus Exit Passcode on first-time setup (min 8 chars). */
+    /** Creates the Exit Passcode on first-time setup (min 8 chars). */
     fun createFocusPasscode(passcode: String): Boolean =
         saveFocusPasscode(passcode) { it.focusPasscodeCreatedToast }
 
@@ -810,7 +820,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Ends the active Study Mode session ONLY when [passcode] matches the
-     * Focus Exit Passcode. On success the countdown stops, Study Mode
+     * Exit Passcode. On success the countdown stops, Study Mode
      * restrictions are removed and the normal state returns — the user's
      * permanent restriction configuration is untouched. Returns false (and
      * keeps Study Mode fully active) on an incorrect passcode.

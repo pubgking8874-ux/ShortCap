@@ -242,7 +242,7 @@ fun HomeScreen(
 
     // "Stop Study Mode?" confirmation — opened by tapping the active Study
     // Mode page. It does NOT stop Study Mode: the confirm action opens the
-    // SHARED Focus Exit Passcode verification screen, and Study Mode ends
+    // SHARED Exit Passcode verification screen, and Study Mode ends
     // only after the passcode is verified (or 00:00 is reached naturally).
     if (stopStudyDialogOpen) {
         AlertDialog(

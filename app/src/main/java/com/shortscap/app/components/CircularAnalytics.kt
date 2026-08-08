@@ -139,7 +139,7 @@ fun ScCircularMetricRing(
  * timestamp-based remaining countdown + the reusable Watch/Timer animation —
  * is injected as the FIRST page and is fully TAPPABLE ([onStopStudyMode]):
  * tapping it opens the "Stop Study Mode?" confirmation which leads to the
- * shared Focus Exit Passcode verification (Home Page exit path). The existing
+ * shared Exit Passcode verification (Home Page exit path). The existing
  * metric pages (Watch Time, Shorts Count) move behind it but remain reachable
  * by horizontal swiping; the Shorts monitoring system itself is never touched
  * and returns to the front automatically when the session ends.
@@ -162,7 +162,7 @@ fun ScCircularAnalyticsCarousel(
     studyRemainingMillis: Long = 0L,
     studyTotalMillis: Long = 0L,
     // Tapping the active Study Mode page → "Stop Study Mode?" → the shared
-    // Focus Exit Passcode verification (same flow as General → Study Mode).
+    // Exit Passcode verification (same flow as General → Study Mode).
     onStopStudyMode: (() -> Unit)? = null,
 ) {
     if (metrics.isEmpty()) return

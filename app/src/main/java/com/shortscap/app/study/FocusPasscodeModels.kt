@@ -1,9 +1,9 @@
 package com.shortscap.app.study
 
 /**
- * Focus Exit Passcode — Study Mode protection & recovery models.
+ * Exit Passcode — Study Mode protection & recovery models.
  *
- * The Focus Exit Passcode is the ONLY way to manually end an active Study
+ * The Exit Passcode is the ONLY way to manually end an active Study
  * Mode session before its countdown finishes. It lives entirely inside the
  * Study Mode feature (General section) and controls ONLY the ability to end
  * a session early — it never touches blocking settings, restriction
@@ -18,13 +18,32 @@ package com.shortscap.app.study
 enum class FocusRecoveryMethod { EMAIL, MOBILE }
 
 /**
- * Entry point for the Focus Passcode flow overlay — the SAME verification
- * and recovery screens are used from BOTH the Home page and
+ * Entry point for the Exit Passcode flow overlay — the SAME verification,
+ * status and recovery screens are used from BOTH the Home page and
  * General → Study Mode, so there is exactly one passcode UI in the app.
  * [SETUP] is the first-time create flow; [VERIFY] gates ending an active
- * Study Mode session (or confirms the passcode from the Study Mode row).
+ * Study Mode session early; [STATUS] is the passcode status/management
+ * screen opened from the Study Mode row once a passcode exists.
  */
-enum class FocusPasscodeEntry { SETUP, VERIFY }
+enum class FocusPasscodeEntry { SETUP, VERIFY, STATUS }
+
+/**
+ * Device-local date string for the passcode "Set on" line — e.g.
+ * "Aug 8, 2026" — formatted with the phone's own locale/timezone
+ * ([java.text.DateFormat.MEDIUM]). Never a hardcoded or server date.
+ */
+fun formatPasscodeSetOn(millis: Long): String =
+    java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
+        .format(java.util.Date(millis))
+
+/**
+ * Device-local time string for the passcode "Set at" line — e.g.
+ * "7:42 PM" — formatted with the phone's locale and 12/24-hour preference
+ * ([java.text.DateFormat.SHORT]).
+ */
+fun formatPasscodeSetAt(millis: Long): String =
+    java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+        .format(java.util.Date(millis))
 
 /**
  * Masks a recovery contact for display so the UI "clearly indicates whether
