@@ -70,6 +70,10 @@ import com.shortscap.app.theme.ScTextStyles
 @Composable
 fun MonitoringScreen(
     settings: MonitoringSettings,
+    // Centralized paused state (derived from the live permission list in
+    // AppUiState) — the status tile reflects REAL monitoring status: Paused
+    // when a required permission is missing even if the master switch is on.
+    monitoringPaused: Boolean = false,
     onToggleMonitoring: (Boolean) -> Unit,
     onToggleAppBlocking: (Boolean) -> Unit,
     onSetScreenTimeLimit: (Int) -> Unit,
@@ -245,8 +249,16 @@ fun MonitoringScreen(
                     StatTile(
                         iconKey = IconKey.STAT_MONITORING_STATUS,
                         label = strings.monitoringStatus,
-                        value = if (settings.enabled) strings.monitoringActive else strings.monitoringPaused,
-                        valueColor = if (settings.enabled) colors.Success else colors.Warning,
+                        value = when {
+                            monitoringPaused -> strings.monitoringPaused
+                            settings.enabled -> strings.monitoringActive
+                            else -> strings.monitoringPaused
+                        },
+                        valueColor = when {
+                            monitoringPaused -> colors.Warning
+                            settings.enabled -> colors.Success
+                            else -> colors.Warning
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }

@@ -138,6 +138,9 @@ fun SettingsNavHost(
         composable(SettingsDestinations.MONITORING) {
             MonitoringScreen(
                 settings = state.monitoring,
+                // Same derived permission-based paused state the Home section
+                // uses — the Monitoring status tile can never disagree with it.
+                monitoringPaused = state.monitoringPaused,
                 onToggleMonitoring = viewModel::setMonitoringEnabled,
                 onToggleAppBlocking = viewModel::setAppBlockingEnabled,
                 onSetScreenTimeLimit = viewModel::setScreenTimeLimit,

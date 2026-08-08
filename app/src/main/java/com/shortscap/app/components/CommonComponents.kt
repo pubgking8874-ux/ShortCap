@@ -140,7 +140,13 @@ fun ScCard(
     )
 }
 
-/** Mirrors StatCard({ icon, label, value, sub, accent }) used on Home */
+/**
+ * Mirrors StatCard({ icon, label, value, sub, accent }) used on Home.
+ *
+ * When [onClick] is provided the WHOLE card (including its padding) becomes
+ * tappable with a real Material ripple, clipped to the rounded card — used
+ * by the Home Quick Stats cards to open their real screens.
+ */
 @Composable
 fun ScStatCard(
     icon: ImageVector? = null,
@@ -150,6 +156,7 @@ fun ScStatCard(
     sub: String? = null,
     accent: Color = LocalScColors.current.Accent,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     val colors = LocalScColors.current
     val style = LocalIconStyle.current
@@ -158,7 +165,20 @@ fun ScStatCard(
     // Compact stat tile: 36dp neutral container + 20dp colored icon (icon ≈
     // 55% of the tile) — the color belongs to the icon, not the container.
     val resolvedBg = colors.CardHover
-    ScCard(modifier = modifier) {
+    val shape: Shape = RoundedCornerShape(22.dp)
+    val base = modifier
+        .clip(shape)
+        .background(colors.Card, shape)
+        .border(1.dp, colors.Divider, shape)
+    Column(
+        modifier = if (onClick != null) {
+            // Ripple before padding so the whole card (padding included) is a
+            // comfortable touch target, with the ripple clipped to the shape.
+            base.clickable(onClick = onClick).padding(18.dp)
+        } else {
+            base.padding(18.dp)
+        },
+    ) {
         Box(
             modifier = Modifier
                 .size(36.dp)

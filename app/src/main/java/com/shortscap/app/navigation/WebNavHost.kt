@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.navigation.compose.NavHost
@@ -66,6 +67,17 @@ fun WebNavHost(state: AppUiState, viewModel: AppViewModel) {
         WebRepository.analyticsSummary(state.webUsageRecords, WebAnalyticsPeriod.TODAY).totalMinutes
     }
     val existingDomains = remember(state.webRules) { state.webRules.map { it.domain }.toSet() }
+
+    // Home Quick Stats deep links (Blocked Sites / Allowed Websites cards):
+    // when the ViewModel asks to open a specific Web rule screen, navigate
+    // there as soon as the graph is up, then consume the request so the Web
+    // tab starts at its normal blocking root next time.
+    LaunchedEffect(state.webStartRoute) {
+        state.webStartRoute?.let { route ->
+            navController.navigate(route)
+            viewModel.clearWebStartRoute()
+        }
+    }
 
     NavHost(
         navController = navController,

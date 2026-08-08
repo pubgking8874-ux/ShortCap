@@ -57,6 +57,7 @@ import com.shortscap.app.navigation.DrawerNavHost
 import com.shortscap.app.navigation.ScNavHost
 import com.shortscap.app.navigation.SettingsNavHost
 import com.shortscap.app.screens.profile.ProfileScreen
+import com.shortscap.app.screens.settings.RefreshPermissionsOnResume
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScFonts
 import com.shortscap.app.theme.ScTextStyles
@@ -97,6 +98,15 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
     }
 
     ShortsCapTheme(mode = state.themeMode) {
+        // Re-checks the live Android permission state every time the app
+        // returns to the foreground (e.g. after the user comes back from the
+        // Android settings screen). This is the automatic refresh behind the
+        // centralized monitoring-paused state: Home, Permissions and
+        // Monitoring all read the same refreshed list, so the Monitoring
+        // Paused section appears/disappears with NO manual refresh — and only
+        // once the permission status has actually been re-verified.
+        RefreshPermissionsOnResume(viewModel::refreshPermissions)
+
         // The whole logged-in experience reads text from the active language
         // catalog; RTL languages (Urdu) also flip the layout direction. The
         // Auth flow lives outside this composable and stays English/LTR.

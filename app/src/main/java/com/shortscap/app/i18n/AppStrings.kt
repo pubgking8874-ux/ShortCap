@@ -234,6 +234,17 @@ interface AppStrings {
     val monitoringActive: String
     val monitoringPaused: String
 
+    // ---- Home Monitoring Paused section (priority page) + resume popup ----
+    val homeMonitoringPausedTitle: String
+    val resumeMonitoringDialogTitle: String
+    val resumeMonitoringDialogMessage: String
+    val resumeMonitoringDialogRequired: String
+    val resumeMonitoringDialogContinue: String
+    val resumeMonitoringDialogNotNow: String
+
+    /** Toast when monitoring auto-resumes after the required permissions return. */
+    val monitoringStartedToast: String
+
     // ---- Time option labels ----
     val time15Min: String
     val time30Min: String

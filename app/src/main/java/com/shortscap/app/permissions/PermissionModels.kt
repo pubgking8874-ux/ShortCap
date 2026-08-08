@@ -18,6 +18,21 @@ enum class PermissionId {
 }
 
 /**
+ * The permissions that must be granted for monitoring to actually run.
+ *
+ * This is the SINGLE centralized contract for the monitoring "paused" state:
+ * the Home screen (Monitoring Paused section), the Permissions screen, the
+ * Monitoring screen and — later — the backend all derive their status from
+ * this same set, so monitoring state can never drift between surfaces.
+ * Adding or removing a required permission only touches this set (the UI and
+ * the derived AppUiState.monitoringPaused react automatically).
+ */
+val MonitoringRequiredPermissionIds: Set<PermissionId> = setOf(
+    PermissionId.USAGE_ACCESS,  // app-usage statistics → usage tracking
+    PermissionId.ACCESSIBILITY, // app blocking / restriction enforcement
+)
+
+/**
  * Live status of a permission. [GRANTED] / [NOT_GRANTED] / [DISABLED] come
  * from real Android checks (see [PermissionRepository]); [FUTURE] and
  * [NOT_AVAILABLE] mark entries that exist in the UI but have no

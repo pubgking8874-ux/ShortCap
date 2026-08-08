@@ -208,6 +208,15 @@ object HindiStrings : AppStrings {
     override val monitoringActive = "सक्रिय"
     override val monitoringPaused = "रोकी गई"
 
+    // ---- Home Monitoring Paused section (priority page) + resume popup ----
+    override val homeMonitoringPausedTitle = "निगरानी रोकी गई"
+    override val resumeMonitoringDialogTitle = "अनुमतियाँ आवश्यक हैं"
+    override val resumeMonitoringDialogMessage = "आवश्यक अनुमतियाँ सक्षम होने तक निगरानी फिर से शुरू नहीं हो सकती। सभी आवश्यक अनुमतियाँ सक्षम होने पर निगरानी अपने आप फिर से शुरू हो जाएगी।"
+    override val resumeMonitoringDialogRequired = "आवश्यक अनुमतियाँ:"
+    override val resumeMonitoringDialogContinue = "जारी रखें"
+    override val resumeMonitoringDialogNotNow = "अभी नहीं"
+    override val monitoringStartedToast = "निगरानी शुरू हो गई"
+
     // ---- Time option labels ----
     override val time15Min = "15 मिनट"
     override val time30Min = "30 मिनट"

@@ -208,6 +208,15 @@ object SpanishStrings : AppStrings {
     override val monitoringActive = "Activo"
     override val monitoringPaused = "En pausa"
 
+    // ---- Home Monitoring Paused section (priority page) + resume popup ----
+    override val homeMonitoringPausedTitle = "Monitoreo en pausa"
+    override val resumeMonitoringDialogTitle = "Permisos requeridos"
+    override val resumeMonitoringDialogMessage = "El monitoreo no puede reanudarse hasta que los permisos requeridos estén habilitados. Se reanudará automáticamente cuando todos los permisos requeridos estén habilitados."
+    override val resumeMonitoringDialogRequired = "Permisos requeridos:"
+    override val resumeMonitoringDialogContinue = "Continuar"
+    override val resumeMonitoringDialogNotNow = "Ahora no"
+    override val monitoringStartedToast = "Monitoreo iniciado"
+
     // ---- Time option labels ----
     override val time15Min = "15 min"
     override val time30Min = "30 min"

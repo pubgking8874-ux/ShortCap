@@ -208,6 +208,15 @@ object ChineseStrings : AppStrings {
     override val monitoringActive = "活跃"
     override val monitoringPaused = "已暂停"
 
+    // ---- Home Monitoring Paused section (priority page) + resume popup ----
+    override val homeMonitoringPausedTitle = "监控已暂停"
+    override val resumeMonitoringDialogTitle = "需要权限"
+    override val resumeMonitoringDialogMessage = "在启用必需权限之前，监控无法恢复。所有必需权限启用后，监控将自动恢复。"
+    override val resumeMonitoringDialogRequired = "必需权限："
+    override val resumeMonitoringDialogContinue = "继续"
+    override val resumeMonitoringDialogNotNow = "暂不"
+    override val monitoringStartedToast = "监控已启动"
+
     // ---- Time option labels ----
     override val time15Min = "15 分钟"
     override val time30Min = "30 分钟"

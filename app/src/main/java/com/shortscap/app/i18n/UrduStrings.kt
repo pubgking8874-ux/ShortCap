@@ -208,6 +208,15 @@ object UrduStrings : AppStrings {
     override val monitoringActive = "فعال"
     override val monitoringPaused = "موقوف"
 
+    // ---- Home Monitoring Paused section (priority page) + resume popup ----
+    override val homeMonitoringPausedTitle = "نگرانی موقوف"
+    override val resumeMonitoringDialogTitle = "اجازتیں درکار ہیں"
+    override val resumeMonitoringDialogMessage = "ضروری اجازتیں فعال ہونے تک نگرانی دوبارہ شروع نہیں ہو سکتی۔ تمام ضروری اجازتیں فعال ہونے پر نگرانی خود بخود دوبارہ شروع ہو جائے گی۔"
+    override val resumeMonitoringDialogRequired = "ضروری اجازتیں:"
+    override val resumeMonitoringDialogContinue = "جاری رکھیں"
+    override val resumeMonitoringDialogNotNow = "ابھی نہیں"
+    override val monitoringStartedToast = "نگرانی شروع ہو گئی"
+
     // ---- Time option labels ----
     override val time15Min = "15 منٹ"
     override val time30Min = "30 منٹ"

@@ -42,7 +42,24 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
             .padding(bottom = 100.dp),
     ) {
         when (state.screen) {
-            ScScreen.HOME -> HomeScreen(loading = state.homeLoading, metrics = state.homeMetrics)
+            ScScreen.HOME -> HomeScreen(
+                loading = state.homeLoading,
+                metrics = state.homeMetrics,
+                appsUsedToday = state.homeAppsUsedToday,
+                blockedWebCount = state.blockedWebCount,
+                allowedWebCount = state.allowedWebCount,
+                // Centralized monitoring-paused state (derived from the live
+                // permission list) — injects the Monitoring Paused section as
+                // the first swipe page and auto-clears once permissions return.
+                monitoringPaused = state.monitoringPaused,
+                missingRequiredPermissions = state.missingRequiredMonitoringPermissions,
+                // Tapping the paused circle re-checks the required permissions
+                // before showing the resume popup.
+                onRefreshPermissions = viewModel::refreshPermissions,
+                onOpenActivityDaily = viewModel::openActivityDaily,
+                onOpenWebAllowed = { viewModel.openWebSection(WebDestinations.ALLOWED) },
+                onOpenWebBlocked = { viewModel.openWebSection(WebDestinations.BLOCKED) },
+            )
 
             ScScreen.ACTIVITY -> {
                 // Dedicated report / range-detail screens (full pages inside

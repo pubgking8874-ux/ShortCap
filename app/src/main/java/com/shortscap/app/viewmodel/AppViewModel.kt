@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shortscap.app.activity.ActivityPeriod
 import com.shortscap.app.activity.ActivityRange
+import com.shortscap.app.activity.ActivityRepository
 import com.shortscap.app.appearance.AppearanceRepository
 import com.shortscap.app.appearance.FontMode
 import com.shortscap.app.appearance.TextSizeMode
@@ -23,8 +24,11 @@ import com.shortscap.app.model.ProfileData
 import com.shortscap.app.notifications.NotificationRepository
 import com.shortscap.app.notifications.NotificationSetting
 import com.shortscap.app.notifications.NotificationSettingId
+import com.shortscap.app.permissions.MonitoringRequiredPermissionIds
+import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.permissions.PermissionRepository
+import com.shortscap.app.permissions.PermissionStatus
 import com.shortscap.app.settings.SettingsManager
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
@@ -67,6 +71,13 @@ data class AppUiState(
         ScCircularMetric(id = "shorts-watched", label = "Today's Shorts Watched", value = "245", unit = "Shorts", progress = 0.65f),
     ),
 
+    // Home Quick Stats "Apps Used" — apps with real usage today, derived from
+    // the SAME ActivityRepository data the Activity → Daily screen renders
+    // (one centralized source; the future backend feeds both through the same
+    // repository seam, so Home and Activity can never drift apart).
+    val homeAppsUsedToday: Int =
+        ActivityRepository.reportFor(ActivityPeriod.DAILY).distribution.count { it.minutes > 0 },
+
     // ActivityScreen: range chip + dedicated report screens. The report data
     // itself is derived in ActivityRepository.reportFor(period) /
     // rangeReportFor(range) — the UI only renders it, and the global chart
@@ -83,6 +94,11 @@ data class AppUiState(
     val webPeriod: WebAnalyticsPeriod = WebAnalyticsPeriod.TODAY,
     val webRules: List<WebRule> = WebRepository.seedRules(),
     val webUsageRecords: List<WebUsageRecord> = WebRepository.seedUsageRecords(),
+
+    // Deep link for the Web tab: when a Home Quick Stats card (Blocked Sites /
+    // Allowed Websites) opens the Web tab, WebNavHost starts at this route
+    // instead of the blocking root. Consumed (cleared) once it has been shown.
+    val webStartRoute: String? = null,
 
     // Settings: dedicated sub-screen currently open (null = none). The
     // Monitoring settings live in [monitoring] — the single source of truth
@@ -153,7 +169,29 @@ data class AppUiState(
     // backend / JWT are connected, set this from the session state so the
     // app opens straight to the Dashboard; no UI changes are required.
     val sessionActive: Boolean = false,
-)
+) {
+    // Derived web counts — the SAME source of truth the Web section uses (the
+    // Blocked / Allowed screens filter this exact webRules list), so the Home
+    // Quick Stats numbers always match the actual website data. Computed as
+    // body properties (custom getters can't live in constructor params) and
+    // always in sync with [webRules].
+    val blockedWebCount: Int get() = webRules.count { it.status == WebRuleStatus.BLOCKED }
+    val allowedWebCount: Int get() = webRules.count { it.status == WebRuleStatus.ALLOWED }
+
+    // ---- Centralized monitoring-paused state (derived, never stored) ----
+    // Monitoring is considered PAUSED whenever it is switched on but a
+    // required permission is missing. Both properties are derived from the
+    // SAME live [permissions] list the Permissions screen renders (refreshed
+    // automatically on every app resume), so Home, Monitoring, Permissions
+    // and the future backend can never disagree or hold duplicate state.
+    val missingRequiredMonitoringPermissions: List<PermissionId> get() =
+        permissions
+            .filter { it.id in MonitoringRequiredPermissionIds && it.status != PermissionStatus.GRANTED }
+            .map { it.id }
+
+    val monitoringPaused: Boolean get() =
+        monitoring.enabled && missingRequiredMonitoringPermissions.isNotEmpty()
+}
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -175,6 +213,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
     init {
+        // Resolve the REAL Android permission state on launch so the derived
+        // monitoring-paused state is correct from the very first frame
+        // (seeded placeholders are replaced by live OS checks before the Home
+        // skeleton clears). The same refresh also runs on every app resume.
+        refreshPermissions()
+
         // Mirrors: useEffect(() => { setTimeout(() => setLoading(false), 900) }, [])
         viewModelScope.launch {
             delay(900)
@@ -306,6 +350,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(toastMessage = null) }
         }
     }
+
+    // ---- Home Quick Stats (cards open the real screens, same data) ----
+
+    /** Apps Used card → Activity page with the Daily tab selected. */
+    fun openActivityDaily() = _uiState.update {
+        it.copy(
+            screen = ScScreen.ACTIVITY,
+            activityRange = "Daily",
+            // Close any report / range-detail page so the Daily page is shown.
+            activityReport = null,
+            activityRangeDetail = null,
+        )
+    }
+
+    /** Blocked Sites / Allowed Websites cards → Web tab, opening that screen. */
+    fun openWebSection(route: String) =
+        _uiState.update { it.copy(screen = ScScreen.WEB, webStartRoute = route) }
+
+    /** Called by WebNavHost after the deep-linked route has been shown. */
+    fun clearWebStartRoute() = _uiState.update { it.copy(webStartRoute = null) }
 
     // ---- Activity screen ----
     fun setActivityRange(range: String) = _uiState.update { it.copy(activityRange = range) }
@@ -470,12 +534,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ---- Permissions (live OS checks; backend-ready via PermissionRepository)
-    //      Called on every Permissions-screen resume so statuses stay fresh
-    //      after the user returns from Android Settings — no manual refresh. ----
+    //      Called on every Permissions-screen resume AND at the app root on
+    //      every foreground resume, so statuses stay fresh after the user
+    //      returns from Android Settings — no manual refresh. ----
+
+    // False until the seeded placeholder statuses have been replaced by real
+    // OS checks. Guards the success toast: on cold start the seeded state may
+    // look "paused", so we must not fire a bogus "Monitoring Started".
+    private var permissionsHaveRealStatus = false
+
     fun refreshPermissions() {
+        val wasPaused = _uiState.value.monitoringPaused
         _uiState.update { state ->
             state.copy(permissions = PermissionRepository.checkAll(getApplication(), state.permissions))
         }
+        // Success feedback: monitoring automatically resumes the moment the
+        // required permissions are re-verified as granted (paused → active),
+        // with no extra button press — e.g. after returning from Android
+        // Settings. Derived state guarantees this only fires on a real change.
+        if (permissionsHaveRealStatus && wasPaused && !_uiState.value.monitoringPaused) {
+            showToast { it.monitoringStartedToast }
+        }
+        permissionsHaveRealStatus = true
     }
 
     // Restores every resettable application setting to its default through the
