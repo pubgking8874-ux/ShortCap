@@ -83,10 +83,14 @@ fun HomeScreen(
     missingRequiredPermissions: List<PermissionId> = emptyList(),
     // Study Mode active state — timestamp-based remaining time from
     // AppUiState; when a session runs, the carousel leads with the Study Mode
-    // page (countdown + study animation) and the Shorts pages move behind it.
+    // page (countdown + Watch/Timer animation) and the Shorts pages move
+    // behind it. The page is TAPPABLE: it opens the "Stop Study Mode?"
+    // confirmation, whose confirm action leads to the SHARED Focus Exit
+    // Passcode verification (same screen as General → Study Mode).
     studyModeActive: Boolean = false,
     studyRemainingMillis: Long = 0L,
     studyTotalMillis: Long = 0L,
+    onStopStudyMode: () -> Unit,
     onRefreshPermissions: () -> Unit,
     // Fired when no Android settings screen could be opened for a missing
     // permission (e.g. the Accessibility settings screen is unavailable) —
@@ -100,6 +104,7 @@ fun HomeScreen(
     val strings = LocalAppStrings.current
     val context = LocalContext.current
     var resumeDialogOpen by remember { mutableStateOf(false) }
+    var stopStudyDialogOpen by remember { mutableStateOf(false) }
 
     // If the paused state clears while the popup is open (e.g. the user
     // granted the permission via Android Settings without tapping Continue),
@@ -107,6 +112,11 @@ fun HomeScreen(
     // pause without a fresh tap on the circle.
     LaunchedEffect(monitoringPaused) {
         if (!monitoringPaused) resumeDialogOpen = false
+    }
+    // If Study Mode ends (naturally at 00:00) while the stop confirmation is
+    // open, drop it — there is nothing to stop anymore.
+    LaunchedEffect(studyModeActive) {
+        if (!studyModeActive) stopStudyDialogOpen = false
     }
 
     Column(
@@ -138,11 +148,14 @@ fun HomeScreen(
                     }
                 } else null,
                 // While Study Mode is active, the Study Mode page (countdown
-                // + study animation) leads the carousel; the Shorts monitoring
-                // pages stay behind it and return to the front at 00:00.
+                // + Watch/Timer animation) leads the carousel; the Shorts
+                // monitoring pages stay behind it and return to the front at
+                // 00:00. Tapping the page only opens the "Stop Study Mode?"
+                // confirmation — it never stops the session directly.
                 studyModeActive = studyModeActive,
                 studyRemainingMillis = studyRemainingMillis,
                 studyTotalMillis = studyTotalMillis,
+                onStopStudyMode = { stopStudyDialogOpen = true },
             )
         }
 
@@ -225,6 +238,34 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    // "Stop Study Mode?" confirmation — opened by tapping the active Study
+    // Mode page. It does NOT stop Study Mode: the confirm action opens the
+    // SHARED Focus Exit Passcode verification screen, and Study Mode ends
+    // only after the passcode is verified (or 00:00 is reached naturally).
+    if (stopStudyDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { stopStudyDialogOpen = false },
+            containerColor = colors.Card,
+            titleContentColor = colors.TextPrimary,
+            textContentColor = colors.TextSecondary,
+            title = { Text(strings.studyStopTitle) },
+            text = { Text(strings.studyStopMessage, style = ScTextStyles.Body) },
+            confirmButton = {
+                TextButton(onClick = {
+                    stopStudyDialogOpen = false
+                    onStopStudyMode()
+                }) {
+                    Text(strings.studyStopAction, color = colors.Danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { stopStudyDialogOpen = false }) {
+                    Text(strings.cancel, color = colors.TextSecondary)
+                }
+            },
+        )
     }
 
     // Professional permission-requirement popup shown when the user taps the

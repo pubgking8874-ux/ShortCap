@@ -252,6 +252,66 @@ interface AppStrings {
     val studySessionCompleteToast: String
     val studyHomeTitle: String
 
+    // "Stop Study Mode?" confirmation — the shared early-exit gate on the Home
+    // page AND General → Study Mode (leads to the Focus Exit Passcode).
+    val studyStopTitle: String
+    val studyStopMessage: String
+    val studyStopAction: String
+
+    // ---- Focus Exit Passcode (Study Mode protection & recovery) ----
+    val studyFocusProtection: String
+    val focusPasscodeTitle: String
+    val focusPasscodeSetupTitle: String
+    val focusPasscodeSetupDesc: String
+    val focusPasscodeSetupFieldLabel: String
+    val focusPasscodeSetupSave: String
+    val focusPasscodeSetStatus: String
+    val focusPasscodeCreatedToast: String
+    val focusPasscodeVerifyTitle: String
+    val focusPasscodeVerifyDesc: String
+    val focusPasscodeVerifyPlaceholder: String
+    val focusPasscodeVerifyButton: String
+    val focusPasscodeVerifyOnly: String
+    val focusPasscodeForgot: String
+    val focusPasscodeIncorrect: String
+    val focusPasscodeEndedToast: String
+    val focusPasscodeVerifiedToast: String
+    val focusPasscodeLockedNote: String
+    val focusPasscodeRecoverTitle: String
+    val focusPasscodeRecoverDesc: String
+    val focusPasscodeRecoverEmail: String
+    val focusPasscodeRecoverMobile: String
+    val focusPasscodeEmailTitle: String
+    val focusPasscodeEmailLabel: String
+    val focusPasscodeEmailPlaceholder: String
+    val focusPasscodeEmailSend: String
+    val focusPasscodeEmailInvalid: String
+    val focusPasscodeMobileTitle: String
+    val focusPasscodeMobileLabel: String
+    val focusPasscodeMobilePlaceholder: String
+    val focusPasscodeMobileSend: String
+    val focusPasscodeMobileInvalid: String
+    val focusPasscodeOtpTitle: String
+    val focusPasscodeOtpEmailSent: String
+    val focusPasscodeOtpMobileSent: String
+    val focusPasscodeOtpEnterLabel: String
+    val focusPasscodeOtpVerify: String
+    val focusPasscodeOtpResend: String
+    val focusPasscodeOtpIncorrect: String
+    val focusPasscodeCreateTitle: String
+    val focusPasscodeNewLabel: String
+    val focusPasscodeConfirmLabel: String
+    val focusPasscodeCreateSave: String
+    val focusPasscodeUpdatedToast: String
+    val focusPasscodeTooShort: String
+    val focusPasscodeMismatch: String
+
+    /** "Resend code in 45s" — resend countdown on the OTP page. */
+    fun focusPasscodeOtpResendIn(seconds: Int): String
+
+    /** "Demo code: 123456" — development-only line for the LOCAL mock OTP. */
+    fun focusPasscodeOtpDemo(code: String): String
+
     // ---- Monitoring ----
     val monitoringTitle: String
     val monitoringSection: String
@@ -268,8 +328,6 @@ interface AppStrings {
     val monitoringShortsSection: String
     val monitoringShortsControl: String
     val monitoringShortsControlDesc: String
-    val monitoringBreakReminder: String
-    val monitoringReminderInterval: String
     val monitoringSchedule: String
 
     // ---- Home Monitoring Paused section (priority page) + resume popup ----
@@ -287,10 +345,6 @@ interface AppStrings {
     val monitoringStartedToast: String
 
     // ---- Time option labels ----
-    val time1Hour: String
-    val time15Minutes: String
-    val time30Minutes: String
-    val time45Minutes: String
     val minutesLabel: String
 
     // ---- Permissions (status overview) ----

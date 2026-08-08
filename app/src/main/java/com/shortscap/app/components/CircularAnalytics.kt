@@ -3,6 +3,7 @@ package com.shortscap.app.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -21,6 +22,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,14 +40,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.ScCircularMetric
+import com.shortscap.app.study.StudyAnimationType
 import com.shortscap.app.study.formatStudyCountdown
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -129,11 +136,13 @@ fun ScCircularMetricRing(
  *
  * Study Mode (priority state): while a Study Mode session is active
  * ([studyModeActive]), a Study Mode page — "Study Mode Active" + the exact
- * timestamp-based remaining countdown + a study-focused animation — is
- * injected as the FIRST page. The existing metric pages (Watch Time, Shorts
- * Count) move behind it but remain reachable by horizontal swiping; the
- * Shorts monitoring system itself is never touched and returns to the front
- * automatically when the session ends.
+ * timestamp-based remaining countdown + the reusable Watch/Timer animation —
+ * is injected as the FIRST page and is fully TAPPABLE ([onStopStudyMode]):
+ * tapping it opens the "Stop Study Mode?" confirmation which leads to the
+ * shared Focus Exit Passcode verification (Home Page exit path). The existing
+ * metric pages (Watch Time, Shorts Count) move behind it but remain reachable
+ * by horizontal swiping; the Shorts monitoring system itself is never touched
+ * and returns to the front automatically when the session ends.
  *
  * Monitoring Paused (priority/exception state): when [monitoringPaused] is
  * true, a Monitoring Paused page is injected after the Study Mode page (or
@@ -152,6 +161,9 @@ fun ScCircularAnalyticsCarousel(
     studyModeActive: Boolean = false,
     studyRemainingMillis: Long = 0L,
     studyTotalMillis: Long = 0L,
+    // Tapping the active Study Mode page → "Stop Study Mode?" → the shared
+    // Focus Exit Passcode verification (same flow as General → Study Mode).
+    onStopStudyMode: (() -> Unit)? = null,
 ) {
     if (metrics.isEmpty()) return
     val colors = LocalScColors.current
@@ -203,6 +215,7 @@ fun ScCircularAnalyticsCarousel(
                     isStudyPage(page) -> ScStudyModePage(
                         remainingMillis = studyRemainingMillis,
                         totalMillis = studyTotalMillis,
+                        onStop = onStopStudyMode,
                     )
                     isPausedPage(page) -> ScMonitoringPausedPage(onResumeMonitoring = onResumeMonitoring)
                     else -> ScCircularMetricRing(metric = metricFor(page))
@@ -237,13 +250,18 @@ fun ScCircularAnalyticsCarousel(
 /**
  * The Study Mode page injected as the first carousel page while a session is
  * active: a countdown ring (progress toward 00:00) with the exact remaining
- * time in the center, a gentle study-focused animation (books, notebook and
- * pen bobbing subtly), and the "Study Mode Active" label — a distinct visual
- * from the normal Shorts monitoring pages, which stay untouched and reachable
- * by swiping.
+ * time in the center, the reusable Watch/Timer Study animation, and the
+ * "Study Mode Active" label. The ENTIRE page is tappable ([onStop]): tapping
+ * opens the "Stop Study Mode?" confirmation which leads to the SHARED Focus
+ * Exit Passcode verification — it never stops Study Mode directly. The normal
+ * Shorts monitoring pages stay untouched and reachable by swiping.
  */
 @Composable
-private fun ScStudyModePage(remainingMillis: Long, totalMillis: Long) {
+private fun ScStudyModePage(
+    remainingMillis: Long,
+    totalMillis: Long,
+    onStop: (() -> Unit)? = null,
+) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
     val ringBrush = Brush.linearGradient(
@@ -254,16 +272,30 @@ private fun ScStudyModePage(remainingMillis: Long, totalMillis: Long) {
         (1f - remainingMillis.toFloat() / totalMillis).coerceIn(0f, 1f)
     } else 0f
 
-    // Gentle, endless bob for the study icons so the page feels alive.
-    val transition = rememberInfiniteTransition(label = "studyIconTransition")
-    val bob by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Reverse),
-        label = "studyIconBob",
+    // Subtle press feedback confirms the whole page is the interactive
+    // control; the tap only opens the "Stop Study Mode?" confirmation.
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressBg by animateColorAsState(
+        targetValue = if (pressed) colors.CardHover else Color.Transparent,
+        animationSpec = tween(120),
+        label = "studyPagePress",
     )
+    val shape = RoundedCornerShape(22.dp)
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier
+            .clip(shape)
+            .background(pressBg)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = onStop != null,
+                onClick = { onStop?.invoke() },
+            )
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Box(
             modifier = Modifier.size(190.dp),
             contentAlignment = Alignment.Center,
@@ -303,18 +335,9 @@ private fun ScStudyModePage(remainingMillis: Long, totalMillis: Long) {
         }
 
         Spacer(Modifier.height(10.dp))
-        // Study-focused visual elements — books, notebook and pen.
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            listOf("📚", "📓", "✏️").forEachIndexed { index, emoji ->
-                Text(
-                    text = emoji,
-                    fontSize = 26.sp,
-                    modifier = Modifier.graphicsLayer {
-                        translationY = bob * 5.dp.toPx() * (if (index % 2 == 0) 1f else -1f)
-                    },
-                )
-            }
-        }
+        // Reusable Study Mode animation — Watch/Timer today; future styles
+        // (Study/Book, Focus/Cartoon) swap in via StudyAnimationType later.
+        ScStudyAnimation(type = StudyAnimationType.WATCH)
 
         Spacer(Modifier.height(10.dp))
         Text(
@@ -323,6 +346,122 @@ private fun ScStudyModePage(remainingMillis: Long, totalMillis: Long) {
             style = ScTextStyles.SectionTitle,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+/**
+ * Reusable Study Mode animation — the Home page visualization shown while a
+ * session is active. Dispatches on [StudyAnimationType] so a future
+ * Appearance → Study Animation setting can switch styles WITHOUT rebuilding
+ * the Home page logic. Today only [StudyAnimationType.WATCH] is animated
+ * (a clean watch/timer: sweeping hand + tick marks + lock badge conveying
+ * "time is running / Study Mode is active / protected"); the other values
+ * render simple static placeholders until their animations are added.
+ */
+@Composable
+fun ScStudyAnimation(
+    type: StudyAnimationType,
+    modifier: Modifier = Modifier,
+) {
+    when (type) {
+        StudyAnimationType.WATCH -> WatchTimerAnimation(modifier)
+        // Future styles — static placeholders so the seam works end-to-end;
+        // their animations plug in later without touching the Home page.
+        StudyAnimationType.BOOK -> StaticStudyIcon(Icons.Filled.MenuBook, modifier)
+        StudyAnimationType.FOCUS -> StaticStudyIcon(Icons.Filled.CenterFocusStrong, modifier)
+    }
+}
+
+/** Clean watch/timer: face + ticks + endlessly sweeping hand + lock badge. */
+@Composable
+private fun WatchTimerAnimation(modifier: Modifier = Modifier) {
+    val colors = LocalScColors.current
+    val transition = rememberInfiniteTransition(label = "studyWatchTransition")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing)),
+        label = "studyWatchHand",
+    )
+
+    Box(modifier = modifier.size(64.dp), contentAlignment = Alignment.Center) {
+        // Watch face + 12 tick marks.
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val r = size.minDimension / 2f
+            val stroke = 2.dp.toPx()
+            drawCircle(color = colors.Divider, radius = r - stroke / 2f, style = Stroke(stroke))
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            repeat(12) { i ->
+                val angle = Math.toRadians((i * 30 - 90).toDouble())
+                val cos = kotlin.math.cos(angle).toFloat()
+                val sin = kotlin.math.sin(angle).toFloat()
+                val major = i % 3 == 0
+                val outer = r - 5.dp.toPx()
+                val inner = if (major) r - 13.dp.toPx() else r - 10.dp.toPx()
+                drawLine(
+                    color = if (major) colors.TextSecondary else colors.Divider,
+                    start = Offset(cx + cos * inner, cy + sin * inner),
+                    end = Offset(cx + cos * outer, cy + sin * outer),
+                    strokeWidth = if (major) 1.8.dp.toPx() else 1.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        // Endlessly sweeping hand — "time is running".
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { rotationZ = rotation },
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val cx = size.width / 2f
+                val cy = size.height / 2f
+                val r = size.minDimension / 2f
+                drawLine(
+                    color = colors.Accent,
+                    start = Offset(cx, cy + 5.dp.toPx()),
+                    end = Offset(cx, cy - (r - 8.dp.toPx())),
+                    strokeWidth = 2.4.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        // Center cap.
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .clip(CircleShape)
+                .background(colors.Accent),
+        )
+        // Lock badge — "the session is protected".
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(colors.Card)
+                .border(1.dp, colors.Divider, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Lock, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(11.dp))
+        }
+    }
+}
+
+/** Static icon tile for the not-yet-animated future study styles. */
+@Composable
+private fun StaticStudyIcon(icon: ImageVector, modifier: Modifier = Modifier) {
+    val colors = LocalScColors.current
+    Box(
+        modifier = modifier
+            .size(56.dp)
+            .clip(CircleShape)
+            .background(colors.CardHover),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = colors.Accent, modifier = Modifier.size(28.dp))
     }
 }
 

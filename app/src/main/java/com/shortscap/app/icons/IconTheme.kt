@@ -83,6 +83,7 @@ object IconTheme {
         // General
         IconKey.LANGUAGE -> Icons.Filled.Language
         IconKey.STUDY_MODE -> Icons.Filled.School
+        IconKey.FOCUS_PASSCODE -> Icons.Filled.Lock
 
         // Appearance
         IconKey.THEME -> Icons.Filled.Palette
@@ -239,6 +240,7 @@ private object VibrantPalette {
         // General
         IconKey.LANGUAGE -> violet
         IconKey.STUDY_MODE -> indigo
+        IconKey.FOCUS_PASSCODE -> amber
 
         // Appearance
         IconKey.THEME -> violet

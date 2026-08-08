@@ -30,11 +30,16 @@ import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.permissions.PermissionStatus
 import com.shortscap.app.settings.SettingsManager
+import com.shortscap.app.study.FocusPasscodeEntry
+import com.shortscap.app.study.FocusPasscodePreferenceStore
+import com.shortscap.app.study.FocusPasscodeRepository
+import com.shortscap.app.study.FocusRecoveryMethod
 import com.shortscap.app.study.StudyModeSettings
 import com.shortscap.app.study.StudyPreferenceStore
 import com.shortscap.app.study.StudySession
 import com.shortscap.app.study.StudySoundMode
 import com.shortscap.app.study.StudySummary
+import com.shortscap.app.study.maskContact
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
@@ -120,6 +125,23 @@ data class AppUiState(
     val studySettings: StudyModeSettings = StudyModeSettings(),
     val activeStudySession: StudySession? = null,
     val studySummary: StudySummary = StudySummary(),
+
+    // Focus Exit Passcode (Study Mode protection) — controls ONLY the
+    // ability to end an active session early. [focusPasscodeSet] is loaded
+    // from the salted-hash store; [focusOtpDemoCode] / [focusOtpContactMasked]
+    // exist purely for the LOCAL MOCK recovery flow (the UI shows the demo
+    // code + masked contact because there is no email/SMS backend yet) and
+    // disappear when the backend OTP APIs land — the UI code does not change.
+    val focusPasscodeSet: Boolean = false,
+    val focusOtpDemoCode: String? = null,
+    val focusOtpContactMasked: String? = null,
+
+    // The Focus Passcode flow overlay (SETUP first-time create, or VERIFY to
+    // end an active session). ONE shared flow — opened from BOTH the Home
+    // page and General → Study Mode, so every exit path uses the exact same
+    // verification + recovery screens (single Study Mode state, single
+    // passcode, single recovery system — never two).
+    val focusPasscodeFlow: FocusPasscodeEntry? = null,
 
     // Notifications module — every option's on/off state, persisted locally
     // by [NotificationRepository] (backend-ready: same shape maps 1:1 to a
@@ -236,8 +258,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val themeStore = ThemePreferenceStore(application)
     private val languageStore = LanguagePreferenceStore(application)
     private val studyStore = StudyPreferenceStore(application)
+    // Focus Exit Passcode — salted-hash storage + mock OTP repository seam.
+    private val focusPasscodeStore = FocusPasscodePreferenceStore(application)
+    private val focusPasscodeRepo = FocusPasscodeRepository()
     private val _uiState = MutableStateFlow(
         AppUiState(
+            focusPasscodeSet = focusPasscodeStore.isPasscodeSet(),
             themeMode = themeStore.loadThemeMode(),
             appLanguage = languageStore.loadLanguage(),
             notificationSettings = NotificationRepository.loadSettings(application),
@@ -544,6 +570,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closeSettingsScreen() = _uiState.update { it.copy(settingsDestination = null) }
 
+    // ---- Focus Passcode flow overlay (shared by Home + General → Study Mode) ----
+    // One overlay, one passcode UI, one recovery system. Rendered at the app
+    // root on top of everything; closing it returns to whatever screen opened
+    // it (Home or Study Mode), both of which observe the SAME Study Mode state.
+    fun openFocusPasscodeFlow(entry: FocusPasscodeEntry) =
+        _uiState.update { it.copy(focusPasscodeFlow = entry) }
+
+    fun closeFocusPasscodeFlow() = _uiState.update { it.copy(focusPasscodeFlow = null) }
+
     // ---- Monitoring settings (local today; GET/UPDATE Monitoring Settings
     //      backend APIs + SettingsRepository seam later) ----
     // App Blocking / Daily Screen Time Limit settings no longer live on the
@@ -573,12 +608,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             ),
         )
     }
-
-    fun setBreakReminderEnabled(on: Boolean) =
-        _uiState.update { it.copy(monitoring = it.monitoring.copy(breakReminderEnabled = on)) }
-
-    fun setBreakReminderInterval(minutes: Int) =
-        _uiState.update { it.copy(monitoring = it.monitoring.copy(breakReminderIntervalMinutes = minutes)) }
 
     // ---- Study Mode (General section; backend seam: StudyRepository) ----
     // State is held in AppUiState (studySettings / activeStudySession /
@@ -716,8 +745,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Ends the session (only reachable when the countdown reached 00:00). */
-    private fun finishStudySession() {
+    /**
+     * Ends the session. Reachable naturally when the countdown reaches 00:00
+     * ([manualEnd] = false, no passcode involved) or manually when the user
+     * enters the correct Focus Exit Passcode ([manualEnd] = true). Both paths
+     * restore the exact pre-session restriction states and update the summary
+     * — the user's permanent restriction configuration is never changed.
+     */
+    private fun finishStudySession(manualEnd: Boolean = false) {
         studyTickerJob?.cancel()
         studyTickerJob = null
         // Restore the exact restriction states the user had before the session.
@@ -743,8 +778,70 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         // The session is over — nothing to persist anymore.
         studyStore.clearActiveSession()
-        showToast { it.studySessionCompleteToast }
+        showToast { if (manualEnd) it.focusPasscodeEndedToast else it.studySessionCompleteToast }
     }
+
+    // ---- Focus Exit Passcode (Study Mode protection; local mock today,
+    //      backend seams: FocusPasscodeRepository / FocusPasscodePreferenceStore) ----
+
+    /**
+     * Shared save path for setup (create) and post-recovery (update) — the
+     * passcode is hashed+salted before storage, so the old one becomes
+     * invalid immediately. [toast] picks the localized success message.
+     */
+    private fun saveFocusPasscode(passcode: String, toast: (AppStrings) -> String): Boolean {
+        if (passcode.length < 8) return false
+        focusPasscodeStore.savePasscode(passcode)
+        _uiState.update { it.copy(focusPasscodeSet = true) }
+        showToast(toast)
+        return true
+    }
+
+    /** Creates the Focus Exit Passcode on first-time setup (min 8 chars). */
+    fun createFocusPasscode(passcode: String): Boolean =
+        saveFocusPasscode(passcode) { it.focusPasscodeCreatedToast }
+
+    /** Replaces the passcode after successful OTP recovery (old becomes invalid). */
+    fun updateFocusPasscode(passcode: String): Boolean =
+        saveFocusPasscode(passcode) { it.focusPasscodeUpdatedToast }
+
+    /** Checks an entry against the stored hash (used by the verify screen). */
+    fun verifyFocusPasscode(passcode: String): Boolean = focusPasscodeStore.verifyPasscode(passcode)
+
+    /**
+     * Ends the active Study Mode session ONLY when [passcode] matches the
+     * Focus Exit Passcode. On success the countdown stops, Study Mode
+     * restrictions are removed and the normal state returns — the user's
+     * permanent restriction configuration is untouched. Returns false (and
+     * keeps Study Mode fully active) on an incorrect passcode.
+     */
+    fun endStudySessionWithPasscode(passcode: String): Boolean {
+        if (!_uiState.value.studyModeActive) return false
+        if (!focusPasscodeStore.verifyPasscode(passcode)) return false
+        finishStudySession(manualEnd = true)
+        return true
+    }
+
+    // ---- Recovery OTP (LOCAL MOCK — no backend yet). The demo code +
+    //      masked contact are surfaced in the UI so the flow is testable;
+    //      the future backend generates and sends the OTP itself. ----
+
+    /** Requests a recovery code for [method] + [contact]. */
+    fun requestFocusOtp(method: FocusRecoveryMethod, contact: String) {
+        val code = focusPasscodeRepo.requestOtp(method, contact)
+        _uiState.update {
+            it.copy(focusOtpDemoCode = code, focusOtpContactMasked = maskContact(method, contact))
+        }
+    }
+
+    /** Re-sends the pending code (fresh expiry) for the resend countdown. */
+    fun resendFocusOtp() {
+        val code = focusPasscodeRepo.resendOtp() ?: return
+        _uiState.update { it.copy(focusOtpDemoCode = code) }
+    }
+
+    /** Verifies the entered code — true only for the pending, unexpired code. */
+    fun verifyFocusOtp(code: String): Boolean = focusPasscodeRepo.verifyOtp(code)
 
     /**
      * Called on every app resume (via refreshPermissions): if a session

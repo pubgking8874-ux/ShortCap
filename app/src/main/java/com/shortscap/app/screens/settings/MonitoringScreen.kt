@@ -18,8 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -35,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScPremiumNavCard
@@ -60,8 +57,10 @@ import com.shortscap.app.theme.ScTextStyles
  *                      is monitored and why permissions matter)
  *   STRICT MODE      → Strict Mode switch
  *   SHORTS           → Shorts Control (opens the dedicated per-platform screen)
- *   BREAK REMINDER   → Break Reminder switch + Reminder Interval picker
  *   MONITORING SCHEDULE → Monitoring Schedule page
+ *
+ * Break Reminder / Break Duration is NOT here — it belongs exclusively to
+ * Study Mode in the General section (StudyModeScreen owns that feature).
  *
  * App Blocking, Daily Screen Time Limit, per-platform Shorts toggles and the
  * read-only Statistics tiles no longer live here (their underlying concepts
@@ -84,8 +83,6 @@ fun MonitoringScreen(
     monitoringPaused: Boolean = false,
     onToggleMonitoring: (Boolean) -> Unit,
     onToggleStrictMode: (Boolean) -> Unit,
-    onToggleBreakReminder: (Boolean) -> Unit,
-    onSetBreakReminderInterval: (Int) -> Unit,
     onOpenShortsControl: () -> Unit,
     onOpenSchedule: () -> Unit,
     onBack: () -> Unit,
@@ -93,18 +90,6 @@ fun MonitoringScreen(
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
     var deviceInfoDialogOpen by remember { mutableStateOf(false) }
-    var intervalDialogOpen by remember { mutableStateOf(false) }
-
-    // Option lists follow the active language catalog.
-    val breakIntervals = listOf(
-        15 to strings.time15Minutes,
-        30 to strings.time30Minutes,
-        45 to strings.time45Minutes,
-        60 to strings.time1Hour,
-    )
-    fun intervalLabel(minutes: Int): String =
-        breakIntervals.firstOrNull { it.first == minutes }?.second
-            ?: "$minutes ${strings.minutesLabel}"
 
     // Device Monitoring state — the app-wide Enabled/Disabled vocabulary.
     val deviceMonitoringEnabled = settings.enabled && !monitoringPaused
@@ -153,24 +138,7 @@ fun MonitoringScreen(
                 onClick = onOpenShortsControl,
             )
 
-            // ---- Section 4 — Break Reminder ----
-            SectionTitle(strings.monitoringBreakReminder)
-            ScPremiumNavCard(
-                iconKey = IconKey.BREAK_REMINDER,
-                title = strings.monitoringBreakReminder,
-                onClick = { onToggleBreakReminder(!settings.breakReminderEnabled) },
-                trailing = {
-                    ScSwitch(on = settings.breakReminderEnabled, onToggle = { onToggleBreakReminder(!settings.breakReminderEnabled) })
-                },
-            )
-            ScPremiumNavCard(
-                iconKey = IconKey.REMINDER_INTERVAL,
-                title = strings.monitoringReminderInterval,
-                onClick = { intervalDialogOpen = true },
-                trailing = { TrailingValue(intervalLabel(settings.breakReminderIntervalMinutes)) },
-            )
-
-            // ---- Section 5 — Monitoring Schedule (dedicated page) ----
+            // ---- Section 4 — Monitoring Schedule (dedicated page) ----
             SectionTitle(strings.monitoringSchedule)
             ScPremiumNavCard(
                 iconKey = IconKey.SCHEDULE,
@@ -203,35 +171,6 @@ fun MonitoringScreen(
         )
     }
 
-    // ---- Reminder Interval picker dialog ----
-    if (intervalDialogOpen) {
-        AlertDialog(
-            onDismissRequest = { intervalDialogOpen = false },
-            containerColor = colors.Card,
-            titleContentColor = colors.TextPrimary,
-            textContentColor = colors.TextSecondary,
-            title = { Text(strings.monitoringReminderInterval) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    breakIntervals.forEach { (minutes, label) ->
-                        DialogOption(
-                            label = label,
-                            selected = settings.breakReminderIntervalMinutes == minutes,
-                            onClick = {
-                                onSetBreakReminderInterval(minutes)
-                                intervalDialogOpen = false
-                            },
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { intervalDialogOpen = false }) {
-                    Text(strings.cancel, color = colors.TextSecondary)
-                }
-            },
-        )
-    }
 }
 
 /**
@@ -329,51 +268,3 @@ private fun SectionTitle(text: String) {
     )
 }
 
-/** Right-aligned value + chevron used by picker rows. */
-@Composable
-private fun TrailingValue(value: String) {
-    val colors = LocalScColors.current
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(value, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = colors.TextSecondary,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
-/** Selectable row inside the picker dialogs — highlights the current pick. */
-@Composable
-private fun DialogOption(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) colors.ChipActiveBg else Color.Transparent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            label,
-            color = if (selected) colors.ChipActiveText else colors.TextPrimary,
-            style = ScTextStyles.BodySemiBold,
-            modifier = Modifier.weight(1f),
-        )
-        if (selected) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.Accent, modifier = Modifier.size(18.dp))
-        }
-    }
-}

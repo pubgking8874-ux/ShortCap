@@ -41,6 +41,7 @@ import com.shortscap.app.screens.settings.StudyAllowedItemsScreen
 import com.shortscap.app.screens.settings.StudyModeScreen
 import com.shortscap.app.screens.settings.TextSizeScreen
 import com.shortscap.app.screens.settings.ThemeScreen
+import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.viewmodel.AppUiState
 import com.shortscap.app.viewmodel.AppViewModel
 
@@ -146,6 +147,7 @@ fun SettingsNavHost(
                 studyRemainingMillis = state.studyRemainingMillis,
                 studyTotalMillis = state.studyTotalMillis,
                 summary = state.studySummary,
+                focusPasscodeSet = state.focusPasscodeSet,
                 onStartSession = viewModel::startStudySession,
                 onSetStudyDuration = viewModel::setStudyDuration,
                 onSetStudyBreakReminder = viewModel::setStudyBreakReminder,
@@ -155,6 +157,11 @@ fun SettingsNavHost(
                 onSetStudyScheduleStart = viewModel::setStudyScheduleStart,
                 onSetStudyScheduleEnd = viewModel::setStudyScheduleEnd,
                 onOpenAllowed = { navController.navigate(SettingsDestinations.STUDY_ALLOWED) },
+                // Focus Exit Passcode flows live in their own root overlay
+                // (FocusPasscodeNavHost) — shared by Home AND Study Mode, so
+                // both exit paths use the exact same verification/recovery UI.
+                onOpenFocusPasscodeSetup = { viewModel.openFocusPasscodeFlow(FocusPasscodeEntry.SETUP) },
+                onOpenFocusPasscodeVerify = { viewModel.openFocusPasscodeFlow(FocusPasscodeEntry.VERIFY) },
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -186,8 +193,6 @@ fun SettingsNavHost(
                 monitoringPaused = state.monitoringPaused,
                 onToggleMonitoring = viewModel::setMonitoringEnabled,
                 onToggleStrictMode = viewModel::setStrictMode,
-                onToggleBreakReminder = viewModel::setBreakReminderEnabled,
-                onSetBreakReminderInterval = viewModel::setBreakReminderInterval,
                 onOpenShortsControl = { navController.navigate(SettingsDestinations.SHORTS_CONTROL) },
                 onOpenSchedule = { navController.navigate(SettingsDestinations.SCHEDULE) },
                 onBack = { navController.backOrClose(onClose) },

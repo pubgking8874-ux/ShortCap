@@ -17,6 +17,23 @@ package com.shortscap.app.study
 enum class StudySoundMode { SOUND, VIBRATE, SILENT }
 
 /**
+ * Study Mode Home visualization — the animation shown while a session is
+ * active. Today only [WATCH] (a clean watch/timer that communicates "time is
+ * running / Study Mode is active / protected") is implemented; the other
+ * values are future-ready placeholders so an upcoming
+ * Appearance → Study Animation setting can switch them WITHOUT rebuilding
+ * the Home page logic (ScStudyAnimation dispatches on this type).
+ */
+enum class StudyAnimationType {
+    /** Watch/Timer — sweeping hand + tick marks + lock badge (current default). */
+    WATCH,
+    /** Study/Book animation (future). */
+    BOOK,
+    /** Focus/Cartoon animation (future). */
+    FOCUS,
+}
+
+/**
  * Optional Study Mode active window. Configuration only today (like the
  * Monitoring Schedule) — future automation can auto-start sessions inside
  * this window without changing the UI.

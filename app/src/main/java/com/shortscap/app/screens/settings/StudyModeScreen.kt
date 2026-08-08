@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -66,6 +68,8 @@ import com.shortscap.app.theme.ScTextStyles
  *                button is replaced by the live countdown — there is no way
  *                to stop early.
  *   SETTINGS   — Study Duration, Break Reminder, Break Duration, Sound Mode.
+ *   FOCUS PROTECTION — Focus Exit Passcode (set/status; the ONLY way to end
+ *                      an active session early — via the verify screen).
  *   SCHEDULE   — Study Schedule (enabled + start/end window).
  *   ALLOWED    — Allowed Apps/Websites (stays accessible during sessions).
  *   SUMMARY    — Study Session Summary (derived when sessions complete).
@@ -83,6 +87,10 @@ fun StudyModeScreen(
     studyRemainingMillis: Long,
     studyTotalMillis: Long,
     summary: StudySummary,
+    // Focus Exit Passcode — set/status shown in the Focus Protection section;
+    // while a session is active the ONLY way to end early is the passcode
+    // verification screen (the subtle exit below the countdown).
+    focusPasscodeSet: Boolean,
     onStartSession: () -> Unit,
     onSetStudyDuration: (Int) -> Unit,
     onSetStudyBreakReminder: (Boolean) -> Unit,
@@ -92,11 +100,14 @@ fun StudyModeScreen(
     onSetStudyScheduleStart: (Int) -> Unit,
     onSetStudyScheduleEnd: (Int) -> Unit,
     onOpenAllowed: () -> Unit,
+    onOpenFocusPasscodeSetup: () -> Unit,
+    onOpenFocusPasscodeVerify: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
     var startDialogOpen by remember { mutableStateOf(false) }
+    var stopDialogOpen by remember { mutableStateOf(false) }
     var durationDialogOpen by remember { mutableStateOf(false) }
     var breakDurationDialogOpen by remember { mutableStateOf(false) }
     var soundDialogOpen by remember { mutableStateOf(false) }
@@ -133,10 +144,28 @@ fun StudyModeScreen(
             // ---- Session ----
             SectionTitle(strings.studySessionSection)
             if (studyModeActive) {
+                // The whole active session card is TAPPABLE: it opens the
+                // "Stop Study Mode?" confirmation (never stops directly) whose
+                // confirm leads to the SHARED Focus Exit Passcode verification.
                 ActiveSessionCard(
                     remainingMillis = studyRemainingMillis,
                     totalMillis = studyTotalMillis,
+                    passcodeProtected = focusPasscodeSet,
+                    onStop = { stopDialogOpen = true },
                 )
+                // Subtle protected exit — deliberately NOT dominant. Same
+                // "Stop Study Mode?" confirmation as tapping the card.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { stopDialogOpen = true }) {
+                        Icon(Icons.Filled.Lock, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.focusPasscodeVerifyButton, color = colors.TextSecondary, style = ScTextStyles.Caption)
+                    }
+                }
             } else {
                 ScButton(
                     label = strings.studyStartSession,
@@ -177,6 +206,25 @@ fun StudyModeScreen(
                 },
             )
 
+            // ---- Focus Protection (Focus Exit Passcode) ----
+            SectionTitle(strings.studyFocusProtection)
+            if (focusPasscodeSet) {
+                ScPremiumNavCard(
+                    iconKey = IconKey.FOCUS_PASSCODE,
+                    title = strings.focusPasscodeTitle,
+                    subtitle = strings.focusPasscodeLockedNote,
+                    onClick = onOpenFocusPasscodeVerify,
+                    trailing = { TrailingValue(strings.focusPasscodeSetStatus) },
+                )
+            } else {
+                ScPremiumNavCard(
+                    iconKey = IconKey.FOCUS_PASSCODE,
+                    title = strings.focusPasscodeSetupTitle,
+                    subtitle = strings.focusPasscodeSetupDesc,
+                    onClick = onOpenFocusPasscodeSetup,
+                )
+            }
+
             // ---- Schedule ----
             SectionTitle(strings.studySchedule)
             ScPremiumNavCard(
@@ -213,6 +261,35 @@ fun StudyModeScreen(
             SectionTitle(strings.studySummary)
             StudySummaryCard(summary = summary)
         }
+    }
+
+    // ---- "Stop Study Mode?" confirmation (active session) — opens the
+    //      SHARED Focus Exit Passcode verification; without a passcode set the
+    //      user is routed to first-time setup. Study Mode itself is only ended
+    //      after the passcode is verified (or 00:00 reached naturally). ----
+    if (stopDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { stopDialogOpen = false },
+            containerColor = colors.Card,
+            titleContentColor = colors.TextPrimary,
+            textContentColor = colors.TextSecondary,
+            title = { Text(strings.studyStopTitle) },
+            text = { Text(strings.studyStopMessage, style = ScTextStyles.Body) },
+            confirmButton = {
+                TextButton(onClick = {
+                    stopDialogOpen = false
+                    if (focusPasscodeSet) onOpenFocusPasscodeVerify()
+                    else onOpenFocusPasscodeSetup()
+                }) {
+                    Text(strings.studyStopAction, color = colors.Danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { stopDialogOpen = false }) {
+                    Text(strings.cancel, color = colors.TextSecondary)
+                }
+            },
+        )
     }
 
     // ---- Pre-start confirmation: no stop/cancel, Restricted Mode until 00:00 ----
@@ -336,9 +413,15 @@ private fun StudyStatusCard(active: Boolean, remainingText: String, note: String
     }
 }
 
-/** Active session card — big countdown, progress and the no-stop note. */
+/** Active session card — big countdown, progress, lock indicator + note. The
+ *  whole card is tappable ([onStop] → "Stop Study Mode?" confirmation). */
 @Composable
-private fun ActiveSessionCard(remainingMillis: Long, totalMillis: Long) {
+private fun ActiveSessionCard(
+    remainingMillis: Long,
+    totalMillis: Long,
+    passcodeProtected: Boolean,
+    onStop: (() -> Unit)? = null,
+) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
     val progress = if (totalMillis > 0) {
@@ -351,6 +434,12 @@ private fun ActiveSessionCard(remainingMillis: Long, totalMillis: Long) {
             .clip(shape)
             .background(colors.Card, shape)
             .border(1.dp, colors.Accent.copy(alpha = 0.35f), shape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = onStop != null,
+                onClick = { onStop?.invoke() },
+            )
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -373,6 +462,18 @@ private fun ActiveSessionCard(remainingMillis: Long, totalMillis: Long) {
                         .height(6.dp)
                         .clip(RoundedCornerShape(999.dp))
                         .background(colors.Accent),
+                )
+            }
+        }
+        if (passcodeProtected) {
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Filled.Lock, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(14.dp))
+                Text(
+                    strings.focusPasscodeLockedNote,
+                    color = colors.TextSecondary,
+                    style = ScTextStyles.Caption,
+                    textAlign = TextAlign.Center,
                 )
             }
         }

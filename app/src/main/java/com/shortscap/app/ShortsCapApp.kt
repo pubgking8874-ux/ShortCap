@@ -54,6 +54,7 @@ import com.shortscap.app.model.DrawerItem
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.navigation.DrawerNavHost
+import com.shortscap.app.navigation.FocusPasscodeNavHost
 import com.shortscap.app.navigation.ScNavHost
 import com.shortscap.app.navigation.SettingsNavHost
 import com.shortscap.app.screens.profile.ProfileScreen
@@ -253,6 +254,22 @@ fun ShortsCapApp(viewModel: AppViewModel = viewModel()) {
                                 state = state,
                                 viewModel = viewModel,
                                 onClose = viewModel::closeSettingsScreen,
+                            )
+                        }
+                    }
+
+                    // Focus Exit Passcode flow — ONE shared overlay rendered on
+                    // top of everything, opened from BOTH the Home page (tap
+                    // active Study Mode → Stop Study Mode?) and General → Study
+                    // Mode. Both callers land on the exact same verification +
+                    // recovery screens and observe the SAME Study Mode state.
+                    state.focusPasscodeFlow?.let { entry ->
+                        key(entry) {
+                            FocusPasscodeNavHost(
+                                entry = entry,
+                                state = state,
+                                viewModel = viewModel,
+                                onClose = viewModel::closeFocusPasscodeFlow,
                             )
                         }
                     }

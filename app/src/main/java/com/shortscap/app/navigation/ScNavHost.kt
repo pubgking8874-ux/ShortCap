@@ -15,6 +15,7 @@ import com.shortscap.app.screens.activity.ActivityReportScreen
 import com.shortscap.app.screens.activity.ActivityScreen
 import com.shortscap.app.screens.home.HomeScreen
 import com.shortscap.app.screens.settings.SettingsScreen
+import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.viewmodel.AppUiState
 import com.shortscap.app.viewmodel.AppViewModel
 
@@ -58,10 +59,17 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                 missingRequiredPermissions = state.missingRequiredMonitoringPermissions,
                 // Study Mode — timestamp-based remaining time; the Home
                 // carousel leads with the study countdown while active and
-                // returns to the normal Shorts monitoring UI at 00:00.
+                // returns to the normal Shorts monitoring UI at 00:00. Tapping
+                // the active Study Mode page opens the SHARED Focus Exit
+                // Passcode verification (same screen as General → Study Mode).
                 studyModeActive = state.studyModeActive,
                 studyRemainingMillis = state.studyRemainingMillis,
                 studyTotalMillis = state.studyTotalMillis,
+                onStopStudyMode = {
+                    viewModel.openFocusPasscodeFlow(
+                        if (state.focusPasscodeSet) FocusPasscodeEntry.VERIFY else FocusPasscodeEntry.SETUP,
+                    )
+                },
                 // Tapping the paused circle re-checks the required permissions
                 // before showing the resume popup.
                 onRefreshPermissions = viewModel::refreshPermissions,

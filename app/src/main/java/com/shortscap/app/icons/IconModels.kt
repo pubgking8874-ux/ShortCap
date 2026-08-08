@@ -67,6 +67,7 @@ enum class IconKey {
     // ---- General ----
     LANGUAGE,
     STUDY_MODE,
+    FOCUS_PASSCODE,
 
     // ---- Appearance ----
     THEME,

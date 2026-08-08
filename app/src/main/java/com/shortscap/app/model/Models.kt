@@ -109,11 +109,15 @@ val DefaultShortVideoPlatforms = listOf(
 
 /**
  * All Monitoring settings shown on the Monitoring screen. Single source of
- * truth for the section toggles, the screen-time limit, break reminder and
- * the platform switches. Today the ViewModel seeds demo values (stats too);
- * tomorrow GET / UPDATE Monitoring Settings APIs swap in behind the same
- * shape — no UI changes required. A SettingsRepository seam is the intended
- * home for those API calls.
+ * truth for the section toggles, the screen-time limit and the platform
+ * switches. Today the ViewModel seeds demo values; tomorrow GET / UPDATE
+ * Monitoring Settings APIs swap in behind the same shape — no UI changes
+ * required. A SettingsRepository seam is the intended home for those API
+ * calls.
+ *
+ * Break Reminder / Break Duration deliberately do NOT live here — they
+ * belong exclusively to Study Mode (StudyModeSettings in the study/
+ * package), so there is exactly one owner of that feature.
  */
 data class MonitoringSettings(
     val enabled: Boolean = true,
@@ -121,8 +125,6 @@ data class MonitoringSettings(
     val screenTimeLimitMinutes: Int = 60,
     val customScreenTimeLimitMinutes: Int = 90,
     val strictModeEnabled: Boolean = false,
-    val breakReminderEnabled: Boolean = true,
-    val breakReminderIntervalMinutes: Int = 30,
     val platforms: List<ShortVideoPlatform> = DefaultShortVideoPlatforms,
     val schedule: Schedule = Schedule(),
 ) {

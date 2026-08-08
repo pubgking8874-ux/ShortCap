@@ -780,10 +780,9 @@ The Monitoring screen (`screens/settings/MonitoringScreen.kt`) is a full page wi
 | 1 | Monitoring | **Device Monitoring** — master switch + **Enabled / Disabled** status (same vocabulary as the Permissions screen) + a small circular **info button** opening a dialog explaining what is monitored, why the required Android permissions matter, and what happens if one is disabled |
 | 2 | Strict Mode | Switch ("Prevent bypassing restrictions.") |
 | 3 | Shorts | **Shorts Control** — opens the dedicated per-platform screen (YouTube Shorts / Instagram Reels / Facebook Reels / Snapchat Spotlight, each with its own real brand icon + independent switch) |
-| 4 | Break Reminder | Switch + Reminder Interval picker (15 / 30 / 45 Minutes / 1 Hour) |
-| 5 | Monitoring Schedule | Dedicated page (UI only; start/end time + weekdays/weekends later) |
+| 4 | Monitoring Schedule | Dedicated page (UI only; start/end time + weekdays/weekends later) |
 
-Removed from Monitoring: **Enable App Blocking**, **Blocked Apps**, **Allowed Apps**, **Daily Screen Time Limit**, the per-platform Shorts toggles and the read-only Statistics tiles — the underlying concepts/models are preserved for the future Settings/Restriction section; only this page's dependency was removed.
+Removed from Monitoring: **Break Reminder / Reminder Interval** (it now lives exclusively in **Study Mode** under the General section), **Enable App Blocking**, **Blocked Apps**, **Allowed Apps**, **Daily Screen Time Limit**, the per-platform Shorts toggles and the read-only Statistics tiles — the underlying concepts/models are preserved where needed for the future Settings/Restriction section; only this page's dependency was removed.
 
 All pickers are clean Material 3 dialogs styled with the ShortsCap dark theme; the current selection is highlighted with a checkmark.
 
@@ -821,7 +820,7 @@ Settings → Monitoring → Blocked Apps
 
 - **No business logic is hardcoded in the UI.** Every setting lives in the `MonitoringSettings` model (`model/Models.kt`) held by `AppViewModel` as the single source of truth (`StateFlow<AppUiState>`). The Monitoring screen is a stateless composable receiving the model + callback lambdas.
 - **Placeholder API seams** (documented, not implemented) — ready for a `SettingsRepository`:
-  - `GET / UPDATE Monitoring Settings` → `MonitoringSettings` fields (master, strict mode, break reminder, per-platform Shorts, schedule; app blocking / screen-time limit fields remain reserved for the future Settings/Restriction section)
+  - `GET / UPDATE Monitoring Settings` → `MonitoringSettings` fields (master, strict mode, per-platform Shorts, schedule; app blocking / screen-time limit fields remain reserved for the future Settings/Restriction section)
   - `GET / UPDATE Blocked Apps` → Blocked Apps page
   - `GET / UPDATE Allowed Apps` → Allowed Apps page
   - `GET / UPDATE Monitoring Schedule` → Schedule page (start/end time, weekdays/weekends)
@@ -908,7 +907,8 @@ Urdu also flips the app’s **layout direction to RTL** (`LocalLayoutDirection`)
 | Section | Controls |
 | --- | --- |
 | Status | Active / Inactive + live remaining countdown while a session runs |
-| Session | **Start Study Session** (pre-start confirmation) → while active the button is replaced by the countdown — **no Stop/Cancel during a session** |
+| Session | **Start Study Session** (pre-start confirmation) → while active the button is replaced by the countdown — **no Stop/Cancel during a session** (the only way to end early is the Focus Exit Passcode) |
+| Focus Protection | **Focus Exit Passcode** — set/status row; the ONLY way to end an active session early (via the passcode verification screen) |
 | Settings | Study Duration (15/25/30/45/60/90 min) · Break Reminder switch · Break Duration (3/5/10/15 min) · Sound Mode (Sound/Vibrate/Silent) |
 | Study Schedule | Enabled switch + Start/End time pickers (configuration; future automation) |
 | Allowed Apps/Websites | Dedicated page — each allowed app/website keeps its own independent switch + add-website by domain |
@@ -916,26 +916,43 @@ Urdu also flips the app’s **layout direction to RTL** (`LocalLayoutDirection`)
 
 ## Session behavior (one connected system)
 
-- **Start** → confirmation dialog clearly states: Study Mode stays active until the countdown reaches **00:00**, there is **no Stop/Cancel button** during a session, and **Restricted Mode stays on until the timer finishes** (Shorts platforms stay restricted; YouTube, Google, Calculator, Gallery and the user's allowed apps/websites remain accessible).
+- **Start** → confirmation dialog clearly states: Study Mode stays active until the countdown reaches **00:00**, there is **no Stop/Cancel button** during a session (you can end early ONLY with the Focus Exit Passcode), and **Restricted Mode stays on until the timer finishes** (Shorts platforms stay restricted; YouTube, Google, Calculator, Gallery and the user's allowed apps/websites remain accessible).
 - **Restricted Mode** is activated automatically: Strict Mode is forced ON for the session (the previous value is remembered), and while a session is active the user **cannot manually disable** Strict Mode or Monitoring — the ViewModel ignores those toggles until 00:00.
 - **Timestamp-based countdown** — the session stores `startTimeMillis`, `endTimeMillis` and a ticking `currentTimeMillis` (remaining = end − current), so the timer stays exact when the app goes to the background or is reopened. A one-second ticker + an on-resume expiry check end the session at 00:00, restore the normal Strict Mode state and update the summary.
-- **HOME** — while a session is active the existing circular analytics carousel leads with a dedicated **Study Mode page** ("Study Mode Active" + countdown ring + a subtle books/notebook/pen animation). The existing Watch Time / Shorts Count pages stay behind it, untouched, and return to the front automatically at 00:00.
+- **HOME** — while a session is active the existing circular analytics carousel leads with a dedicated **Study Mode page** ("Study Mode Active" + countdown ring + a reusable **Watch/Timer sweep-hand animation** with a small lock badge). The existing Watch Time / Shorts Count pages stay behind it, untouched, and return to the front automatically at 00:00.
+- **Two exit locations, one shared state** — an active session can be ended early from **Home** (tap the active Study Mode circle) or from **General → Study Mode** (tap the active session card). Both open the same "Stop Study Mode?" confirmation, which routes into the **same** Focus Exit Passcode verification screen. There is exactly ONE `StudyModeState` (inactive / active + startTime / endTime / remaining) and ONE passcode + recovery system — Home and General always mirror each other; they can never disagree.
+
+## Focus Exit Passcode (Study Mode protection & recovery)
+
+A complete **Focus Exit Passcode** system lives inside Study Mode (General → Study Mode → **Focus Protection**). It controls ONLY the ability to manually end an active session before 00:00 — it never changes blocking settings, restriction configuration, Monitoring, Activity/History data or normal authentication, and natural completion at 00:00 never requires it.
+
+- **Setup (first time)** — "Set Focus Exit Passcode": hidden passcode field with Show/Hide eye, **min 8 characters, no artificial maximum, no Forgot option**; success toast + return to Study Mode.
+- **Protected exit (from both Home and General → Study Mode)** — an active session can only be ended early via the passcode. Tapping the active Study Mode card (Home circle or the Study Mode session card) shows "Stop Study Mode?" → **Stop Study Mode** → the shared **"Enter Focus Exit Passcode"** screen. A correct passcode ends the session immediately (countdown stops, restrictions restored, "Study Mode ended successfully."); an incorrect one keeps Study Mode fully active with a calm "Incorrect Focus Exit Passcode." error so the user can retry. If no passcode has been set yet, the flow routes to passcode setup first.
+- **Recovery (Forgot Passcode?)** — only reachable from the verification screen: Recover → choose **Email** or **Mobile** (two separate cards, no assumption) → Send Verification Code → dedicated 6-digit OTP page (resend countdown; clearly says email or mobile, no sensitive data shown) → Create New Passcode (New + Confirm with eye toggles, min 8, must match) → returns to the verification screen so the new passcode works immediately.
+- **Design** — a dedicated "Study Focus Protection & Recovery" visual identity (lock/focus icon, clean card, ShortsCap dark theme); it deliberately looks **nothing like** the Sign In / Sign Up / auth OTP screens.
+- **Security / backend-ready** — the passcode is **never stored as plain text** (per-install random salt + SHA-256 hash, constant-time verification; the future backend uses a proper KDF). OTP is a LOCAL MOCK (random 6-digit code, 5-minute expiry, single-use) surfaced as a subtle "Demo code" line only until the backend sends it via email/SMS; the old passcode becomes invalid immediately after recovery.
 
 ## Future backend readiness
 
 - `study/StudyModels.kt` — `StudyModeSettings`, `StudySchedule`, `StudySession` (sessionStartTime / sessionEndTime / currentTime / remainingDuration map 1:1 to a future API), `StudySummary`, allowed-items catalogs.
+- `study/FocusPasscodeModels.kt`, `study/FocusPasscodeRepository.kt` (OTP request/resend/verify seams → `POST /focus-passcode/otp/*`), `study/FocusPasscodePreferenceStore.kt` (salted-hash storage).
 - `study/StudyRepository.kt` — GET/PUT Study Settings, POST Study Session, GET Study Summary seams (mirrors the SettingsRepository pattern). Swapping local state for backend APIs requires **no UI changes**.
 - Study Mode never touches `MonitoringSettings`, `ActivityRepository` or Web rules — the two systems stay independently extendable.
 
 ## Files
 
 - `study/StudyModels.kt`, `study/StudyRepository.kt` — Study Mode module (models + backend seam)
+- `study/FocusPasscodeModels.kt`, `study/FocusPasscodeRepository.kt`, `study/FocusPasscodePreferenceStore.kt` — Focus Exit Passcode module (recovery method, mock OTP seam, salted-hash storage)
 - `screens/settings/StudyModeScreen.kt`, `screens/settings/StudyAllowedItemsScreen.kt` — **new** screens
+- `screens/settings/FocusPasscodeScreens.kt` — **new** 7-screen Focus Exit Passcode flow (setup / verify / recover / email / mobile / OTP / create)
 - `screens/settings/GeneralScreen.kt` — Study Mode row added inside the existing General section
 - `navigation/SettingsNavHost.kt` — `settings_study_mode` + `settings_study_allowed` routes
-- `components/CircularAnalytics.kt` — Study Mode page injected into the Home carousel (countdown + study animation)
-- `viewmodel/AppViewModel.kt` — `studySettings` / `activeStudySession` / `studySummary` + session lifecycle + Restricted Mode guards
-- `icons/` — `IconKey.STUDY_MODE`
+- `navigation/FocusPasscodeNavHost.kt` — **new** dedicated root-level overlay hosting ALL passcode screens (setup / verify / recover / email / mobile / OTP / create) so Home and General → Study Mode share the exact same flow
+- `ShortsCapApp.kt` — renders the `FocusPasscodeNavHost` overlay above the settings overlay
+- `components/CircularAnalytics.kt` — tappable Study Mode page injected into the Home carousel (countdown + reusable `ScStudyAnimation` Watch/Timer animation + lock badge; `StudyAnimationType` enum ready for future Book/Focus variants from Appearance)
+- `screens/home/HomeScreen.kt` — active Study Mode circle opens "Stop Study Mode?" → Focus Exit Passcode
+- `viewmodel/AppViewModel.kt` — `studySettings` / `activeStudySession` / `studySummary` + session lifecycle + Restricted Mode guards + passcode create/verify/update + mock OTP + `endStudySessionWithPasscode` + `focusPasscodeFlow` open/close overlay control
+- `icons/` — `IconKey.STUDY_MODE`, `IconKey.FOCUS_PASSCODE`
 - `i18n/` — full catalog (EN / HI / UR / ZH / ES) for the screens, dialogs, toasts and Home page
 
 ---
@@ -1142,7 +1159,7 @@ A **centralized, app-wide icon system** was added to ShortsCap. Users pick an **
 - **Profile** — profile field icons (person / email / lock / calendar)
 - **Settings** — General, Monitoring, Permissions, Notifications, Appearance, Data Backup, About, Reset All Settings
 - **General** — Language
-- **Monitoring** — Device Monitoring, Strict Mode, Shorts Control, Break Reminder, Reminder Interval, Monitoring Schedule
+- **Monitoring** — Device Monitoring, Strict Mode, Shorts Control, Monitoring Schedule
 - **Permissions** — all 6 permission rows + detail page hero (each row keeps its recognizable icon and gains its own color in Vibrant)
 - **Notifications** — the 6 categories + every option row (options inherit their category color in Vibrant)
 - **Appearance** — Theme, **Icons**, Text Size
