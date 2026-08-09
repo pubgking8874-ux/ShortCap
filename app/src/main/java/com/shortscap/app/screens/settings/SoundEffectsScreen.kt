@@ -8,25 +8,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.LocalCafe
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -38,48 +32,42 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScSubScreenTopBar
-import com.shortscap.app.components.ScSwitch
-import com.shortscap.app.i18n.AppStrings
 import com.shortscap.app.i18n.LocalAppStrings
-import com.shortscap.app.sounds.AppSound
+import com.shortscap.app.icons.IconKey
+import com.shortscap.app.icons.IconTheme
+import com.shortscap.app.icons.LocalIconStyle
 import com.shortscap.app.sounds.SoundEffectCategory
-import com.shortscap.app.sounds.SoundEffectsConfig
-import com.shortscap.app.sounds.SoundPreviewPlayer
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
 /**
- * Sound & Effects — the CENTRAL control panel for every ShortsCap app sound.
+ * Sound & Effects — the CENTRAL app-sounds control center, all on ONE screen.
  *
- * This is deliberately separate from the Android device Sound / Vibrate /
- * Silent mode (owned by Study Mode → Sound Mode). Here the user controls
- * ShortsCap's OWN sounds: a master "App Sounds" switch plus one selectable
- * sound per category (Break Reminder, Study Schedule Reminder, Shorts limit
- * alerts, Break Start/End). Every future feature reads its sound from this
- * single [SoundEffectsConfig] — never per-feature sound systems.
+ * Deliberately separate from the Android device Sound / Vibrate / Silent
+ * mode (owned by Study Mode → Sound Mode). The page shows every ShortsCap
+ * sound organized under three section headings — STUDY MODE, MONITORING and
+ * NOTIFICATIONS. Headings are pure labels (never navigate); the small ⓘ
+ * next to each opens a compact in-place info popup. Every row below shows
+ * ONLY the sound/event name and opens the shared sound configuration screen
+ * — the currently selected audio is deliberately NOT shown here; users
+ * discover it inside each option's configuration screen.
  *
- * Preview (▶) plays ONLY that sound via [SoundPreviewPlayer] — short,
- * non-intrusive, and never triggering any actual reminder / notification /
- * Study Mode / Shorts-limit behavior.
+ * Selection is persisted in the single [SoundEffectsConfig] held by the
+ * ViewModel (backend-ready via SoundEffectsRepository).
  */
 @Composable
 fun SoundEffectsScreen(
-    config: SoundEffectsConfig,
-    onSetAppSoundsEnabled: (Boolean) -> Unit,
-    onSetCategorySound: (SoundEffectCategory, AppSound) -> Unit,
+    onOpenSound: (SoundEffectCategory) -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
-    var selectedCategory by remember { mutableStateOf<SoundEffectCategory?>(null) }
+    var infoGroup by remember { mutableStateOf<SoundGroup?>(null) }
 
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
         ScSubScreenTopBar(title = strings.soundEffectsTitle, onBack = onBack)
@@ -89,106 +77,141 @@ fun SoundEffectsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // ---- Master App Sounds switch — OFF silences every ShortsCap
-            //      sound/effect (never touches the device audio mode). ----
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(colors.Card, RoundedCornerShape(22.dp))
-                    .border(1.dp, colors.Divider, RoundedCornerShape(22.dp))
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(colors.CardHover),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.GraphicEq,
-                        contentDescription = null,
-                        tint = colors.Accent,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(strings.soundEffectsAppSounds, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp))
-                    Text(strings.soundEffectsAppSoundsDesc, color = colors.TextSecondary, style = ScTextStyles.Caption)
-                }
-                ScSwitch(on = config.appSoundsEnabled, onToggle = { onSetAppSoundsEnabled(!config.appSoundsEnabled) })
+            // ---- Three sections on ONE screen — headings only, no cards. ----
+            SoundGroup.entries.forEach { group ->
+                SoundSection(
+                    group = group,
+                    onOpenSound = onOpenSound,
+                    onInfo = { infoGroup = group },
+                )
             }
+        }
+    }
 
-            // ---- Sound categories — dimmed + locked while App Sounds is OFF ----
-            Column(
-                modifier = Modifier.alpha(if (config.appSoundsEnabled) 1f else 0.4f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+    // ---- Section info popup — compact, in place, never navigates. ----
+    infoGroup?.let { group ->
+        SectionInfoDialog(
+            group = group,
+            onDismiss = { infoGroup = null },
+        )
+    }
+}
+
+/**
+ * One section: a non-clickable heading (icon + uppercased title + ⓘ button)
+ * above a single grouped container holding that section's compact sound
+ * rows, separated by thin dividers — the premium grouped-settings look.
+ */
+@Composable
+private fun SoundSection(
+    group: SoundGroup,
+    onOpenSound: (SoundEffectCategory) -> Unit,
+    onInfo: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    val style = LocalIconStyle.current
+    val shape = RoundedCornerShape(20.dp)
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // ---- Section heading — label only, never navigates. ----
+        val headingIcon = IconTheme.icon(style, groupIconKey(group))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp),
+        ) {
+            Icon(
+                headingIcon,
+                contentDescription = null,
+                tint = IconTheme.tint(style, groupIconKey(group), colors.Accent),
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                soundGroupTitle(strings, group).uppercase(),
+                color = colors.TextSecondary,
+                style = ScTextStyles.SectionTitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            // Small circular ⓘ — opens the section info popup.
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colors.CardHover)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onInfo,
+                    ),
+                contentAlignment = Alignment.Center,
             ) {
-                SoundEffectCategory.entries.forEach { category ->
-                    SoundCategoryCard(
-                        category = category,
-                        sound = config.soundFor(category),
-                        enabled = config.appSoundsEnabled,
-                        onPreview = { SoundPreviewPlayer.play(config.soundFor(category)) },
-                        onClick = { if (config.appSoundsEnabled) selectedCategory = category },
+                Icon(
+                    Icons.Filled.Info,
+                    contentDescription = strings.soundInfoButton,
+                    tint = colors.TextSecondary,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(colors.Card, shape)
+                .border(1.dp, colors.Divider, shape),
+        ) {
+            group.categories.forEachIndexed { index, category ->
+                SoundRow(
+                    category = category,
+                    onClick = { onOpenSound(category) },
+                )
+                if (index < group.categories.lastIndex) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 62.dp)
+                            .height(1.dp)
+                            .background(colors.Divider),
                     )
                 }
             }
         }
     }
-
-    // ---- Sound selection — one sound per category; every option can be
-    //      previewed (▶) before selecting. ----
-    selectedCategory?.let { category ->
-        SoundPickerDialog(
-            category = category,
-            current = config.soundFor(category),
-            onSelect = { sound ->
-                onSetCategorySound(category, sound)
-                selectedCategory = null
-            },
-            onDismiss = { selectedCategory = null },
-        )
-    }
 }
 
-/** One category row — current sound + small ▶ preview + chevron. */
+/** Compact settings row — icon · sound/event name · chevron only. */
 @Composable
-private fun SoundCategoryCard(
+private fun SoundRow(
     category: SoundEffectCategory,
-    sound: AppSound,
-    enabled: Boolean,
-    onPreview: () -> Unit,
     onClick: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
-    val shape = RoundedCornerShape(18.dp)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(colors.Card, shape)
-            .border(1.dp, colors.Divider, shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                enabled = enabled,
                 onClick = onClick,
             )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(colors.CardHover),
             contentAlignment = Alignment.Center,
         ) {
@@ -196,171 +219,59 @@ private fun SoundCategoryCard(
                 categoryIcon(category),
                 contentDescription = null,
                 tint = colors.Accent,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                categoryLabel(strings, category),
-                color = colors.TextPrimary,
-                style = ScTextStyles.BodySemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                soundLabel(strings, sound),
-                color = colors.TextSecondary,
-                style = ScTextStyles.Caption,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        PreviewButton(enabled = enabled, onClick = onPreview)
+        Text(
+            categoryLabel(strings, category),
+            color = colors.TextPrimary,
+            style = ScTextStyles.BodySemiBold.copy(fontSize = 14.sp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = colors.TextSecondary,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
-/** Small circular ▶ — plays ONLY the requested sound. */
-@Composable
-private fun PreviewButton(
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .background(colors.CardHover)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            Icons.Filled.PlayArrow,
-            contentDescription = LocalAppStrings.current.soundEffectsPreview,
-            tint = colors.Accent,
             modifier = Modifier.size(18.dp),
         )
     }
 }
 
-/** Sound picker — one row per [AppSound], preview + selected check. */
+/** Compact premium info popup — title, short explanation, OK to dismiss. */
 @Composable
-private fun SoundPickerDialog(
-    category: SoundEffectCategory,
-    current: AppSound,
-    onSelect: (AppSound) -> Unit,
+private fun SectionInfoDialog(
+    group: SoundGroup,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = colors.Card,
         titleContentColor = colors.TextPrimary,
         textContentColor = colors.TextSecondary,
-        title = { Text(categoryLabel(strings, category)) },
+        title = { Text(sectionInfoTitle(strings, group)) },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                AppSound.entries.forEach { sound ->
-                    SoundOptionRow(
-                        sound = sound,
-                        selected = sound == current,
-                        onPreview = { SoundPreviewPlayer.play(sound) },
-                        onSelect = { onSelect(sound) },
-                    )
-                }
-            }
+            Text(
+                sectionInfoDescription(strings, group),
+                style = ScTextStyles.Body,
+            )
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(strings.cancel, color = colors.TextSecondary)
+                Text(strings.ok, color = colors.Accent)
             }
         },
     )
 }
 
-/** One selectable sound row — name + ▶ preview + selected check. */
-@Composable
-private fun SoundOptionRow(
-    sound: AppSound,
-    selected: Boolean,
-    onPreview: () -> Unit,
-    onSelect: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) colors.ChipActiveBg else Color.Transparent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onSelect,
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            soundLabel(strings, sound),
-            color = if (selected) colors.ChipActiveText else colors.TextPrimary,
-            style = ScTextStyles.BodySemiBold,
-            modifier = Modifier.weight(1f),
-        )
-        PreviewButton(enabled = true, onClick = onPreview)
-        if (selected) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.Accent, modifier = Modifier.size(18.dp))
-        }
-    }
-}
-
-/** Localized category label. */
-private fun categoryLabel(strings: AppStrings, category: SoundEffectCategory): String = when (category) {
-    SoundEffectCategory.BREAK_REMINDER -> strings.soundEffectsBreakReminder
-    SoundEffectCategory.SCHEDULE_REMINDER -> strings.soundEffectsScheduleReminder
-    SoundEffectCategory.SHORTS_LIMIT_WARNING -> strings.soundEffectsLimitWarning
-    SoundEffectCategory.SHORTS_LIMIT_REACHED -> strings.soundEffectsLimitReached
-    SoundEffectCategory.BREAK_START -> strings.soundEffectsBreakStart
-    SoundEffectCategory.BREAK_END -> strings.soundEffectsBreakEnd
-}
-
-/** Localized sound-library label. */
-private fun soundLabel(strings: AppStrings, sound: AppSound): String = when (sound) {
-    AppSound.DEFAULT -> strings.appSoundDefault
-    AppSound.GENTLE_CHIME -> strings.appSoundGentleChime
-    AppSound.SOFT_BELL -> strings.appSoundSoftBell
-    AppSound.CALM_TONE -> strings.appSoundCalmTone
-    AppSound.FOCUS_TONE -> strings.appSoundFocusTone
-    AppSound.WARNING_PULSE -> strings.appSoundWarningPulse
-    AppSound.LIMIT_ALERT -> strings.appSoundLimitAlert
-    AppSound.SUCCESS_CHIME -> strings.appSoundSuccessChime
-}
-
-/** Per-category icon — study/alert themed, matching the category meaning. */
-private fun categoryIcon(category: SoundEffectCategory): ImageVector = when (category) {
-    SoundEffectCategory.BREAK_REMINDER -> Icons.Filled.LocalCafe
-    SoundEffectCategory.SCHEDULE_REMINDER -> Icons.Filled.Alarm
-    SoundEffectCategory.SHORTS_LIMIT_WARNING -> Icons.Filled.WarningAmber
-    SoundEffectCategory.SHORTS_LIMIT_REACHED -> Icons.Filled.Block
-    SoundEffectCategory.BREAK_START -> Icons.Filled.PlayArrow
-    SoundEffectCategory.BREAK_END -> Icons.Filled.CheckCircle
+/** Icon key behind each section heading. */
+private fun groupIconKey(group: SoundGroup): IconKey = when (group) {
+    SoundGroup.STUDY -> IconKey.STUDY_MODE
+    // Usage monitoring / activity tracking — analytics line, not the eye icon.
+    SoundGroup.MONITORING -> IconKey.MONITORING_ANALYTICS
+    SoundGroup.NOTIFICATIONS -> IconKey.NOTIFICATIONS
 }

@@ -35,9 +35,11 @@ import com.shortscap.app.screens.settings.MonitoringScheduleScreen
 import com.shortscap.app.screens.settings.MonitoringScreen
 import com.shortscap.app.screens.settings.NotificationCategoryScreen
 import com.shortscap.app.screens.settings.NotificationsScreen
+import com.shortscap.app.screens.settings.AddCustomSoundScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
 import com.shortscap.app.screens.settings.ShortsControlScreen
+import com.shortscap.app.screens.settings.SoundConfigScreen
 import com.shortscap.app.screens.settings.SoundEffectsScreen
 import com.shortscap.app.screens.settings.StudyAllowedItemsScreen
 import com.shortscap.app.screens.settings.StudyModeScreen
@@ -45,6 +47,7 @@ import com.shortscap.app.screens.settings.StudyScheduleEditScreen
 import com.shortscap.app.screens.settings.StudyScheduleScreen
 import com.shortscap.app.screens.settings.TextSizeScreen
 import com.shortscap.app.screens.settings.ThemeScreen
+import com.shortscap.app.sounds.SoundEffectCategory
 import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.viewmodel.AppUiState
 import com.shortscap.app.viewmodel.AppViewModel
@@ -58,6 +61,8 @@ object SettingsDestinations {
     const val NOTIFICATIONS = "settings_notifications"
     const val NOTIFICATION_CATEGORY = "settings_notification_category"
     const val SOUND_EFFECTS = "settings_sound_effects"
+    const val SOUND_CONFIG = "settings_sound_config"
+    const val SOUND_ADD_CUSTOM = "settings_sound_add_custom"
     const val APPEARANCE = "settings_appearance"
     const val APPEARANCE_THEME = "settings_appearance_theme"
     const val APPEARANCE_ICONS = "settings_appearance_icons"
@@ -88,6 +93,12 @@ object SettingsDestinations {
     /** Route with the [NotificationCategory] name appended, e.g. settings_notification_category/REMINDERS. */
     fun notificationCategoryRoute(category: NotificationCategory): String =
         "$NOTIFICATION_CATEGORY/${category.name}"
+
+    /** Route with the [SoundEffectCategory] name appended, e.g. settings_sound_config/BREAK_REMINDER. */
+    fun soundConfigRoute(category: SoundEffectCategory): String = "$SOUND_CONFIG/${category.name}"
+
+    /** Route with the [SoundEffectCategory] name appended, e.g. settings_sound_add_custom/BREAK_REMINDER. */
+    fun soundAddCustomRoute(category: SoundEffectCategory): String = "$SOUND_ADD_CUSTOM/${category.name}"
 
     /** Route with the legal document key appended, e.g. settings_legal_document/privacy. */
     fun legalDocumentRoute(document: String): String = "$LEGAL_DOCUMENT/$document"
@@ -333,14 +344,52 @@ fun SettingsNavHost(
             )
         }
 
-        // Sound & Effects — the CENTRAL app-sounds control panel (master
-        // switch + per-category sound selection + previews). Fully separate
-        // from the Android device Sound / Vibrate / Silent mode.
+        // ---- Sound & Effects — ONE control-center screen. ----
+        // Fully separate from the Android device Sound / Vibrate / Silent
+        // mode. All nine sound options live on the single Sound & Effects
+        // page under three section headings; every row opens the SAME
+        // configuration screen (no duplicate sound settings, no nested
+        // category pages).
         composable(SettingsDestinations.SOUND_EFFECTS) {
             SoundEffectsScreen(
-                config = state.soundEffects,
-                onSetAppSoundsEnabled = viewModel::setAppSoundsEnabled,
-                onSetCategorySound = viewModel::setSoundForCategory,
+                onOpenSound = { category ->
+                    navController.navigate(SettingsDestinations.soundConfigRoute(category))
+                },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        // Individual sound configuration — shared by every sound option.
+        composable(
+            route = "${SettingsDestinations.SOUND_CONFIG}/{category}",
+            arguments = listOf(navArgument("category") { type = NavType.StringType }),
+        ) { entry ->
+            val category = entry.arguments?.getString("category")
+                ?.let { name -> SoundEffectCategory.entries.firstOrNull { it.name == name } }
+                ?: SoundEffectCategory.BREAK_REMINDER
+            SoundConfigScreen(
+                category = category,
+                loadSounds = viewModel::loadLocalSounds,
+                selectedSoundId = viewModel::localSelectedSound,
+                onSelectSound = viewModel::setLocalSelectedSound,
+                onAddFromDevice = {
+                    navController.navigate(SettingsDestinations.soundAddCustomRoute(category))
+                },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        // Add from Device — placeholder destination for the future media /
+        // file picker flow (UI/navigation only today).
+        composable(
+            route = "${SettingsDestinations.SOUND_ADD_CUSTOM}/{category}",
+            arguments = listOf(navArgument("category") { type = NavType.StringType }),
+        ) { entry ->
+            val category = entry.arguments?.getString("category")
+                ?.let { name -> SoundEffectCategory.entries.firstOrNull { it.name == name } }
+                ?: SoundEffectCategory.BREAK_REMINDER
+            AddCustomSoundScreen(
+                category = category,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

@@ -79,6 +79,8 @@ enum class IconKey {
 
     // ---- Monitoring ----
     MONITORING_ENABLE,
+    // Usage monitoring / activity tracking (Sound & Effects Monitoring section heading).
+    MONITORING_ANALYTICS,
     BLOCKED_APPS,
     ALLOWED_APPS,
     STRICT_MODE,

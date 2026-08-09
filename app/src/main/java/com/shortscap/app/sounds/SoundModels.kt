@@ -18,12 +18,15 @@ package com.shortscap.app.sounds
 
 /** Which ShortsCap feature a sound belongs to. */
 enum class SoundEffectCategory {
+    STUDY_SESSION_START,
+    STUDY_SESSION_END,
     BREAK_REMINDER,
     SCHEDULE_REMINDER,
     SHORTS_LIMIT_WARNING,
     SHORTS_LIMIT_REACHED,
     BREAK_START,
     BREAK_END,
+    NOTIFICATION_SOUND,
 }
 
 /** Every app sound available in the central sound library. */
@@ -60,12 +63,15 @@ data class SoundEffectsConfig(
     companion object {
         /** Per-category default sounds — a tasteful starting library. */
         fun defaultSelection(): Map<SoundEffectCategory, AppSound> = mapOf(
+            SoundEffectCategory.STUDY_SESSION_START to AppSound.FOCUS_TONE,
+            SoundEffectCategory.STUDY_SESSION_END to AppSound.SUCCESS_CHIME,
             SoundEffectCategory.BREAK_REMINDER to AppSound.GENTLE_CHIME,
             SoundEffectCategory.SCHEDULE_REMINDER to AppSound.SOFT_BELL,
             SoundEffectCategory.SHORTS_LIMIT_WARNING to AppSound.WARNING_PULSE,
             SoundEffectCategory.SHORTS_LIMIT_REACHED to AppSound.LIMIT_ALERT,
             SoundEffectCategory.BREAK_START to AppSound.CALM_TONE,
             SoundEffectCategory.BREAK_END to AppSound.SUCCESS_CHIME,
+            SoundEffectCategory.NOTIFICATION_SOUND to AppSound.GENTLE_CHIME,
         )
     }
 }

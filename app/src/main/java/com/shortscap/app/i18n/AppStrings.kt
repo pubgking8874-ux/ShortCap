@@ -182,16 +182,62 @@ interface AppStrings {
 
     // ---- Sound & Effects (central app-sounds control) ----
     val soundEffectsTitle: String
-    /** "App Sounds" — master switch label. */
-    val soundEffectsAppSounds: String
-    /** Subtitle under the App Sounds master switch. */
-    val soundEffectsAppSoundsDesc: String
     val soundEffectsBreakReminder: String
     val soundEffectsScheduleReminder: String
     val soundEffectsLimitWarning: String
     val soundEffectsLimitReached: String
-    val soundEffectsBreakStart: String
-    val soundEffectsBreakEnd: String
+    /** Section heading — "Study Mode" (label only, never navigates). */
+    val soundStudySection: String
+    /** Section heading — "Monitoring" (label only, never navigates). */
+    val soundMonitoringSection: String
+    /** Section heading — "Notifications" (label only, never navigates). */
+    val soundNotificationsSection: String
+    // Section info popups (ⓘ buttons next to each heading)
+    /** Content description for the ⓘ button on a section heading. */
+    val soundInfoButton: String
+    val soundStudyInfoTitle: String
+    val soundStudyInfoDesc: String
+    val soundMonitoringInfoTitle: String
+    val soundMonitoringInfoDesc: String
+    val soundNotificationsInfoTitle: String
+    val soundNotificationsInfoDesc: String
+    // Study sounds
+    val soundStudySessionStart: String
+    val soundStudySessionStartDesc: String
+    val soundStudySessionEnd: String
+    val soundStudySessionEndDesc: String
+    val soundBreakReminderDesc: String
+    val soundBreakSessionStart: String
+    val soundBreakSessionStartDesc: String
+    val soundBreakSessionEnd: String
+    val soundBreakSessionEndDesc: String
+    val soundScheduleReminderDesc: String
+    // Monitoring sounds
+    val soundLimitWarningDesc: String
+    val soundLimitReachedDesc: String
+    // Notification sound
+    val soundNotificationDesc: String
+    // Individual sound configuration screen
+    /** "Current" — label shown next to the currently selected sound. */
+    val soundCurrentLabel: String
+    /** "Add from Device" — opens the custom-audio flow for one sound. */
+    val soundAddFromDevice: String
+    /** Subtitle under the "Add from Device" action. */
+    val soundAddFromDeviceDesc: String
+    // Add from Device placeholder screen
+    val soundAddCustomTitle: String
+    val soundAddCustomDesc: String
+    val soundAddCustomEmptyTitle: String
+    val soundAddCustomEmptyDesc: String
+    /** "Choose File" — placeholder action that will open the device picker. */
+    val soundChooseFile: String
+    // Bundled local sound files (all_sounds assets) — states inside each category
+    /** "No sounds available" — empty state when a category folder has no audio files. */
+    val soundNoSounds: String
+    /** Empty-state explanation telling the user where to put audio files. */
+    fun soundNoSoundsDesc(folder: String): String
+    /** "Choose" — heading above the list when a category contains multiple sounds. */
+    val soundChoose: String
     // Sound library (shared by every category picker)
     val appSoundDefault: String
     val appSoundGentleChime: String

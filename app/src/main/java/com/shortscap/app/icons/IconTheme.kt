@@ -101,6 +101,10 @@ object IconTheme {
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> Icons.Filled.Insights
+        // Usage monitoring / activity tracking — Sound & Effects Monitoring
+        // section heading (activity line, NOT the eye icon of the Settings
+        // Monitoring row).
+        IconKey.MONITORING_ANALYTICS -> Icons.Filled.Timeline
         IconKey.BLOCKED_APPS -> Icons.Filled.DoNotDisturbOn
         // Allow Apps & Websites — app window + checkmark (allowed/permitted),
         // not a generic list icon.
@@ -263,6 +267,7 @@ private object VibrantPalette {
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> blue
+        IconKey.MONITORING_ANALYTICS -> blue
         IconKey.BLOCKED_APPS -> orange
         IconKey.ALLOWED_APPS -> green
         IconKey.STRICT_MODE -> red

@@ -34,6 +34,8 @@ import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.permissions.PermissionStatus
 import com.shortscap.app.settings.SettingsManager
 import com.shortscap.app.sounds.AppSound
+import com.shortscap.app.sounds.LocalSound
+import com.shortscap.app.sounds.LocalSoundRepository
 import com.shortscap.app.sounds.SoundEffectCategory
 import com.shortscap.app.sounds.SoundEffectsConfig
 import com.shortscap.app.sounds.SoundEffectsRepository
@@ -66,6 +68,7 @@ import com.shortscap.app.web.WebsiteBlockingEngine
 import com.shortscap.app.web.PlaceholderBlockingEngine
 import com.shortscap.app.web.WebUsageRecord
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -74,6 +77,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Single source of truth for app-wide UI state.
@@ -1110,6 +1114,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val updated = uiState.value.soundEffects.withSound(category, sound)
         SoundEffectsRepository.saveSettings(getApplication(), updated)
         _uiState.update { it.copy(soundEffects = updated) }
+    }
+
+    // ---- Local sound files (Downloads/All sounds/<category>) ----
+
+    /** Scans the category's folder under Downloads/All sounds. */
+    suspend fun loadLocalSounds(category: SoundEffectCategory): List<LocalSound> =
+        withContext(Dispatchers.IO) { LocalSoundRepository.loadSounds(getApplication(), category) }
+
+    /** Last user-selected sound id for a category (null = never chosen). */
+    fun localSelectedSound(category: SoundEffectCategory): String? =
+        LocalSoundRepository.selectedSound(getApplication(), category)
+
+    /** Persists the user's chosen sound for a category. */
+    fun setLocalSelectedSound(category: SoundEffectCategory, soundId: String) {
+        LocalSoundRepository.saveSelectedSound(getApplication(), category, soundId)
     }
 
     // ---- Permissions (live OS checks; backend-ready via PermissionRepository)

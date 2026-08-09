@@ -38,6 +38,14 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!--
+        Reading the user's local sound files from Downloads/All sounds
+        (Sound & Effects). READ_MEDIA_AUDIO applies to Android 13+;
+        READ_EXTERNAL_STORAGE (declared above, maxSdkVersion=32) covers
+        Android 12 and below. Requested at runtime from the sound
+        configuration screens.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <!--
         Known app packages so installed app icons can be resolved via
