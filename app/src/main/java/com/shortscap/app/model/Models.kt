@@ -71,7 +71,7 @@ data class ProfileData(
  * Settings -> <item> -> Back -> Settings.
  */
 enum class SettingsDestination {
-    GENERAL, MONITORING, PERMISSIONS, NOTIFICATIONS, APPEARANCE, ABOUT,
+    GENERAL, MONITORING, PERMISSIONS, NOTIFICATIONS, SOUND_EFFECTS, APPEARANCE, ABOUT,
 }
 
 /** One row on the Settings home — icon + title + chevron only (no subtitles). */

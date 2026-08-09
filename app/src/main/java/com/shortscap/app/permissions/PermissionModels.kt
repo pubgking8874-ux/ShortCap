@@ -18,6 +18,14 @@ enum class PermissionId {
     BATTERY_OPTIMIZATION,
     STORAGE_MEDIA,
     SYSTEM_AUDIO_ACCESS,
+    /**
+     * The foreground Monitoring Service — an informational/status control,
+     * not a system-grantable permission: Android exposes no toggle for a
+     * foreground service, so this row reflects whether the service is
+     * ACTUALLY running and configured (see PermissionRepository), and its
+     * tap opens the detail page instead of a system settings screen.
+     */
+    MONITORING_SERVICE,
 }
 
 /**

@@ -23,6 +23,7 @@ import com.shortscap.app.icons.IconStyle
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.model.ProfileData
+import com.shortscap.app.monitoring.MonitoringService
 import com.shortscap.app.notifications.NotificationRepository
 import com.shortscap.app.notifications.NotificationSetting
 import com.shortscap.app.notifications.NotificationSettingId
@@ -32,13 +33,20 @@ import com.shortscap.app.permissions.PermissionInfo
 import com.shortscap.app.permissions.PermissionRepository
 import com.shortscap.app.permissions.PermissionStatus
 import com.shortscap.app.settings.SettingsManager
+import com.shortscap.app.sounds.AppSound
+import com.shortscap.app.sounds.SoundEffectCategory
+import com.shortscap.app.sounds.SoundEffectsConfig
+import com.shortscap.app.sounds.SoundEffectsRepository
 import com.shortscap.app.study.DeviceSoundModeResult
+import com.shortscap.app.study.BreakReminderConfig
 import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.study.FocusPasscodePreferenceStore
 import com.shortscap.app.study.FocusPasscodeRepository
 import com.shortscap.app.study.FocusRecoveryMethod
+import com.shortscap.app.study.StudyDay
 import com.shortscap.app.study.StudyModeSettings
 import com.shortscap.app.study.StudyPreferenceStore
+import com.shortscap.app.study.StudyScheduleEntry
 import com.shortscap.app.study.StudySession
 import com.shortscap.app.study.StudySoundMode
 import com.shortscap.app.study.StudySummary
@@ -57,6 +65,7 @@ import com.shortscap.app.web.WebRuleStatus
 import com.shortscap.app.web.WebsiteBlockingEngine
 import com.shortscap.app.web.PlaceholderBlockingEngine
 import com.shortscap.app.web.WebUsageRecord
+import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -158,6 +167,12 @@ data class AppUiState(
     // by [NotificationRepository] (backend-ready: same shape maps 1:1 to a
     // future GET/POST /notifications/settings API).
     val notificationSettings: List<NotificationSetting> = NotificationRepository.seedSettings(),
+
+    // Sound & Effects — the CENTRAL app-sounds configuration (master switch +
+    // one sound per category). Persisted locally by SoundEffectsRepository;
+    // every feature reads its sound from here (Break Reminder, Study Schedule,
+    // Shorts limits, break start/end) — never per-feature sound systems.
+    val soundEffects: SoundEffectsConfig = SoundEffectsRepository.defaults(),
 
     // Permissions management center — live statuses resolved from the Android
     // OS by [PermissionRepository]; refreshed automatically whenever a
@@ -279,6 +294,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             themeMode = themeStore.loadThemeMode(),
             appLanguage = languageStore.loadLanguage(),
             notificationSettings = NotificationRepository.loadSettings(application),
+            soundEffects = SoundEffectsRepository.loadSettings(application),
             textSizeMode = AppearanceRepository.loadTextSizeMode(application),
             chartStyle = AppearanceRepository.loadChartStyle(application),
             iconStyle = IconRepository.loadIconStyle(application),
@@ -601,6 +617,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // — monitoring cannot be switched off mid-session.
         if (_uiState.value.studyModeActive && !on) return
         _uiState.update { it.copy(monitoring = it.monitoring.copy(enabled = on)) }
+        syncMonitoringService()
+    }
+
+    /**
+     * Keeps the foreground MonitoringService in sync with the real
+     * configuration: it runs only while monitoring is enabled AND every
+     * required monitoring permission is granted. The enabled flag is
+     * persisted so a START_STICKY restart (or the task-removed alarm
+     * restart) can self-heal without the UI being open; the service stops
+     * itself if the prerequisites disappear.
+     */
+    private fun syncMonitoringService() {
+        val state = _uiState.value
+        MonitoringService.saveMonitoringEnabled(getApplication(), state.monitoring.enabled)
+        val shouldRun = state.monitoring.enabled && state.missingRequiredMonitoringPermissions.isEmpty()
+        if (shouldRun) MonitoringService.start(getApplication())
+        else MonitoringService.stop(getApplication())
     }
 
     fun setStrictMode(on: Boolean) {
@@ -635,8 +668,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setStudyDuration(minutes: Int) =
         _uiState.update { it.copy(studySettings = it.studySettings.copy(studyDurationMinutes = minutes)) }
 
-    fun setStudyBreakReminder(on: Boolean) =
-        _uiState.update { it.copy(studySettings = it.studySettings.copy(breakReminderEnabled = on)) }
+    /** Replaces the whole Break Reminder configuration (saved from its page). */
+    fun setBreakReminderConfig(config: BreakReminderConfig) =
+        _uiState.update { it.copy(studySettings = it.studySettings.copy(breakReminder = config)) }
 
     fun setStudyBreakDuration(minutes: Int) =
         _uiState.update { it.copy(studySettings = it.studySettings.copy(breakDurationMinutes = minutes)) }
@@ -726,20 +760,86 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setStudyScheduleEnabled(on: Boolean) =
-        _uiState.update {
-            it.copy(studySettings = it.studySettings.copy(schedule = it.studySettings.schedule.copy(enabled = on)))
-        }
+    // ---- Study Schedule — MULTIPLE schedules, each with its own subject,
+    //      days, start time, duration, reminder and enabled state. Editing
+    //      one schedule never touches another (each keeps a stable id).
+    //      Configuration-only today; the future scheduler reads
+    //      reminderTimeMinutes (start − reminder) to fire a notification and
+    //      startMinutes + durationMinutes to auto-start the EXISTING Study
+    //      Mode session — no second Study Mode system. ----
 
-    fun setStudyScheduleStart(minutes: Int) =
+    /** Creates a new schedule (enabled by default). */
+    fun addStudySchedule(
+        subject: String,
+        days: Set<StudyDay>,
+        startMinutes: Int,
+        durationMinutes: Int,
+        reminderMinutesBefore: Int?,
+    ) {
+        val entry = StudyScheduleEntry(
+            id = UUID.randomUUID().toString(),
+            subject = subject.trim(),
+            days = days,
+            startMinutes = startMinutes,
+            durationMinutes = durationMinutes,
+            reminderMinutesBefore = reminderMinutesBefore,
+            enabled = true,
+        )
         _uiState.update {
-            it.copy(studySettings = it.studySettings.copy(schedule = it.studySettings.schedule.copy(startMinutes = minutes)))
+            it.copy(studySettings = it.studySettings.copy(schedules = it.studySettings.schedules + entry))
         }
+        showToast { it.studyScheduleSavedToast }
+    }
 
-    fun setStudyScheduleEnd(minutes: Int) =
-        _uiState.update {
-            it.copy(studySettings = it.studySettings.copy(schedule = it.studySettings.schedule.copy(endMinutes = minutes)))
+    /** Updates ONLY the schedule with [id]; all other schedules stay untouched. */
+    fun updateStudySchedule(
+        id: String,
+        subject: String,
+        days: Set<StudyDay>,
+        startMinutes: Int,
+        durationMinutes: Int,
+        reminderMinutesBefore: Int?,
+    ) {
+        _uiState.update { state ->
+            state.copy(
+                studySettings = state.studySettings.copy(
+                    schedules = state.studySettings.schedules.map {
+                        if (it.id == id) {
+                            it.copy(
+                                subject = subject.trim(),
+                                days = days,
+                                startMinutes = startMinutes,
+                                durationMinutes = durationMinutes,
+                                reminderMinutesBefore = reminderMinutesBefore,
+                            )
+                        } else it
+                    },
+                ),
+            )
         }
+        showToast { it.studyScheduleSavedToast }
+    }
+
+    /** Removes ONLY the schedule with [id]. */
+    fun deleteStudySchedule(id: String) {
+        _uiState.update {
+            it.copy(studySettings = it.studySettings.copy(schedules = it.studySettings.schedules.filterNot { s -> s.id == id }))
+        }
+        showToast { it.studyScheduleDeletedToast }
+    }
+
+    /** Flips the enabled state of ONLY the schedule with [id]. */
+    fun toggleStudyScheduleEnabled(id: String) {
+        _uiState.update { state ->
+            state.copy(
+                studySettings = state.studySettings.copy(
+                    schedules = state.studySettings.schedules.map {
+                        if (it.id == id) it.copy(enabled = !it.enabled) else it
+                    },
+                ),
+            )
+        }
+    }
 
     /** Removes/restores one app in the Study Mode allowed-app list. */
     fun toggleStudyAllowedApp(id: String) = _uiState.update { state ->
@@ -749,6 +849,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 allowedApps = if (id in current) current - id else current + id,
             ),
         )
+    }
+
+    /** Adds one installed app to the Study Mode allowed list (Add App picker). */
+    fun addStudyAllowedApp(id: String) = _uiState.update { state ->
+        val current = state.studySettings.allowedApps
+        if (id in current) state
+        else state.copy(studySettings = state.studySettings.copy(allowedApps = current + id))
+    }
+
+    /** Removes one app from the Study Mode allowed list (Manage Apps). */
+    fun removeStudyAllowedApp(id: String) = _uiState.update { state ->
+        val current = state.studySettings.allowedApps
+        if (id !in current) state
+        else state.copy(studySettings = state.studySettings.copy(allowedApps = current - id))
     }
 
     /** Removes/restores one domain in the Study Mode allowed-websites list. */
@@ -796,7 +910,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             startTimeMillis = now,
             endTimeMillis = now + settings.studyDurationMinutes * 60_000L,
             durationMinutes = settings.studyDurationMinutes,
-            breakReminderEnabled = settings.breakReminderEnabled,
+            breakReminder = settings.breakReminder,
             breakDurationMinutes = settings.breakDurationMinutes,
             soundMode = settings.soundMode,
             allowedApps = settings.allowedApps,
@@ -812,6 +926,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 monitoring = state.monitoring.copy(strictModeEnabled = true, enabled = true),
             )
         }
+        // Study Mode forces Device Monitoring on — make sure the foreground
+        // monitoring service is running for the whole session.
+        syncMonitoringService()
         // Persist across process death / app reopen (timestamp-based restore).
         studyStore.saveActiveSession(session, previousStrict, previousMonitoring)
         startStudyTicker()
@@ -870,6 +987,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 ),
             )
         }
+        // The session restored the user's normal monitoring state — resync the
+        // foreground service (starts/stops to match the restored config).
+        syncMonitoringService()
         // The session is over — nothing to persist anymore.
         studyStore.clearActiveSession()
         showToast { if (manualEnd) it.focusPasscodeEndedToast else it.studySessionCompleteToast }
@@ -979,6 +1099,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Future analytics: NotificationRepository.trackNotificationAnalytics(id, enabled).
     }
 
+    // ---- Sound & Effects (central app-sounds control) ----
+    fun setAppSoundsEnabled(enabled: Boolean) {
+        val updated = uiState.value.soundEffects.withMaster(enabled)
+        SoundEffectsRepository.saveSettings(getApplication(), updated)
+        _uiState.update { it.copy(soundEffects = updated) }
+    }
+
+    fun setSoundForCategory(category: SoundEffectCategory, sound: AppSound) {
+        val updated = uiState.value.soundEffects.withSound(category, sound)
+        SoundEffectsRepository.saveSettings(getApplication(), updated)
+        _uiState.update { it.copy(soundEffects = updated) }
+    }
+
     // ---- Permissions (live OS checks; backend-ready via PermissionRepository)
     //      Called on every Permissions-screen resume AND at the app root on
     //      every foreground resume, so statuses stay fresh after the user
@@ -994,6 +1127,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             state.copy(permissions = PermissionRepository.checkAll(getApplication(), state.permissions))
         }
+        // Foreground service follows the real configuration: it starts once
+        // monitoring is enabled and the required permissions are verified as
+        // granted, and stops when monitoring is paused or turned off.
+        syncMonitoringService()
         // Study Mode runs on every resume too: an expired session ends and
         // restores the normal restriction state the moment the app returns.
         checkStudySessionExpiry()
@@ -1030,6 +1167,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     SettingsManager.defaultMonitoring().copy(strictModeEnabled = true, enabled = true)
                 } else SettingsManager.defaultMonitoring(),
                 notificationSettings = SettingsManager.defaultNotificationSettings(),
+                soundEffects = SettingsManager.defaultSoundEffects(),
                 themeMode = SettingsManager.defaultThemeMode(),
                 textSizeMode = SettingsManager.defaultTextSizeMode(),
                 chartStyle = SettingsManager.defaultChartStyle(),

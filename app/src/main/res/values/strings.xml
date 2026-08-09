@@ -8,4 +8,18 @@
     -->
     <string name="accessibility_service_label">ShortsCap</string>
     <string name="accessibility_service_description">ShortsCap uses this service to detect which app is currently open so it can monitor your short-video usage. It does not read, store, or share any content from other apps.</string>
+
+    <!--
+        Foreground Monitoring Service — persistent notification shown while
+        the service keeps monitoring active in the background.
+    -->
+    <string name="monitoring_notification_channel">ShortsCap Monitoring</string>
+    <string name="monitoring_notification_title">ShortsCap is monitoring</string>
+    <string name="monitoring_notification_text">Usage monitoring is active in the background.</string>
+
+    <!--
+        Brain overlay — the small monitoring indicator shown above supported
+        short-video apps (accessibility label read by TalkBack).
+    -->
+    <string name="brain_overlay_label">ShortsCap Brain monitoring indicator</string>
 </resources>

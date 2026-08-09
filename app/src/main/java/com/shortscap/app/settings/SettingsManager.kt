@@ -12,6 +12,8 @@ import com.shortscap.app.icons.IconStyle
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.notifications.NotificationRepository
 import com.shortscap.app.notifications.NotificationSetting
+import com.shortscap.app.sounds.SoundEffectsConfig
+import com.shortscap.app.sounds.SoundEffectsRepository
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
 
@@ -61,6 +63,9 @@ object SettingsManager {
     fun defaultNotificationSettings(): List<NotificationSetting> =
         NotificationRepository.seedSettings()
 
+    /** Sound & Effects default — master ON with the per-category sound library. */
+    fun defaultSoundEffects(): SoundEffectsConfig = SoundEffectsRepository.defaults()
+
     /**
      * Restores every local preference store to its default value and persists
      * those defaults, so the app stays consistent across restarts. Add a new
@@ -74,6 +79,7 @@ object SettingsManager {
         AppearanceRepository.saveFontMode(context, defaultFontMode())
         IconRepository.saveIconStyle(context, defaultIconStyle())
         NotificationRepository.saveSettings(context, defaultNotificationSettings())
+        SoundEffectsRepository.saveSettings(context, defaultSoundEffects())
     }
 
     /** FUTURE: restore backend / cloud preferences through the API. */

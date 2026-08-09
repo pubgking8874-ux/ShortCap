@@ -1,5 +1,7 @@
 package com.shortscap.app.i18n
 
+import com.shortscap.app.study.StudyDay
+
 /** Español (Spanish) translations. */
 object SpanishStrings : AppStrings {
 
@@ -155,6 +157,24 @@ object SpanishStrings : AppStrings {
     override val settingsMonitoring = "Monitoreo"
     override val settingsPermissions = "Permisos"
     override val settingsNotifications = "Notificaciones"
+    override val soundEffectsTitle = "Sonido y efectos"
+    override val soundEffectsAppSounds = "Sonidos de la app"
+    override val soundEffectsAppSoundsDesc = "Control central de todos los sonidos y efectos de ShortsCap."
+    override val soundEffectsBreakReminder = "Recordatorio de pausas"
+    override val soundEffectsScheduleReminder = "Recordatorio de horario de estudio"
+    override val soundEffectsLimitWarning = "Aviso de límite de Shorts"
+    override val soundEffectsLimitReached = "Límite de Shorts alcanzado"
+    override val soundEffectsBreakStart = "Inicio de la pausa"
+    override val soundEffectsBreakEnd = "Fin de la pausa"
+    override val appSoundDefault = "Predeterminado"
+    override val appSoundGentleChime = "Tono suave"
+    override val appSoundSoftBell = "Campana suave"
+    override val appSoundCalmTone = "Tono tranquilo"
+    override val appSoundFocusTone = "Tono de enfoque"
+    override val appSoundWarningPulse = "Pulso de advertencia"
+    override val appSoundLimitAlert = "Alerta de límite"
+    override val appSoundSuccessChime = "Tono de éxito"
+    override val soundEffectsPreview = "Vista previa"
     override val settingsAppearance = "Apariencia"
     override val settingsDataBackup = "Copia de seguridad"
     override val settingsAbout = "Acerca de"
@@ -208,7 +228,34 @@ object SpanishStrings : AppStrings {
         }
     }
     override val studyDuration = "Duración del estudio"
+    override val studyDurationHours = "Horas"
+    override val studyDurationSave = "Guardar"
+    override val studyDurationCustom = "Personalizado"
+    override val studyDurationPickerSubtitle = "¿Cuánto tiempo debe permanecer activo el modo estudio?"
+    override val studyDurationRequired = "Selecciona una duración mayor que cero."
     override val studyBreakReminder = "Recordatorio de pausas"
+    override val studyBreakReminderEvery = "Cada"
+    override val studyBreakReminderOff = "DESACTIVADO"
+    override val studyBreakReminderInfoDesc = "El recordatorio de pausas te recuerda tomar descansos breves durante tu sesión de modo estudio. Puedes elegir con qué frecuencia recibes recordatorios y configurar su comportamiento."
+    override val studyBreakReminderIntervalLabel = "Recordarme después de"
+    override val studyBreakReminderPatternLabel = "Patrón de recordatorio"
+    override val studyBreakReminderPatternOnce = "Una vez"
+    override val studyBreakReminderPatternRepeat = "Repetir"
+    override val studyBreakReminderSoundLabel = "Sonido del recordatorio"
+    override val studyBreakSoundDefault = "Predeterminado"
+    override val studyBreakSoundSoftBell = "Campana suave"
+    override val studyBreakSoundGentleChime = "Tono suave"
+    override val studyBreakSoundFocusTone = "Tono de enfoque"
+    override val studyBreakSoundCustom = "Personalizado"
+    override val studyBreakReminderCustom = "Personalizado"
+    override val studyBreakReminderSave = "Guardar recordatorio"
+    override val studyBreakConflictTitle = "Conflicto de horario"
+    override val studyBreakConflictAdjustReminder = "Ajustar recordatorio"
+    override val studyBreakConflictKeepSchedule = "Mantener horario"
+    override val studyBreakConflictScheduledStudy = "Estudio programado"
+    override val studyBreakConflictLabel = "Conflicto"
+    override val studyBreakConflictNone = "No se encontraron conflictos de horario."
+    override fun studyBreakConflictMessage(time: String) = "Tu recordatorio de pausas seleccionado puede coincidir con una sesión de estudio programada a las $time."
     override val studyBreakDuration = "Duración de la pausa"
     override val studySoundMode = "Modo de sonido"
     override val studySoundSound = "Sonido"
@@ -220,15 +267,54 @@ object SpanishStrings : AppStrings {
     override val soundModeChangeFailedToast = "Android no permitió el cambio del modo de sonido."
     override val studySchedule = "Horario de estudio"
     override val studyScheduleStart = "Hora de inicio"
-    override val studyScheduleEnd = "Hora de fin"
-    override val studyAllowedItems = "Apps/sitios permitidos"
-    override val studyAllowedItemsDesc = "Estos permanecen accesibles mientras el modo estudio está activo."
+    override val studyScheduleLabel = "Horarios"
+    override val studyScheduleAdd = "Añadir horario"
+    override val studyScheduleNewTitle = "Añadir horario"
+    override val studyScheduleEdit = "Editar"
+    override val studyScheduleEmptyTitle = "Aún no hay horarios"
+    override val studyScheduleEmptyDesc = "Crea un horario para planificar tus sesiones de estudio."
+    override val studyScheduleEditTitle = "Editar horario"
+    override val studyScheduleSubject = "Materia"
+    override val studyScheduleSubjectPlaceholder = "p. ej., Matemáticas"
+    override val studyScheduleSubjectRequired = "Introduce una materia"
+    override val studyScheduleDays = "Días"
+    override val studyScheduleDaysRequired = "Selecciona al menos un día"
+    override val studyScheduleReminder = "Recordatorio"
+    override val studyScheduleReminderNone = "Sin recordatorio"
+    override val studyScheduleSavedToast = "Horario guardado"
+    override val studyScheduleDeletedToast = "Horario eliminado"
+    override fun studyScheduleReminderLabel(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> if (h == 1) "1 hora antes" else "$h horas antes"
+            h == 0 -> "$m minutos antes"
+            else -> "${if (h == 1) "1 hora" else "$h horas"} $m minutos antes"
+        }
+    }
+    override fun studyDayShort(day: StudyDay): String = when (day) {
+        StudyDay.MONDAY -> "Lun"
+        StudyDay.TUESDAY -> "Mar"
+        StudyDay.WEDNESDAY -> "Mié"
+        StudyDay.THURSDAY -> "Jue"
+        StudyDay.FRIDAY -> "Vie"
+        StudyDay.SATURDAY -> "Sáb"
+        StudyDay.SUNDAY -> "Dom"
+    }
+    override val studyAllowedItems = "Permitir apps / sitios web"
     override val studyAllowedApps = "Apps permitidas"
     override val studyAllowedWebsites = "Sitios web permitidos"
+    override val studyAllowedMenuAddApp = "Añadir app"
+    override val studyAllowedMenuManageApps = "Gestionar apps"
+    override val studyAllowedPickerEmpty = "No hay apps disponibles para añadir."
+    override val studyAllowedManageEmpty = "Aún no hay apps permitidas."
+    override val studyAllowedInfoTitle = "Acceso del modo estudio"
+    override val studyAllowedInfoDesc = "Estos sitios web permanecerán disponibles mientras el modo estudio esté activo."
     override val studyAllowedWebsitePlaceholder = "p. ej. khanacademy.org"
     override val studyAllowedAdd = "Añadir"
     override val studyAllowedInvalid = "Introduce un dominio web válido"
     override val studyAllowedDuplicate = "Este sitio web ya está permitido"
+    override val studyAllowedAddTitle = "Añadir sitio web"
     override val studySummary = "Resumen de la sesión de estudio"
     override val studySummarySessionsToday = "Sesiones de hoy"
     override val studySummaryTimeToday = "Tiempo de estudio de hoy"
@@ -327,6 +413,8 @@ object SpanishStrings : AppStrings {
 
     // ---- Time option labels ----
     override val minutesLabel = "Minutos"
+    override val studyTimeAm = "a. m."
+    override val studyTimePm = "p. m."
 
     // ---- Permissions ----
     override val permissionsTitle = "Permisos"
@@ -341,7 +429,7 @@ object SpanishStrings : AppStrings {
     override val permAccessibility = "Servicio de Accesibilidad"
     override val permAccessibilityDesc = "Necesario para el bloqueo de apps y la aplicación de restricciones."
     override val permOverlay = "Mostrar sobre otras apps"
-    override val permOverlayDesc = "Necesario para mostrar pantallas de bloqueo al abrir apps restringidas."
+    override val permOverlayDesc = "Permite que el pequeño indicador Brain de monitoreo de ShortsCap aparezca sobre las aplicaciones de video corto compatibles."
     override val permNotifications = "Permiso de notificaciones"
     override val permNotificationsDesc = "Necesario para enviar recordatorios y alertas de monitoreo."
     override val permBattery = "Ignorar optimización de batería"
@@ -350,6 +438,8 @@ object SpanishStrings : AppStrings {
     override val permStorageDesc = "Se usa solo para seleccionar la imagen de perfil y futuras funciones de respaldo."
     override val permSystemAudioAccess = "Acceso de audio del sistema"
     override val permSystemAudioAccessDesc = "Necesario para que el Modo Estudio cambie el teléfono entre los modos de sonido, vibración y silencio."
+    override val permMonitoringService = "Servicio de monitoreo"
+    override val permMonitoringServiceDesc = "Mantiene el monitoreo de ShortsCap activo en segundo plano."
 
     // ---- Notifications ----
     override val notificationsTitle = "Notificaciones"

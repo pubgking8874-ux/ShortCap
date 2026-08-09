@@ -28,7 +28,10 @@ class StudyPreferenceStore(context: Context) {
             .putLong(KEY_START, session.startTimeMillis)
             .putLong(KEY_END, session.endTimeMillis)
             .putInt(KEY_DURATION, session.durationMinutes)
-            .putBoolean(KEY_BREAK_REMINDER, session.breakReminderEnabled)
+            .putBoolean(KEY_BREAK_REMINDER, session.breakReminder.enabled)
+            .putInt(KEY_BREAK_INTERVAL, session.breakReminder.intervalMinutes)
+            .putInt(KEY_BREAK_PATTERN, session.breakReminder.pattern.ordinal)
+            .putInt(KEY_BREAK_SOUND, session.breakReminder.sound.ordinal)
             .putInt(KEY_BREAK_DURATION, session.breakDurationMinutes)
             .putInt(KEY_SOUND, session.soundMode.ordinal)
             .putString(KEY_APPS, session.allowedApps.joinToString(SEP))
@@ -48,7 +51,12 @@ class StudyPreferenceStore(context: Context) {
                 startTimeMillis = start,
                 endTimeMillis = end,
                 durationMinutes = prefs.getInt(KEY_DURATION, 0),
-                breakReminderEnabled = prefs.getBoolean(KEY_BREAK_REMINDER, true),
+                breakReminder = BreakReminderConfig(
+                    enabled = prefs.getBoolean(KEY_BREAK_REMINDER, true),
+                    intervalMinutes = prefs.getInt(KEY_BREAK_INTERVAL, 25),
+                    pattern = BreakReminderPattern.entries.getOrElse(prefs.getInt(KEY_BREAK_PATTERN, 0)) { BreakReminderPattern.REPEAT },
+                    sound = BreakReminderSound.entries.getOrElse(prefs.getInt(KEY_BREAK_SOUND, 0)) { BreakReminderSound.DEFAULT },
+                ),
                 breakDurationMinutes = prefs.getInt(KEY_BREAK_DURATION, 5),
                 soundMode = StudySoundMode.entries.getOrElse(prefs.getInt(KEY_SOUND, 0)) { StudySoundMode.SOUND },
                 allowedApps = (prefs.getString(KEY_APPS, "") ?: "").split(SEP).filter { it.isNotBlank() },
@@ -77,6 +85,9 @@ class StudyPreferenceStore(context: Context) {
         const val KEY_END = "session_end"
         const val KEY_DURATION = "session_duration_min"
         const val KEY_BREAK_REMINDER = "session_break_reminder"
+        const val KEY_BREAK_INTERVAL = "session_break_interval"
+        const val KEY_BREAK_PATTERN = "session_break_pattern"
+        const val KEY_BREAK_SOUND = "session_break_sound"
         const val KEY_BREAK_DURATION = "session_break_duration"
         const val KEY_SOUND = "session_sound_mode"
         const val KEY_APPS = "session_allowed_apps"

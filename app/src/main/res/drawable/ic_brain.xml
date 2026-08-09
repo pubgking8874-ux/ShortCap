@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Brain icon — ShortsCap's monitoring indicator. Two rounded lobes + a
+    brain-stem + center folds, drawn with white strokes so it works as both
+    the foreground-service notification small icon (alpha channel only) and
+    the small Brain overlay shown above supported short-video apps.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Left hemisphere -->
+    <path
+        android:pathData="M14,10.5 A5.2,5.2 0 1 0 3.6,10.5 A5.2,5.2 0 1 0 14,10.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Right hemisphere -->
+    <path
+        android:pathData="M20.4,10.5 A5.2,5.2 0 1 0 10,10.5 A5.2,5.2 0 1 0 20.4,10.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Brain stem -->
+    <path
+        android:pathData="M12,15.8 L12,17.6 M10.5,17.6 L13.5,17.6"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Center folds -->
+    <path
+        android:pathData="M5.4,10.5 L7.8,10.5 M16.2,10.5 L18.6,10.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

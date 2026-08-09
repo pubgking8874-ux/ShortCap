@@ -1,5 +1,7 @@
 package com.shortscap.app.i18n
 
+import com.shortscap.app.study.StudyDay
+
 /** English (default) — the source language, verbatim from the current UI. */
 object EnglishStrings : AppStrings {
 
@@ -155,6 +157,24 @@ object EnglishStrings : AppStrings {
     override val settingsMonitoring = "Monitoring"
     override val settingsPermissions = "Permissions"
     override val settingsNotifications = "Notifications"
+    override val soundEffectsTitle = "Sound & Effects"
+    override val soundEffectsAppSounds = "App Sounds"
+    override val soundEffectsAppSoundsDesc = "Master control for all ShortsCap sounds and effects."
+    override val soundEffectsBreakReminder = "Break Reminder"
+    override val soundEffectsScheduleReminder = "Study Schedule Reminder"
+    override val soundEffectsLimitWarning = "Shorts Limit Warning"
+    override val soundEffectsLimitReached = "Shorts Limit Reached"
+    override val soundEffectsBreakStart = "Break Start"
+    override val soundEffectsBreakEnd = "Break End"
+    override val appSoundDefault = "Default"
+    override val appSoundGentleChime = "Gentle Chime"
+    override val appSoundSoftBell = "Soft Bell"
+    override val appSoundCalmTone = "Calm Tone"
+    override val appSoundFocusTone = "Focus Tone"
+    override val appSoundWarningPulse = "Warning Pulse"
+    override val appSoundLimitAlert = "Limit Alert"
+    override val appSoundSuccessChime = "Success Chime"
+    override val soundEffectsPreview = "Preview"
     override val settingsAppearance = "Appearance"
     override val settingsDataBackup = "Data Backup"
     override val settingsAbout = "About"
@@ -208,7 +228,34 @@ object EnglishStrings : AppStrings {
         }
     }
     override val studyDuration = "Study Duration"
+    override val studyDurationHours = "Hours"
+    override val studyDurationSave = "Save"
+    override val studyDurationCustom = "Custom"
+    override val studyDurationPickerSubtitle = "How long should Study Mode stay active?"
+    override val studyDurationRequired = "Select a duration greater than zero."
     override val studyBreakReminder = "Break Reminder"
+    override val studyBreakReminderEvery = "Every"
+    override val studyBreakReminderOff = "OFF"
+    override val studyBreakReminderInfoDesc = "Break Reminder reminds you to take short breaks during your Study Mode session. You can choose how often you receive reminders and configure the reminder behavior."
+    override val studyBreakReminderIntervalLabel = "Remind Me After"
+    override val studyBreakReminderPatternLabel = "Reminder Pattern"
+    override val studyBreakReminderPatternOnce = "Once"
+    override val studyBreakReminderPatternRepeat = "Repeat"
+    override val studyBreakReminderSoundLabel = "Reminder Sound"
+    override val studyBreakSoundDefault = "Default"
+    override val studyBreakSoundSoftBell = "Soft Bell"
+    override val studyBreakSoundGentleChime = "Gentle Chime"
+    override val studyBreakSoundFocusTone = "Focus Tone"
+    override val studyBreakSoundCustom = "Custom"
+    override val studyBreakReminderCustom = "Custom"
+    override val studyBreakReminderSave = "Save Reminder"
+    override val studyBreakConflictTitle = "Schedule Conflict"
+    override val studyBreakConflictAdjustReminder = "Adjust Reminder"
+    override val studyBreakConflictKeepSchedule = "Keep Schedule"
+    override val studyBreakConflictScheduledStudy = "Scheduled Study"
+    override val studyBreakConflictLabel = "Conflict"
+    override val studyBreakConflictNone = "No schedule conflicts found."
+    override fun studyBreakConflictMessage(time: String) = "Your selected break reminder may overlap with a scheduled study session at $time."
     override val studyBreakDuration = "Break Duration"
     override val studySoundMode = "Sound Mode"
     override val studySoundSound = "Sound"
@@ -220,15 +267,54 @@ object EnglishStrings : AppStrings {
     override val soundModeChangeFailedToast = "Android did not allow the Sound Mode change."
     override val studySchedule = "Study Schedule"
     override val studyScheduleStart = "Start Time"
-    override val studyScheduleEnd = "End Time"
-    override val studyAllowedItems = "Allowed Apps/Websites"
-    override val studyAllowedItemsDesc = "These stay accessible while Study Mode is active."
+    override val studyScheduleLabel = "Schedules"
+    override val studyScheduleAdd = "Add Schedule"
+    override val studyScheduleEdit = "Edit"
+    override val studyScheduleEmptyTitle = "No schedules yet"
+    override val studyScheduleEmptyDesc = "Create a schedule to plan your study sessions."
+    override val studyScheduleNewTitle = "Add Schedule"
+    override val studyScheduleEditTitle = "Edit Schedule"
+    override val studyScheduleSubject = "Subject"
+    override val studyScheduleSubjectPlaceholder = "e.g. Mathematics"
+    override val studyScheduleSubjectRequired = "Enter a subject"
+    override val studyScheduleDays = "Days"
+    override val studyScheduleDaysRequired = "Select at least one day"
+    override val studyScheduleReminder = "Reminder"
+    override val studyScheduleReminderNone = "No Reminder"
+    override val studyScheduleSavedToast = "Schedule saved"
+    override val studyScheduleDeletedToast = "Schedule deleted"
+    override fun studyScheduleReminderLabel(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> if (h == 1) "1 Hour Before" else "$h Hours Before"
+            h == 0 -> "$m Minutes Before"
+            else -> "${if (h == 1) "1 Hour" else "$h Hours"} $m Minutes Before"
+        }
+    }
+    override fun studyDayShort(day: StudyDay): String = when (day) {
+        StudyDay.MONDAY -> "Mon"
+        StudyDay.TUESDAY -> "Tue"
+        StudyDay.WEDNESDAY -> "Wed"
+        StudyDay.THURSDAY -> "Thu"
+        StudyDay.FRIDAY -> "Fri"
+        StudyDay.SATURDAY -> "Sat"
+        StudyDay.SUNDAY -> "Sun"
+    }
+    override val studyAllowedItems = "Allow Apps / Website"
     override val studyAllowedApps = "Allowed Apps"
     override val studyAllowedWebsites = "Allowed Websites"
+    override val studyAllowedMenuAddApp = "Add App"
+    override val studyAllowedMenuManageApps = "Manage Apps"
+    override val studyAllowedPickerEmpty = "No apps available to add."
+    override val studyAllowedManageEmpty = "No apps allowed yet."
+    override val studyAllowedInfoTitle = "Study Mode Access"
+    override val studyAllowedInfoDesc = "These websites will remain available while Study Mode is active."
     override val studyAllowedWebsitePlaceholder = "e.g. khanacademy.org"
     override val studyAllowedAdd = "Add"
     override val studyAllowedInvalid = "Enter a valid website domain"
     override val studyAllowedDuplicate = "This website is already allowed"
+    override val studyAllowedAddTitle = "Add Website"
     override val studySummary = "Study Session Summary"
     override val studySummarySessionsToday = "Sessions Today"
     override val studySummaryTimeToday = "Study Time Today"
@@ -327,6 +413,8 @@ object EnglishStrings : AppStrings {
 
     // ---- Time option labels ----
     override val minutesLabel = "Minutes"
+    override val studyTimeAm = "AM"
+    override val studyTimePm = "PM"
 
     // ---- Permissions ----
     override val permissionsTitle = "Permissions"
@@ -341,7 +429,7 @@ object EnglishStrings : AppStrings {
     override val permAccessibility = "Accessibility Service"
     override val permAccessibilityDesc = "Required for app blocking and restriction enforcement."
     override val permOverlay = "Display Over Other Apps"
-    override val permOverlayDesc = "Required to display blocking screens when restricted apps are opened."
+    override val permOverlayDesc = "Allows ShortsCap's small monitoring Brain indicator to appear above supported short-video applications."
     override val permNotifications = "Notification Permission"
     override val permNotificationsDesc = "Required to send reminders and monitoring alerts."
     override val permBattery = "Ignore Battery Optimization"
@@ -350,6 +438,8 @@ object EnglishStrings : AppStrings {
     override val permStorageDesc = "Used only for profile image selection and future backup features."
     override val permSystemAudioAccess = "System Audio Access"
     override val permSystemAudioAccessDesc = "Required by Study Mode's Sound Mode to change your phone between Sound, Vibrate and Silent modes."
+    override val permMonitoringService = "Monitoring Service"
+    override val permMonitoringServiceDesc = "Keeps ShortsCap monitoring active in the background."
 
     // ---- Notifications ----
     override val notificationsTitle = "Notifications"

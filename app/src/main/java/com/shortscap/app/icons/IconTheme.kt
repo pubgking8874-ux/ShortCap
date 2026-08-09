@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.shortscap.app.study.AllowedAppsIcon
 import com.shortscap.app.study.FocusPasscodeIcon
 
 /**
@@ -76,6 +77,8 @@ object IconTheme {
         IconKey.MONITORING -> Icons.Filled.Visibility
         IconKey.PERMISSIONS -> Icons.Filled.VerifiedUser
         IconKey.NOTIFICATIONS -> Icons.Filled.Notifications
+        // Sound & Effects — audio waves (app sounds / effects panel).
+        IconKey.SOUND_EFFECTS -> Icons.Filled.GraphicEq
         IconKey.APPEARANCE -> Icons.Filled.Palette
         IconKey.DATA_BACKUP -> Icons.Filled.Storage
         IconKey.ABOUT -> Icons.Filled.Info
@@ -99,7 +102,9 @@ object IconTheme {
         // Monitoring
         IconKey.MONITORING_ENABLE -> Icons.Filled.Insights
         IconKey.BLOCKED_APPS -> Icons.Filled.DoNotDisturbOn
-        IconKey.ALLOWED_APPS -> Icons.Filled.CheckCircle
+        // Allow Apps & Websites — app window + checkmark (allowed/permitted),
+        // not a generic list icon.
+        IconKey.ALLOWED_APPS -> AllowedAppsIcon
         IconKey.STRICT_MODE -> Icons.Filled.GppMaybe
         IconKey.SHORTS_CONTROL -> Icons.Filled.SmartDisplay
         IconKey.BREAK_REMINDER -> Icons.Filled.SelfImprovement
@@ -122,6 +127,7 @@ object IconTheme {
         IconKey.PERM_BATTERY -> Icons.Filled.BatteryChargingFull
         IconKey.PERM_STORAGE -> Icons.Filled.PhotoLibrary
         IconKey.PERM_SYSTEM_AUDIO -> Icons.Filled.VolumeUp
+        IconKey.PERM_MONITORING_SERVICE -> Icons.Filled.Timelapse
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> Icons.Filled.HelpOutline
@@ -237,6 +243,7 @@ private object VibrantPalette {
         IconKey.MONITORING -> blue
         IconKey.PERMISSIONS -> green
         IconKey.NOTIFICATIONS -> pink
+        IconKey.SOUND_EFFECTS -> teal
         IconKey.APPEARANCE -> violet
         IconKey.DATA_BACKUP -> cyan
         IconKey.ABOUT -> indigo
@@ -280,6 +287,7 @@ private object VibrantPalette {
         IconKey.PERM_BATTERY -> lime
         IconKey.PERM_STORAGE -> cyan
         IconKey.PERM_SYSTEM_AUDIO -> orange
+        IconKey.PERM_MONITORING_SERVICE -> teal
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> blue

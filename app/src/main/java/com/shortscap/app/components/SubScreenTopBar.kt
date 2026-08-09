@@ -32,11 +32,16 @@ import com.shortscap.app.theme.ScTextStyles
  * Shared full-screen sub-screen chrome: a back button + title bar used by
  * every drawer sub-screen (Help & Support, About, Feedback, legal readers).
  * Matches the app top bar's icon-button styling (38dp, radius 12).
+ *
+ * [trailing] optionally renders custom content (e.g. a three-dot menu) in
+ * place of the empty spacer at the far right of the bar; screens that don't
+ * need it keep the balanced spacer.
  */
 @Composable
 fun ScSubScreenTopBar(
     title: String,
     onBack: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalScColors.current
     Row(
@@ -72,7 +77,13 @@ fun ScSubScreenTopBar(
             maxLines = 1,
         )
         Spacer(Modifier.weight(1f))
-        Box(modifier = Modifier.size(38.dp))
+        if (trailing != null) {
+            Box(modifier = Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+                trailing()
+            }
+        } else {
+            Box(modifier = Modifier.size(38.dp))
+        }
     }
     ScDivider()
 }

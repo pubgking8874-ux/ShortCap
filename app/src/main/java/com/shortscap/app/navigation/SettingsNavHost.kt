@@ -25,6 +25,7 @@ import com.shortscap.app.screens.settings.AboutSettingsScreen
 import com.shortscap.app.screens.settings.AllowedAppsScreen
 import com.shortscap.app.screens.settings.AppearanceScreen
 import com.shortscap.app.screens.settings.BlockedAppsScreen
+import com.shortscap.app.screens.settings.BreakReminderScreen
 import com.shortscap.app.screens.settings.ChartScreen
 import com.shortscap.app.screens.settings.FontScreen
 import com.shortscap.app.screens.settings.GeneralScreen
@@ -37,8 +38,11 @@ import com.shortscap.app.screens.settings.NotificationsScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
 import com.shortscap.app.screens.settings.ShortsControlScreen
+import com.shortscap.app.screens.settings.SoundEffectsScreen
 import com.shortscap.app.screens.settings.StudyAllowedItemsScreen
 import com.shortscap.app.screens.settings.StudyModeScreen
+import com.shortscap.app.screens.settings.StudyScheduleEditScreen
+import com.shortscap.app.screens.settings.StudyScheduleScreen
 import com.shortscap.app.screens.settings.TextSizeScreen
 import com.shortscap.app.screens.settings.ThemeScreen
 import com.shortscap.app.study.FocusPasscodeEntry
@@ -53,6 +57,7 @@ object SettingsDestinations {
     const val PERMISSION_DETAIL = "settings_permission_detail"
     const val NOTIFICATIONS = "settings_notifications"
     const val NOTIFICATION_CATEGORY = "settings_notification_category"
+    const val SOUND_EFFECTS = "settings_sound_effects"
     const val APPEARANCE = "settings_appearance"
     const val APPEARANCE_THEME = "settings_appearance_theme"
     const val APPEARANCE_ICONS = "settings_appearance_icons"
@@ -68,7 +73,13 @@ object SettingsDestinations {
     const val SCHEDULE = "settings_schedule"
     const val SHORTS_CONTROL = "settings_shorts_control"
     const val STUDY_MODE = "settings_study_mode"
+    const val STUDY_BREAK_REMINDER = "settings_study_break_reminder"
     const val STUDY_ALLOWED = "settings_study_allowed"
+    const val STUDY_SCHEDULE = "settings_study_schedule"
+    const val STUDY_SCHEDULE_EDIT = "settings_study_schedule_edit"
+
+    /** Route with the schedule id appended; pass "new" to create one. */
+    fun studyScheduleEditRoute(id: String): String = "$STUDY_SCHEDULE_EDIT/$id"
 
     /** Route with the [PermissionId] name appended, e.g. settings_permission_detail/USAGE_ACCESS. */
     fun permissionDetailRoute(permissionId: PermissionId): String =
@@ -87,6 +98,7 @@ private fun SettingsDestination.startRoute(): String = when (this) {
     SettingsDestination.MONITORING -> SettingsDestinations.MONITORING
     SettingsDestination.PERMISSIONS -> SettingsDestinations.PERMISSIONS
     SettingsDestination.NOTIFICATIONS -> SettingsDestinations.NOTIFICATIONS
+    SettingsDestination.SOUND_EFFECTS -> SettingsDestinations.SOUND_EFFECTS
     SettingsDestination.APPEARANCE -> SettingsDestinations.APPEARANCE
     SettingsDestination.ABOUT -> SettingsDestinations.ABOUT
 }
@@ -151,13 +163,14 @@ fun SettingsNavHost(
                 focusPasscodeSetAtMillis = state.focusPasscodeSetAtMillis,
                 onStartSession = viewModel::startStudySession,
                 onSetStudyDuration = viewModel::setStudyDuration,
-                onSetStudyBreakReminder = viewModel::setStudyBreakReminder,
+                onOpenBreakReminder = { navController.navigate(SettingsDestinations.STUDY_BREAK_REMINDER) },
                 onSetStudyBreakDuration = viewModel::setStudyBreakDuration,
                 onSetStudySoundMode = viewModel::setStudySoundMode,
                 onOpenSoundModeAccessSettings = viewModel::openSoundModeAccessSettings,
-                onSetStudyScheduleEnabled = viewModel::setStudyScheduleEnabled,
-                onSetStudyScheduleStart = viewModel::setStudyScheduleStart,
-                onSetStudyScheduleEnd = viewModel::setStudyScheduleEnd,
+                // Study Schedule — a dedicated management screen with
+                // multiple schedules (subject, days, start, duration,
+                // reminder, enabled).
+                onOpenStudySchedule = { navController.navigate(SettingsDestinations.STUDY_SCHEDULE) },
                 onOpenAllowed = { navController.navigate(SettingsDestinations.STUDY_ALLOWED) },
                 // Exit Passcode flows live in their own root overlay
                 // (FocusPasscodeNavHost) — shared by Home AND Study Mode, so
@@ -174,6 +187,21 @@ fun SettingsNavHost(
             )
         }
 
+        // Break Reminder — the full configurable reminder system (enable /
+        // interval / Once-Repeat / sound). Saving stores one
+        // BreakReminderConfig into StudyModeSettings and returns to Study Mode.
+        composable(SettingsDestinations.STUDY_BREAK_REMINDER) {
+            BreakReminderScreen(
+                config = state.studySettings.breakReminder,
+                schedules = state.studySettings.schedules,
+                onSave = { config ->
+                    viewModel.setBreakReminderConfig(config)
+                    navController.popBackStack()
+                },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
         composable(SettingsDestinations.STUDY_ALLOWED) {
             StudyAllowedItemsScreen(
                 allowedApps = state.studySettings.allowedApps,
@@ -181,6 +209,44 @@ fun SettingsNavHost(
                 onToggleApp = viewModel::toggleStudyAllowedApp,
                 onToggleWebsite = viewModel::toggleStudyAllowedWebsite,
                 onAddWebsite = viewModel::addStudyAllowedWebsite,
+                onAddApp = viewModel::addStudyAllowedApp,
+                onRemoveApp = viewModel::removeStudyAllowedApp,
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        // Study Schedule — list of every scheduled session with per-schedule
+        // toggle / Edit / Delete; "Add Schedule" opens the edit route with a
+        // "new" id.
+        composable(SettingsDestinations.STUDY_SCHEDULE) {
+            StudyScheduleScreen(
+                schedules = state.studySettings.schedules,
+                onToggleEnabled = viewModel::toggleStudyScheduleEnabled,
+                onEdit = { id -> navController.navigate(SettingsDestinations.studyScheduleEditRoute(id)) },
+                onAdd = { navController.navigate(SettingsDestinations.studyScheduleEditRoute("new")) },
+                onDelete = viewModel::deleteStudySchedule,
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        // Add ("new") / Edit (existing id) — a schedule. Saving creates or
+        // updates ONLY that schedule and returns to the list.
+        composable(
+            route = "${SettingsDestinations.STUDY_SCHEDULE_EDIT}/{scheduleId}",
+            arguments = listOf(navArgument("scheduleId") { type = NavType.StringType }),
+        ) { entry ->
+            val id = entry.arguments?.getString("scheduleId") ?: "new"
+            val existing = if (id == "new") null else state.studySettings.schedules.firstOrNull { it.id == id }
+            StudyScheduleEditScreen(
+                existing = existing,
+                onSave = { subject, days, start, duration, reminder ->
+                    if (existing == null) {
+                        viewModel.addStudySchedule(subject, days, start, duration, reminder)
+                    } else {
+                        viewModel.updateStudySchedule(existing.id, subject, days, start, duration, reminder)
+                    }
+                    navController.popBackStack()
+                },
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -263,6 +329,18 @@ fun SettingsNavHost(
                 category = category,
                 settings = state.notificationSettings.filter { it.id.category == category },
                 onToggleSetting = viewModel::toggleNotificationSetting,
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        // Sound & Effects — the CENTRAL app-sounds control panel (master
+        // switch + per-category sound selection + previews). Fully separate
+        // from the Android device Sound / Vibrate / Silent mode.
+        composable(SettingsDestinations.SOUND_EFFECTS) {
+            SoundEffectsScreen(
+                config = state.soundEffects,
+                onSetAppSoundsEnabled = viewModel::setAppSoundsEnabled,
+                onSetCategorySound = viewModel::setSoundForCategory,
                 onBack = { navController.backOrClose(onClose) },
             )
         }

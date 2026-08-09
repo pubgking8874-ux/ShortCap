@@ -20,6 +20,17 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+        Continuous monitoring: a foreground service keeps the monitoring
+        process alive after the user leaves ShortsCap or removes it from
+        Recents (subject to Android/OEM limits). FOREGROUND_SERVICE is
+        install-time granted; FOREGROUND_SERVICE_SPECIAL_USE is required on
+        Android 14+ for the specialUse foreground-service type the
+        monitoring use case uses. The service starts only after the required
+        monitoring permissions (Usage Access + Accessibility) are granted.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -89,6 +100,28 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!--
+            Foreground Monitoring Service — keeps ShortsCap's monitoring
+            process alive in the background after the user leaves the app or
+            removes it from Recents (subject to Android/OEM restrictions).
+
+            exported=false: only ShortsCap can start it. stopWithTask=false:
+            swiping the app away must NOT intentionally stop monitoring.
+            foregroundServiceType="specialUse" is the Android-appropriate
+            type for continuous usage monitoring (it does not match
+            dataSync/connectedDevice/etc.); on Android 14+ the subtype
+            property below is mandatory for specialUse services.
+        -->
+        <service
+            android:name=".monitoring.MonitoringService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="continuous_usage_monitoring" />
         </service>
     </application>
 

@@ -104,9 +104,14 @@ fun PermissionsScreen(
                                 // Enabled → opens the simple detail page;
                                 // Disabled → opens the Android settings screen.
                                 PermissionStatus.GRANTED -> onOpenDetail(id)
-                                PermissionStatus.NOT_GRANTED,
-                                PermissionStatus.DISABLED,
-                                -> PermissionActions.open(context, id)
+                                else -> {
+                                    // Some items (e.g. the Monitoring Service)
+                                    // have NO Android settings page — open
+                                    // returns false and the row falls back to
+                                    // the informational detail page instead of
+                                    // an irrelevant system screen.
+                                    if (!PermissionActions.open(context, id)) onOpenDetail(id)
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),

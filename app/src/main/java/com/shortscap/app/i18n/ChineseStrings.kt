@@ -1,5 +1,7 @@
 package com.shortscap.app.i18n
 
+import com.shortscap.app.study.StudyDay
+
 /** 中文（简体）Simplified Chinese translations. */
 object ChineseStrings : AppStrings {
 
@@ -155,6 +157,24 @@ object ChineseStrings : AppStrings {
     override val settingsMonitoring = "监控"
     override val settingsPermissions = "权限"
     override val settingsNotifications = "通知"
+    override val soundEffectsTitle = "声音与效果"
+    override val soundEffectsAppSounds = "应用声音"
+    override val soundEffectsAppSoundsDesc = "ShortsCap 所有声音和效果的总体控制。"
+    override val soundEffectsBreakReminder = "休息提醒"
+    override val soundEffectsScheduleReminder = "学习日程提醒"
+    override val soundEffectsLimitWarning = "短视频限额警告"
+    override val soundEffectsLimitReached = "已达到短视频限额"
+    override val soundEffectsBreakStart = "休息开始"
+    override val soundEffectsBreakEnd = "休息结束"
+    override val appSoundDefault = "默认"
+    override val appSoundGentleChime = "轻柔提示音"
+    override val appSoundSoftBell = "柔和铃声"
+    override val appSoundCalmTone = "平静音"
+    override val appSoundFocusTone = "专注音"
+    override val appSoundWarningPulse = "警告脉冲"
+    override val appSoundLimitAlert = "限额提示"
+    override val appSoundSuccessChime = "成功提示音"
+    override val soundEffectsPreview = "预览"
     override val settingsAppearance = "外观"
     override val settingsDataBackup = "数据备份"
     override val settingsAbout = "关于"
@@ -208,7 +228,34 @@ object ChineseStrings : AppStrings {
         }
     }
     override val studyDuration = "学习时长"
+    override val studyDurationHours = "小时"
+    override val studyDurationSave = "保存"
+    override val studyDurationCustom = "自定义"
+    override val studyDurationPickerSubtitle = "学习模式应保持多长时间的活跃？"
+    override val studyDurationRequired = "请选择大于零的时长。"
     override val studyBreakReminder = "休息提醒"
+    override val studyBreakReminderEvery = "每"
+    override val studyBreakReminderOff = "关闭"
+    override val studyBreakReminderInfoDesc = "休息提醒会在学习模式会话期间提醒你短暂休息。你可以选择收到提醒的频率，并配置提醒行为。"
+    override val studyBreakReminderIntervalLabel = "多久后提醒我"
+    override val studyBreakReminderPatternLabel = "提醒模式"
+    override val studyBreakReminderPatternOnce = "一次"
+    override val studyBreakReminderPatternRepeat = "重复"
+    override val studyBreakReminderSoundLabel = "提醒声音"
+    override val studyBreakSoundDefault = "默认"
+    override val studyBreakSoundSoftBell = "柔和铃声"
+    override val studyBreakSoundGentleChime = "轻柔提示音"
+    override val studyBreakSoundFocusTone = "专注音"
+    override val studyBreakSoundCustom = "自定义"
+    override val studyBreakReminderCustom = "自定义"
+    override val studyBreakReminderSave = "保存提醒"
+    override val studyBreakConflictTitle = "日程冲突"
+    override val studyBreakConflictAdjustReminder = "调整提醒"
+    override val studyBreakConflictKeepSchedule = "保留日程"
+    override val studyBreakConflictScheduledStudy = "计划学习"
+    override val studyBreakConflictLabel = "冲突"
+    override val studyBreakConflictNone = "未发现日程冲突。"
+    override fun studyBreakConflictMessage(time: String) = "你选择的休息提醒可能与 $time 的计划学习时段重叠。"
     override val studyBreakDuration = "休息时长"
     override val studySoundMode = "声音模式"
     override val studySoundSound = "声音"
@@ -220,15 +267,54 @@ object ChineseStrings : AppStrings {
     override val soundModeChangeFailedToast = "Android 不允许更改声音模式。"
     override val studySchedule = "学习计划"
     override val studyScheduleStart = "开始时间"
-    override val studyScheduleEnd = "结束时间"
-    override val studyAllowedItems = "允许的应用/网站"
-    override val studyAllowedItemsDesc = "学习模式激活期间这些保持可访问。"
+    override val studyScheduleLabel = "日程"
+    override val studyScheduleAdd = "添加日程"
+    override val studyScheduleNewTitle = "添加日程"
+    override val studyScheduleEdit = "编辑"
+    override val studyScheduleEmptyTitle = "暂无日程"
+    override val studyScheduleEmptyDesc = "创建一个日程来规划您的学习会话。"
+    override val studyScheduleEditTitle = "编辑日程"
+    override val studyScheduleSubject = "科目"
+    override val studyScheduleSubjectPlaceholder = "例如：数学"
+    override val studyScheduleSubjectRequired = "请输入科目"
+    override val studyScheduleDays = "星期"
+    override val studyScheduleDaysRequired = "请至少选择一天"
+    override val studyScheduleReminder = "提醒"
+    override val studyScheduleReminderNone = "无提醒"
+    override val studyScheduleSavedToast = "日程已保存"
+    override val studyScheduleDeletedToast = "日程已删除"
+    override fun studyScheduleReminderLabel(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> "提前 $h 小时"
+            h == 0 -> "提前 $m 分钟"
+            else -> "提前 $h 小时 $m 分钟"
+        }
+    }
+    override fun studyDayShort(day: StudyDay): String = when (day) {
+        StudyDay.MONDAY -> "周一"
+        StudyDay.TUESDAY -> "周二"
+        StudyDay.WEDNESDAY -> "周三"
+        StudyDay.THURSDAY -> "周四"
+        StudyDay.FRIDAY -> "周五"
+        StudyDay.SATURDAY -> "周六"
+        StudyDay.SUNDAY -> "周日"
+    }
+    override val studyAllowedItems = "允许应用 / 网站"
     override val studyAllowedApps = "允许的应用"
     override val studyAllowedWebsites = "允许的网站"
+    override val studyAllowedMenuAddApp = "添加应用"
+    override val studyAllowedMenuManageApps = "管理应用"
+    override val studyAllowedPickerEmpty = "没有可添加的应用。"
+    override val studyAllowedManageEmpty = "尚未允许任何应用。"
+    override val studyAllowedInfoTitle = "学习模式访问"
+    override val studyAllowedInfoDesc = "学习模式激活期间，这些网站将保持可用。"
     override val studyAllowedWebsitePlaceholder = "例如 khanacademy.org"
     override val studyAllowedAdd = "添加"
     override val studyAllowedInvalid = "请输入有效的网站域名"
     override val studyAllowedDuplicate = "该网站已在允许列表中"
+    override val studyAllowedAddTitle = "添加网站"
     override val studySummary = "学习会话摘要"
     override val studySummarySessionsToday = "今日会话"
     override val studySummaryTimeToday = "今日学习时长"
@@ -327,6 +413,8 @@ object ChineseStrings : AppStrings {
 
     // ---- Time option labels ----
     override val minutesLabel = "分钟"
+    override val studyTimeAm = "上午"
+    override val studyTimePm = "下午"
 
     // ---- Permissions ----
     override val permissionsTitle = "权限"
@@ -341,7 +429,7 @@ object ChineseStrings : AppStrings {
     override val permAccessibility = "无障碍服务"
     override val permAccessibilityDesc = "用于应用阻止和限制执行。"
     override val permOverlay = "在其他应用上层显示"
-    override val permOverlayDesc = "打开受限应用时显示阻止屏幕。"
+    override val permOverlayDesc = "允许 ShortsCap 的小型 Brain 监控指示器显示在受支持的短视频应用上方。"
     override val permNotifications = "通知权限"
     override val permNotificationsDesc = "用于发送提醒和监控警报。"
     override val permBattery = "忽略电池优化"
@@ -350,6 +438,8 @@ object ChineseStrings : AppStrings {
     override val permStorageDesc = "仅用于个人资料图片选择和未来的备份功能。"
     override val permSystemAudioAccess = "系统音频访问"
     override val permSystemAudioAccessDesc = "学习模式的“声音模式”需要在声音、振动和静音模式之间切换手机。"
+    override val permMonitoringService = "监控服务"
+    override val permMonitoringServiceDesc = "让 ShortsCap 监控在后台保持运行。"
 
     // ---- Notifications ----
     override val notificationsTitle = "通知"

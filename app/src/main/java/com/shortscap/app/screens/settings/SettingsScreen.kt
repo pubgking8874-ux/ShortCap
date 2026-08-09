@@ -48,6 +48,9 @@ fun SettingsScreen(
         SettingsItem(SettingsDestination.MONITORING, IconKey.MONITORING, strings.settingsMonitoring),
         SettingsItem(SettingsDestination.PERMISSIONS, IconKey.PERMISSIONS, strings.settingsPermissions),
         SettingsItem(SettingsDestination.NOTIFICATIONS, IconKey.NOTIFICATIONS, strings.settingsNotifications),
+        // Sound & Effects — the central control panel for all ShortsCap app
+        // sounds (separate from the Android device audio mode).
+        SettingsItem(SettingsDestination.SOUND_EFFECTS, IconKey.SOUND_EFFECTS, strings.soundEffectsTitle),
         SettingsItem(SettingsDestination.APPEARANCE, IconKey.APPEARANCE, strings.settingsAppearance),
         SettingsItem(SettingsDestination.ABOUT, IconKey.ABOUT, strings.settingsAbout),
     )

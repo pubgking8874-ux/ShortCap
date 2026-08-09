@@ -1,6 +1,7 @@
 package com.shortscap.app.i18n
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.shortscap.app.study.StudyDay
 
 /**
  * The complete user-facing string catalog for the logged-in ShortsCap
@@ -178,6 +179,31 @@ interface AppStrings {
     val settingsMonitoring: String
     val settingsPermissions: String
     val settingsNotifications: String
+
+    // ---- Sound & Effects (central app-sounds control) ----
+    val soundEffectsTitle: String
+    /** "App Sounds" — master switch label. */
+    val soundEffectsAppSounds: String
+    /** Subtitle under the App Sounds master switch. */
+    val soundEffectsAppSoundsDesc: String
+    val soundEffectsBreakReminder: String
+    val soundEffectsScheduleReminder: String
+    val soundEffectsLimitWarning: String
+    val soundEffectsLimitReached: String
+    val soundEffectsBreakStart: String
+    val soundEffectsBreakEnd: String
+    // Sound library (shared by every category picker)
+    val appSoundDefault: String
+    val appSoundGentleChime: String
+    val appSoundSoftBell: String
+    val appSoundCalmTone: String
+    val appSoundFocusTone: String
+    val appSoundWarningPulse: String
+    val appSoundLimitAlert: String
+    val appSoundSuccessChime: String
+    /** "Preview" — content description of the small ▶ buttons. */
+    val soundEffectsPreview: String
+
     val settingsAppearance: String
     val settingsDataBackup: String
     val settingsAbout: String
@@ -231,7 +257,56 @@ interface AppStrings {
     /** Formats the selected Study Duration, e.g. "45 Minutes" / "1 Hour 30 Minutes". */
     fun studyDurationText(minutes: Int): String
     val studyDuration: String
+    /** "Hours" — label of the Hours wheel in the duration/clock pickers. */
+    val studyDurationHours: String
+    /** "Save" — confirms the wheel picker selection (time/duration/reminder). */
+    val studyDurationSave: String
+    /** "Custom" — duration selector option opening the wheel picker. */
+    val studyDurationCustom: String
+    /** "How long should Study Mode stay active?" — duration selector subtitle. */
+    val studyDurationPickerSubtitle: String
+    /** "Select a duration greater than zero." — shown when the wheel picker is at 0h 0m. */
+    val studyDurationRequired: String
     val studyBreakReminder: String
+    /** "Every" — prefix of the Break Reminder summary, e.g. "Every 25 Minutes". */
+    val studyBreakReminderEvery: String
+    /** "OFF" — Break Reminder summary when disabled. */
+    val studyBreakReminderOff: String
+    /** Break Reminder info (ⓘ) popup — explains the feature. */
+    val studyBreakReminderInfoDesc: String
+    /** "Remind Me After" — first-reminder interval label. */
+    val studyBreakReminderIntervalLabel: String
+    /** "Reminder Pattern" — Once / Repeat label. */
+    val studyBreakReminderPatternLabel: String
+    /** "Once" — the reminder fires a single time. */
+    val studyBreakReminderPatternOnce: String
+    /** "Repeat" — the reminder repeats every interval while Study Mode is active. */
+    val studyBreakReminderPatternRepeat: String
+    /** "Reminder Sound" — sound preference label. */
+    val studyBreakReminderSoundLabel: String
+    val studyBreakSoundDefault: String
+    val studyBreakSoundSoftBell: String
+    val studyBreakSoundGentleChime: String
+    val studyBreakSoundFocusTone: String
+    val studyBreakSoundCustom: String
+    /** "Custom" — opens the wheel selector for a custom interval. */
+    val studyBreakReminderCustom: String
+    /** "Save Reminder" — saves the Break Reminder configuration. */
+    val studyBreakReminderSave: String
+    /** "Schedule Conflict" — warning when reminders overlap a scheduled session. */
+    val studyBreakConflictTitle: String
+    /** "Adjust Reminder" — return to editing the interval. */
+    val studyBreakConflictAdjustReminder: String
+    /** "Keep Schedule" — keep the schedule as-is and save the reminder anyway. */
+    val studyBreakConflictKeepSchedule: String
+    /** "Scheduled Study" — label above the conflict timeline. */
+    val studyBreakConflictScheduledStudy: String
+    /** "Conflict" — label above the conflicting reminder times. */
+    val studyBreakConflictLabel: String
+    /** "No schedule conflicts found." — quiet caption when the reminder cycle is clear. */
+    val studyBreakConflictNone: String
+    /** "Your selected break reminder may overlap with a scheduled study session at <time>." */
+    fun studyBreakConflictMessage(time: String): String
     val studyBreakDuration: String
     val studySoundMode: String
     val studySoundSound: String
@@ -244,15 +319,68 @@ interface AppStrings {
     val soundModeChangeFailedToast: String
     val studySchedule: String
     val studyScheduleStart: String
-    val studyScheduleEnd: String
+
+    // ---- Study Schedule — multiple schedules, each with its own subject,
+    //      days, start time, duration, reminder and enabled state ----
+    /** "Schedules" — count label on the Study Mode screen schedule row. */
+    val studyScheduleLabel: String
+    /** "Add Schedule" — primary action + create-screen title. */
+    val studyScheduleAdd: String
+    /** "Add Schedule" — title of the create screen. */
+    val studyScheduleNewTitle: String
+    /** "Edit" — schedule card action. */
+    val studyScheduleEdit: String
+    /** "No schedules yet" — schedule row subtitle + list empty-state title. */
+    val studyScheduleEmptyTitle: String
+    /** Empty-state description on the schedule list screen. */
+    val studyScheduleEmptyDesc: String
+    /** "Edit Schedule" — title of the edit screen. */
+    val studyScheduleEditTitle: String
+    /** "Subject" — schedule subject field label. */
+    val studyScheduleSubject: String
+    /** Subject placeholder, e.g. "Mathematics". */
+    val studyScheduleSubjectPlaceholder: String
+    /** Validation error when the subject is empty. */
+    val studyScheduleSubjectRequired: String
+    /** "Days" — the days-of-week selector label. */
+    val studyScheduleDays: String
+    /** Validation error when no day is selected. */
+    val studyScheduleDaysRequired: String
+    /** "Reminder" — schedule reminder row label. */
+    val studyScheduleReminder: String
+    /** "No Reminder" — reminder picker option. */
+    val studyScheduleReminderNone: String
+    /** Formats a reminder lead time, e.g. "15 Minutes Before" / "1 Hour Before". */
+    fun studyScheduleReminderLabel(minutes: Int): String
+    /** Toast after a schedule is saved/updated. */
+    val studyScheduleSavedToast: String
+    /** Toast after a schedule is deleted. */
+    val studyScheduleDeletedToast: String
+    /** Short weekday label for schedule days, e.g. "Mon". */
+    fun studyDayShort(day: StudyDay): String
+
+    /** "Allow Apps / Website" — Study Mode section + page title (the slash is intentional). */
     val studyAllowedItems: String
-    val studyAllowedItemsDesc: String
     val studyAllowedApps: String
     val studyAllowedWebsites: String
     val studyAllowedWebsitePlaceholder: String
     val studyAllowedAdd: String
     val studyAllowedInvalid: String
     val studyAllowedDuplicate: String
+    /** "Add Website" — section heading above the add-website input. */
+    val studyAllowedAddTitle: String
+    /** "Add App" — header three-dot menu action + Add App picker title. */
+    val studyAllowedMenuAddApp: String
+    /** "Manage Apps" — header three-dot menu action opening the allowed-apps manager. */
+    val studyAllowedMenuManageApps: String
+    /** "No apps available to add." — empty state in the Add App picker. */
+    val studyAllowedPickerEmpty: String
+    /** "No apps allowed yet." — empty state in the Manage Apps dialog. */
+    val studyAllowedManageEmpty: String
+    /** "Study Mode Access" — title of the Allow Websites info popup. */
+    val studyAllowedInfoTitle: String
+    /** Info popup: the websites allowed here remain available while Study Mode is active. */
+    val studyAllowedInfoDesc: String
     val studySummary: String
     val studySummarySessionsToday: String
     val studySummaryTimeToday: String
@@ -371,6 +499,10 @@ interface AppStrings {
 
     // ---- Time option labels ----
     val minutesLabel: String
+    /** "AM" — period label in the 12-hour wheel clock picker. */
+    val studyTimeAm: String
+    /** "PM" — period label in the 12-hour wheel clock picker. */
+    val studyTimePm: String
 
     // ---- Permissions (status overview) ----
     val permissionsTitle: String
@@ -393,6 +525,7 @@ interface AppStrings {
     val permAccessibility: String
     val permAccessibilityDesc: String
     val permOverlay: String
+    /** Overlay purpose — the small monitoring Brain indicator above supported short-video apps. */
     val permOverlayDesc: String
     val permNotifications: String
     val permNotificationsDesc: String
@@ -404,6 +537,10 @@ interface AppStrings {
     val permSystemAudioAccess: String
     /** Purpose shown on the System Audio Access permission detail page. */
     val permSystemAudioAccessDesc: String
+    /** "Monitoring Service" — the foreground service that keeps monitoring active in the background. */
+    val permMonitoringService: String
+    /** Purpose shown on the Monitoring Service permission detail page. */
+    val permMonitoringServiceDesc: String
 
     // ---- Notifications ----
     val notificationsTitle: String

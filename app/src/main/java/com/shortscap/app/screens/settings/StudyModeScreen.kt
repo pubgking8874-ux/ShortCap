@@ -48,9 +48,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.shortscap.app.components.ScDivider
+import com.shortscap.app.components.ScDurationWheelDialog
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
-import com.shortscap.app.components.ScSwitch
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.icons.IconKey
 import com.shortscap.app.study.DeviceSoundModeResult
@@ -60,7 +60,6 @@ import com.shortscap.app.study.StudySoundMode
 import com.shortscap.app.study.StudySummary
 import com.shortscap.app.study.formatPasscodeSetAt
 import com.shortscap.app.study.formatPasscodeSetOn
-import com.shortscap.app.study.formatStudyClock
 import com.shortscap.app.study.formatStudyCountdown
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -83,7 +82,9 @@ import com.shortscap.app.theme.ScTextStyles
  *   EXIT PASSCODE   — Exit Passcode (Not Set / Set + device date-time; the
  *                      ONLY way to end an active session early — via the
  *                      verify screen).
- *   SCHEDULE   — Study Schedule (enabled + start/end window).
+ *   SCHEDULE   — Study Schedule (multiple schedules: subject, days, start
+ *                time, duration, reminder, enabled — managed on a dedicated
+ *                schedule screen).
  *   ALLOWED    — Allowed Apps/Websites (stays accessible during sessions).
  *   SUMMARY    — Study Session Summary (derived when sessions complete).
  *
@@ -108,13 +109,11 @@ fun StudyModeScreen(
     focusPasscodeSetAtMillis: Long,
     onStartSession: () -> Unit,
     onSetStudyDuration: (Int) -> Unit,
-    onSetStudyBreakReminder: (Boolean) -> Unit,
+    onOpenBreakReminder: () -> Unit,
     onSetStudyBreakDuration: (Int) -> Unit,
     onSetStudySoundMode: (StudySoundMode) -> DeviceSoundModeResult,
     onOpenSoundModeAccessSettings: () -> Unit,
-    onSetStudyScheduleEnabled: (Boolean) -> Unit,
-    onSetStudyScheduleStart: (Int) -> Unit,
-    onSetStudyScheduleEnd: (Int) -> Unit,
+    onOpenStudySchedule: () -> Unit,
     onOpenAllowed: () -> Unit,
     onOpenFocusPasscodeSetup: () -> Unit,
     onOpenFocusPasscodeVerify: () -> Unit,
@@ -130,12 +129,7 @@ fun StudyModeScreen(
     var durationDialogOpen by remember { mutableStateOf(false) }
     var breakDurationDialogOpen by remember { mutableStateOf(false) }
     var soundDialogOpen by remember { mutableStateOf(false) }
-    var scheduleStartDialogOpen by remember { mutableStateOf(false) }
-    var scheduleEndDialogOpen by remember { mutableStateOf(false) }
 
-    val studyDurations = listOf(15, 25, 30, 45, 60, 90)
-    val breakDurations = listOf(3, 5, 10, 15)
-    val scheduleHours = listOf(6, 8, 10, 12, 14, 16, 18, 20, 22)
     val soundOptions = listOf(
         StudySoundMode.SOUND to strings.studySoundSound,
         StudySoundMode.VIBRATE to strings.studySoundVibrate,
@@ -207,15 +201,24 @@ fun StudyModeScreen(
                 iconKey = IconKey.STUDY_MODE,
                 title = strings.studyDuration,
                 onClick = { durationDialogOpen = true },
-                trailing = { TrailingValue("${settings.studyDurationMinutes} ${strings.minutesLabel}") },
+                // studyDurationText renders both presets and custom values
+                // (e.g. "45 Minutes" / "1 Hour 20 Minutes") from the single
+                // stored minutes value — nothing is hardcoded here.
+                trailing = { TrailingValue(strings.studyDurationText(settings.studyDurationMinutes)) },
             )
+            // Break Reminder — no longer a plain ON/OFF switch: tapping the
+            // row opens the dedicated configuration page (enable / interval /
+            // Once-Recpeat / sound / schedule-conflict check). The subtitle
+            // shows the live summary ("Every 25 Minutes" or "OFF").
             ScPremiumNavCard(
                 iconKey = IconKey.BREAK_REMINDER,
                 title = strings.studyBreakReminder,
-                onClick = { onSetStudyBreakReminder(!settings.breakReminderEnabled) },
-                trailing = {
-                    ScSwitch(on = settings.breakReminderEnabled, onToggle = { onSetStudyBreakReminder(!settings.breakReminderEnabled) })
+                subtitle = if (settings.breakReminder.enabled) {
+                    "${strings.studyBreakReminderEvery} ${strings.studyDurationText(settings.breakReminder.intervalMinutes)}"
+                } else {
+                    strings.studyBreakReminderOff
                 },
+                onClick = onOpenBreakReminder,
             )
             ScPremiumNavCard(
                 iconKey = IconKey.REMINDER_INTERVAL,
@@ -270,35 +273,27 @@ fun StudyModeScreen(
                 )
             }
 
-            // ---- Schedule ----
+            // ---- Study Schedule — MULTIPLE schedules, each with its own
+            //      subject, days, start time, duration, reminder and enabled
+            //      state. Opens the schedule management screen. ----
             SectionTitle(strings.studySchedule)
             ScPremiumNavCard(
                 iconKey = IconKey.SCHEDULE,
                 title = strings.studySchedule,
-                onClick = { onSetStudyScheduleEnabled(!settings.schedule.enabled) },
-                trailing = {
-                    ScSwitch(on = settings.schedule.enabled, onToggle = { onSetStudyScheduleEnabled(!settings.schedule.enabled) })
+                subtitle = if (settings.schedules.isEmpty()) {
+                    strings.studyScheduleEmptyTitle
+                } else {
+                    val active = settings.schedules.count { it.enabled }
+                    "${settings.schedules.size} ${strings.studyScheduleLabel} · $active ${strings.studyStatusActive}"
                 },
-            )
-            ScPremiumNavCard(
-                iconKey = IconKey.SCHEDULE,
-                title = strings.studyScheduleStart,
-                onClick = { scheduleStartDialogOpen = true },
-                trailing = { TrailingValue(formatStudyClock(settings.schedule.startMinutes)) },
-            )
-            ScPremiumNavCard(
-                iconKey = IconKey.SCHEDULE,
-                title = strings.studyScheduleEnd,
-                onClick = { scheduleEndDialogOpen = true },
-                trailing = { TrailingValue(formatStudyClock(settings.schedule.endMinutes)) },
+                onClick = onOpenStudySchedule,
             )
 
-            // ---- Allowed Apps/Websites ----
+            // ---- Allow Apps / Website ----
             SectionTitle(strings.studyAllowedItems)
             ScPremiumNavCard(
                 iconKey = IconKey.ALLOWED_APPS,
                 title = strings.studyAllowedItems,
-                subtitle = strings.studyAllowedItemsDesc,
                 onClick = onOpenAllowed,
             )
 
@@ -378,6 +373,7 @@ fun StudyModeScreen(
         ) {
             StudyStartConfirmDialog(
                 durationMinutes = settings.studyDurationMinutes,
+                onSetDuration = onSetStudyDuration,
                 onConfirm = {
                     startDialogOpen = false
                     onStartSession()
@@ -387,23 +383,30 @@ fun StudyModeScreen(
         }
     }
 
-    // ---- Picker dialogs ----
-    PickerDialog(
-        title = strings.studyDuration,
-        open = durationDialogOpen,
-        onDismiss = { durationDialogOpen = false },
-        options = studyDurations.map { it to "${it} ${strings.minutesLabel}" },
-        selected = settings.studyDurationMinutes,
-        onSelect = { durationDialogOpen = false; onSetStudyDuration(it) },
-    )
-    PickerDialog(
-        title = strings.studyBreakDuration,
-        open = breakDurationDialogOpen,
-        onDismiss = { breakDurationDialogOpen = false },
-        options = breakDurations.map { it to "${it} ${strings.minutesLabel}" },
-        selected = settings.breakDurationMinutes,
-        onSelect = { breakDurationDialogOpen = false; onSetStudyBreakDuration(it) },
-    )
+    // ---- Study Duration — the SAME scroll-wheel duration selector used
+    //      everywhere (Hours + Minutes wheels, prefilled with the current
+    //      value). Presets and custom values are simply wheel positions, so
+    //      every duration is reachable — no +/− controls anywhere. ----
+    if (durationDialogOpen) {
+        ScDurationWheelDialog(
+            title = strings.studyDuration,
+            initialMinutes = settings.studyDurationMinutes,
+            valueLabel = strings::studyDurationText,
+            onConfirm = { durationDialogOpen = false; onSetStudyDuration(it) },
+            onCancel = { durationDialogOpen = false },
+        )
+    }
+
+    // ---- Break Duration — the same wheel selector. ----
+    if (breakDurationDialogOpen) {
+        ScDurationWheelDialog(
+            title = strings.studyBreakDuration,
+            initialMinutes = settings.breakDurationMinutes,
+            valueLabel = { "${it} ${strings.minutesLabel}" },
+            onConfirm = { breakDurationDialogOpen = false; onSetStudyBreakDuration(it) },
+            onCancel = { breakDurationDialogOpen = false },
+        )
+    }
     PickerDialog(
         title = strings.studySoundMode,
         open = soundDialogOpen,
@@ -418,22 +421,6 @@ fun StudyModeScreen(
                 DeviceSoundModeResult.FAILED -> Unit // ViewModel already toasted the failure
             }
         },
-    )
-    PickerDialog(
-        title = strings.studyScheduleStart,
-        open = scheduleStartDialogOpen,
-        onDismiss = { scheduleStartDialogOpen = false },
-        options = scheduleHours.map { it * 60 to formatStudyClock(it * 60) },
-        selected = settings.schedule.startMinutes,
-        onSelect = { scheduleStartDialogOpen = false; onSetStudyScheduleStart(it) },
-    )
-    PickerDialog(
-        title = strings.studyScheduleEnd,
-        open = scheduleEndDialogOpen,
-        onDismiss = { scheduleEndDialogOpen = false },
-        options = scheduleHours.map { it * 60 to formatStudyClock(it * 60) },
-        selected = settings.schedule.endMinutes,
-        onSelect = { scheduleEndDialogOpen = false; onSetStudyScheduleEnd(it) },
     )
 }
 
@@ -455,12 +442,19 @@ private val StudyInactiveRed = Color(0xFF9A4A4A)
 @Composable
 private fun StudyStartConfirmDialog(
     durationMinutes: Int,
+    onSetDuration: (Int) -> Unit,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
     val shape = RoundedCornerShape(28.dp)
+    // Duration selection (opened by tapping the Duration row) — presets or
+    // Custom via the app-wide wheel picker. Selecting NEVER starts Study
+    // Mode: it stores the duration and returns to THIS popup, where the user
+    // still presses "Start Study".
+    var durationSelectorOpen by remember { mutableStateOf(false) }
+    var customPickerOpen by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -496,18 +490,32 @@ private fun StudyStartConfirmDialog(
                 textAlign = TextAlign.Center,
             )
 
-            // Selected duration — always matches the current Study Duration.
+            // Selected duration — TAPPABLE: opens the duration selector (the
+            // value always mirrors the single StudyModeSettings duration).
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .background(colors.CardHover)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { durationSelectorOpen = true },
+                    )
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(strings.studyDurationLabel, color = colors.TextSecondary, style = ScTextStyles.Body)
-                Text(strings.studyDurationText(durationMinutes), color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(strings.studyDurationText(durationMinutes), color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = colors.TextSecondary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
 
             Text(
@@ -538,6 +546,149 @@ private fun StudyStartConfirmDialog(
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
+    }
+
+    // ---- Duration selector — opened by the Duration row. Presets store
+    //      immediately and return to this popup; Custom opens the wheel
+    //      picker. Nothing here starts Study Mode. ----
+    if (durationSelectorOpen) {
+        Dialog(
+            onDismissRequest = { durationSelectorOpen = false },
+            properties = DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+            ),
+        ) {
+            StudyDurationSelector(
+                currentMinutes = durationMinutes,
+                onPreset = { minutes ->
+                    onSetDuration(minutes)
+                    durationSelectorOpen = false
+                },
+                onCustom = { customPickerOpen = true },
+                onDismiss = { durationSelectorOpen = false },
+            )
+        }
+    }
+
+    // ---- Custom duration — the SAME scroll-wheel picker used everywhere
+    //      (Hours 0+ / Minutes 00-59, Save disabled at 0h 0m). ----
+    if (customPickerOpen) {
+        ScDurationWheelDialog(
+            title = strings.studyDuration,
+            initialMinutes = durationMinutes,
+            valueLabel = strings::studyDurationText,
+            onConfirm = { minutes ->
+                onSetDuration(minutes)
+                customPickerOpen = false
+                durationSelectorOpen = false
+            },
+            onCancel = { customPickerOpen = false },
+        )
+    }
+}
+
+/**
+ * Duration selector opened from the activation popup's Duration row — preset
+ * cards (30 / 45 / 60 / 120 minutes) plus Custom (the app-wide wheel
+ * picker). Selecting stores the duration via [onPreset]/[onCustom] and
+ * returns to the popup; Study Mode still only starts via "Start Study".
+ */
+@Composable
+private fun StudyDurationSelector(
+    currentMinutes: Int,
+    onPreset: (Int) -> Unit,
+    onCustom: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    val presets = listOf(30, 45, 60, 120)
+    val shape = RoundedCornerShape(28.dp)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp),
+        shape = shape,
+        color = colors.Card,
+        shadowElevation = 24.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                strings.studyDuration,
+                color = colors.TextPrimary,
+                style = ScTextStyles.BodySemiBold.copy(fontSize = 18.sp),
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                strings.studyDurationPickerSubtitle,
+                color = colors.TextSecondary,
+                style = ScTextStyles.Body,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(4.dp))
+            presets.forEach { minutes ->
+                DurationOptionCard(
+                    label = strings.studyDurationText(minutes),
+                    selected = currentMinutes == minutes,
+                    onClick = { onPreset(minutes) },
+                )
+            }
+            DurationOptionCard(
+                label = strings.studyDurationCustom,
+                selected = currentMinutes !in presets,
+                onClick = onCustom,
+            )
+            Spacer(Modifier.height(2.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text(strings.cancel, color = colors.TextSecondary)
+                }
+            }
+        }
+    }
+}
+
+/** One selectable duration card — clear selected state (green tint + check). */
+@Composable
+private fun DurationOptionCard(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (selected) colors.ChipActiveBg else colors.CardHover, shape)
+            .border(1.dp, if (selected) colors.Success else colors.Divider, shape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            label,
+            color = if (selected) colors.ChipActiveText else colors.TextPrimary,
+            style = ScTextStyles.BodySemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.Success, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -580,6 +731,7 @@ private fun StudyDialogButton(
         Text(label, color = fg, style = ScTextStyles.ButtonLabel, maxLines = 1)
     }
 }
+
 
 /**
  * Status header — Active/Inactive + the ON/OFF activation toggle. The switch is

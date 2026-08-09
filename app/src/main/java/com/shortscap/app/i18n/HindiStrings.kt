@@ -1,5 +1,7 @@
 package com.shortscap.app.i18n
 
+import com.shortscap.app.study.StudyDay
+
 /** हिन्दी (Hindi) translations for the logged-in experience. */
 object HindiStrings : AppStrings {
 
@@ -155,6 +157,24 @@ object HindiStrings : AppStrings {
     override val settingsMonitoring = "मॉनिटरिंग"
     override val settingsPermissions = "अनुमतियाँ"
     override val settingsNotifications = "सूचनाएँ"
+    override val soundEffectsTitle = "ध्वनि और प्रभाव"
+    override val soundEffectsAppSounds = "ऐप ध्वनियाँ"
+    override val soundEffectsAppSoundsDesc = "सभी ShortsCap ध्वनियों और प्रभावों का मुख्य नियंत्रण।"
+    override val soundEffectsBreakReminder = "ब्रेक रिमाइंडर"
+    override val soundEffectsScheduleReminder = "स्टडी शेड्यूल रिमाइंडर"
+    override val soundEffectsLimitWarning = "शॉर्ट्स सीमा चेतावनी"
+    override val soundEffectsLimitReached = "शॉर्ट्स सीमा समाप्त"
+    override val soundEffectsBreakStart = "ब्रेक शुरू"
+    override val soundEffectsBreakEnd = "ब्रेक समाप्त"
+    override val appSoundDefault = "डिफ़ॉल्ट"
+    override val appSoundGentleChime = "हल्की झंकार"
+    override val appSoundSoftBell = "हल्की घंटी"
+    override val appSoundCalmTone = "शांत टोन"
+    override val appSoundFocusTone = "फोकस टोन"
+    override val appSoundWarningPulse = "चेतावनी पल्स"
+    override val appSoundLimitAlert = "सीमा अलर्ट"
+    override val appSoundSuccessChime = "सफलता झंकार"
+    override val soundEffectsPreview = "पूर्वावलोकन"
     override val settingsAppearance = "दिखावट"
     override val settingsDataBackup = "डेटा बैकअप"
     override val settingsAbout = "जानकारी"
@@ -208,7 +228,34 @@ object HindiStrings : AppStrings {
         }
     }
     override val studyDuration = "स्टडी अवधि"
+    override val studyDurationHours = "घंटे"
+    override val studyDurationSave = "सहेजें"
+    override val studyDurationCustom = "कस्टम"
+    override val studyDurationPickerSubtitle = "स्टडी मोड कितने समय तक सक्रिय रहना चाहिए?"
+    override val studyDurationRequired = "शून्य से अधिक अवधि चुनें।"
     override val studyBreakReminder = "ब्रेक रिमाइंडर"
+    override val studyBreakReminderEvery = "हर"
+    override val studyBreakReminderOff = "बंद"
+    override val studyBreakReminderInfoDesc = "ब्रेक रिमाइंडर आपको स्टडी मोड सेशन के दौरान छोटे ब्रेक लेने की याद दिलाता है। आप चुन सकते हैं कि आपको कितनी बार रिमाइंडर मिले और रिमाइंडर व्यवहार को कॉन्फ़िगर कर सकते हैं।"
+    override val studyBreakReminderIntervalLabel = "कितनी देर बाद याद दिलाएं"
+    override val studyBreakReminderPatternLabel = "रिमाइंडर पैटर्न"
+    override val studyBreakReminderPatternOnce = "एक बार"
+    override val studyBreakReminderPatternRepeat = "दोहराएं"
+    override val studyBreakReminderSoundLabel = "रिमाइंडर ध्वनि"
+    override val studyBreakSoundDefault = "डिफ़ॉल्ट"
+    override val studyBreakSoundSoftBell = "हल्की घंटी"
+    override val studyBreakSoundGentleChime = "हल्की झंकार"
+    override val studyBreakSoundFocusTone = "फोकस टोन"
+    override val studyBreakSoundCustom = "कस्टम"
+    override val studyBreakReminderCustom = "कस्टम"
+    override val studyBreakReminderSave = "रिमाइंडर सहेजें"
+    override val studyBreakConflictTitle = "शेड्यूल विरोध"
+    override val studyBreakConflictAdjustReminder = "रिमाइंडर समायोजित करें"
+    override val studyBreakConflictKeepSchedule = "शेड्यूल रखें"
+    override val studyBreakConflictScheduledStudy = "निर्धारित अध्ययन"
+    override val studyBreakConflictLabel = "विरोध"
+    override val studyBreakConflictNone = "कोई शेड्यूल विरोध नहीं मिला।"
+    override fun studyBreakConflictMessage(time: String) = "आपका चुना हुआ ब्रेक रिमाइंडर $time पर निर्धारित अध्ययन सेशन के साथ ओवरलैप हो सकता है।"
     override val studyBreakDuration = "ब्रेक अवधि"
     override val studySoundMode = "ध्वनि मोड"
     override val studySoundSound = "ध्वनि"
@@ -220,15 +267,54 @@ object HindiStrings : AppStrings {
     override val soundModeChangeFailedToast = "Android ने साउंड मोड बदलने की अनुमति नहीं दी।"
     override val studySchedule = "स्टडी शेड्यूल"
     override val studyScheduleStart = "प्रारंभ समय"
-    override val studyScheduleEnd = "समाप्ति समय"
-    override val studyAllowedItems = "अनुमत ऐप्स/वेबसाइटें"
-    override val studyAllowedItemsDesc = "स्टडी मोड सक्रिय रहने पर ये उपलब्ध रहते हैं।"
+    override val studyScheduleLabel = "शेड्यूल"
+    override val studyScheduleAdd = "शेड्यूल जोड़ें"
+    override val studyScheduleNewTitle = "शेड्यूल जोड़ें"
+    override val studyScheduleEdit = "संपादित करें"
+    override val studyScheduleEmptyTitle = "अभी कोई शेड्यूल नहीं"
+    override val studyScheduleEmptyDesc = "अपने स्टडी सत्रों की योजना बनाने के लिए एक शेड्यूल बनाएँ।"
+    override val studyScheduleEditTitle = "शेड्यूल संपादित करें"
+    override val studyScheduleSubject = "विषय"
+    override val studyScheduleSubjectPlaceholder = "जैसे, गणित"
+    override val studyScheduleSubjectRequired = "विषय दर्ज करें"
+    override val studyScheduleDays = "दिन"
+    override val studyScheduleDaysRequired = "कम से कम एक दिन चुनें"
+    override val studyScheduleReminder = "रिमाइंडर"
+    override val studyScheduleReminderNone = "कोई रिमाइंडर नहीं"
+    override val studyScheduleSavedToast = "शेड्यूल सहेजा गया"
+    override val studyScheduleDeletedToast = "शेड्यूल हटा दिया गया"
+    override fun studyScheduleReminderLabel(minutes: Int): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return when {
+            h > 0 && m == 0 -> if (h == 1) "1 घंटा पहले" else "$h घंटे पहले"
+            h == 0 -> "$m मिनट पहले"
+            else -> "$h घंटे $m मिनट पहले"
+        }
+    }
+    override fun studyDayShort(day: StudyDay): String = when (day) {
+        StudyDay.MONDAY -> "सोम"
+        StudyDay.TUESDAY -> "मंगल"
+        StudyDay.WEDNESDAY -> "बुध"
+        StudyDay.THURSDAY -> "गुरु"
+        StudyDay.FRIDAY -> "शुक्र"
+        StudyDay.SATURDAY -> "शनि"
+        StudyDay.SUNDAY -> "रवि"
+    }
+    override val studyAllowedItems = "ऐप / वेबसाइट की अनुमति दें"
     override val studyAllowedApps = "अनुमत ऐप्स"
     override val studyAllowedWebsites = "अनुमत वेबसाइटें"
+    override val studyAllowedMenuAddApp = "ऐप जोड़ें"
+    override val studyAllowedMenuManageApps = "ऐप्स प्रबंधित करें"
+    override val studyAllowedPickerEmpty = "जोड़ने के लिए कोई ऐप उपलब्ध नहीं है।"
+    override val studyAllowedManageEmpty = "अभी तक कोई ऐप अनुमत नहीं है।"
+    override val studyAllowedInfoTitle = "स्टडी मोड पहुंच"
+    override val studyAllowedInfoDesc = "स्टडी मोड सक्रिय रहने पर ये वेबसाइटें उपलब्ध रहेंगी।"
     override val studyAllowedWebsitePlaceholder = "जैसे khanacademy.org"
     override val studyAllowedAdd = "जोड़ें"
     override val studyAllowedInvalid = "मान्य वेबसाइट डोमेन दर्ज करें"
     override val studyAllowedDuplicate = "यह वेबसाइट पहले से अनुमत है"
+    override val studyAllowedAddTitle = "वेबसाइट जोड़ें"
     override val studySummary = "स्टडी सत्र सारांश"
     override val studySummarySessionsToday = "आज के सत्र"
     override val studySummaryTimeToday = "आज का स्टडी समय"
@@ -327,6 +413,8 @@ object HindiStrings : AppStrings {
 
     // ---- Time option labels ----
     override val minutesLabel = "मिनट"
+    override val studyTimeAm = "पूर्वाह्न"
+    override val studyTimePm = "अपराह्न"
 
     // ---- Permissions ----
     override val permissionsTitle = "अनुमतियाँ"
@@ -341,7 +429,7 @@ object HindiStrings : AppStrings {
     override val permAccessibility = "एक्सेसिबिलिटी सेवा"
     override val permAccessibilityDesc = "ऐप ब्लॉकिंग और प्रतिबंध लागू करने के लिए आवश्यक।"
     override val permOverlay = "अन्य ऐप्स के ऊपर प्रदर्शित करें"
-    override val permOverlayDesc = "प्रतिबंधित ऐप्स खोलने पर ब्लॉकिंग स्क्रीन दिखाने के लिए आवश्यक।"
+    override val permOverlayDesc = "शॉर्ट्सकैप का छोटा ब्रेन मॉनिटरिंग इंडिकेटर समर्थित शॉर्ट-वीडियो ऐप्स के ऊपर दिखाने की अनुमति देता है।"
     override val permNotifications = "सूचना अनुमति"
     override val permNotificationsDesc = "रिमाइंडर और निगरानी अलर्ट भेजने के लिए आवश्यक।"
     override val permBattery = "बैटरी ऑप्टिमाइज़ेशन अनदेखा करें"
@@ -350,6 +438,8 @@ object HindiStrings : AppStrings {
     override val permStorageDesc = "केवल प्रोफ़ाइल चित्र चयन और भविष्य के बैकअप के लिए उपयोग होता है।"
     override val permSystemAudioAccess = "सिस्टम ऑडियो एक्सेस"
     override val permSystemAudioAccessDesc = "स्टडी मोड के साउंड मोड के लिए फ़ोन को साउंड, वाइब्रेट और साइलेंट मोड के बीच बदलने हेतु आवश्यक है।"
+    override val permMonitoringService = "मॉनिटरिंग सेवा"
+    override val permMonitoringServiceDesc = "शॉर्ट्सकैप मॉनिटरिंग को बैकग्राउंड में सक्रिय रखती है।"
 
     // ---- Notifications ----
     override val notificationsTitle = "सूचनाएँ"

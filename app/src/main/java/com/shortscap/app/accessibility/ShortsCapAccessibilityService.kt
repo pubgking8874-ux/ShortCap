@@ -1,8 +1,11 @@
 package com.shortscap.app.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
+import com.shortscap.app.monitoring.BrainOverlayManager
 import com.shortscap.app.monitoring.MonitoringEventHub
+import com.shortscap.app.monitoring.SupportedShortVideoPackages
 
 /**
  * ShortsCap's own Accessibility Service — a MONITORING component, not a UI
@@ -25,9 +28,33 @@ import com.shortscap.app.monitoring.MonitoringEventHub
  *    database, no duplicate monitoring system.
  *
  * The service itself is deliberately UI-agnostic: it only knows the event
- * layer, never individual screens.
+ * layer, never individual screens. It also drives the small Brain overlay:
+ * when the foreground app is a supported short-video platform the Brain
+ * appears (only with the Display Over Other Apps permission granted) and is
+ * removed the moment the user leaves that context — never globally.
  */
-class ShortsCapAccessibilityService : AccessibilityService() {
+class ShortsCapAccessibilityService :
+    AccessibilityService(),
+    MonitoringEventHub.MonitoringEventListener {
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        MonitoringEventHub.subscribe(this)
+    }
+
+    /**
+     * Brain indicator visibility — tied strictly to the foreground context:
+     * shown only inside supported short-video apps, hidden everywhere else
+     * (including ShortsCap itself and any other app). Runs on the service's
+     * main thread, so WindowManager calls are safe.
+     */
+    override fun onForegroundAppChanged(packageName: String) {
+        if (packageName in SupportedShortVideoPackages) {
+            BrainOverlayManager.show(this)
+        } else {
+            BrainOverlayManager.hide()
+        }
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
@@ -47,8 +74,15 @@ class ShortsCapAccessibilityService : AccessibilityService() {
         // No audio/haptic feedback or ongoing actions to interrupt.
     }
 
-    // onServiceConnected / onUnbind use the defaults: the OS's enabled state is
-    // the source of truth (re-read by the app on every resume), and nothing in
-    // this process subscribes to events yet — future monitoring components can
-    // override them when they need connection lifecycle hooks.
+    override fun onUnbind(intent: Intent?): Boolean {
+        BrainOverlayManager.hide()
+        MonitoringEventHub.unsubscribe(this)
+        return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        BrainOverlayManager.hide()
+        MonitoringEventHub.unsubscribe(this)
+        super.onDestroy()
+    }
 }
