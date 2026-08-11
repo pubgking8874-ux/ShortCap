@@ -86,7 +86,7 @@ fun HomeScreen(
     // page (countdown + Watch/Timer animation) and the Shorts pages move
     // behind it. The page is TAPPABLE: it opens the "Stop Study Mode?"
     // confirmation, whose confirm action leads to the SHARED Focus Exit
-    // Passcode verification (same screen as General → Study Mode).
+    // Passcode verification (same screen as Study Mode).
     studyModeActive: Boolean = false,
     studyRemainingMillis: Long = 0L,
     studyTotalMillis: Long = 0L,

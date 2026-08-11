@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.DonutLarge
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -31,7 +30,6 @@ fun permissionIcon(id: PermissionId): ImageVector = when (id) {
     PermissionId.BATTERY_OPTIMIZATION -> Icons.Filled.BatteryChargingFull
     PermissionId.STORAGE_MEDIA -> Icons.Filled.PhotoLibrary
     PermissionId.SYSTEM_AUDIO_ACCESS -> Icons.Filled.VolumeUp
-    PermissionId.MONITORING_SERVICE -> Icons.Filled.Timelapse
 }
 
 /**
@@ -47,7 +45,6 @@ fun permissionIconKey(id: PermissionId): IconKey = when (id) {
     PermissionId.BATTERY_OPTIMIZATION -> IconKey.PERM_BATTERY
     PermissionId.STORAGE_MEDIA -> IconKey.PERM_STORAGE
     PermissionId.SYSTEM_AUDIO_ACCESS -> IconKey.PERM_SYSTEM_AUDIO
-    PermissionId.MONITORING_SERVICE -> IconKey.PERM_MONITORING_SERVICE
 }
 
 /** Localized title for a permission. */
@@ -59,7 +56,6 @@ fun permissionTitle(id: PermissionId, strings: AppStrings): String = when (id) {
     PermissionId.BATTERY_OPTIMIZATION -> strings.permBattery
     PermissionId.STORAGE_MEDIA -> strings.permStorage
     PermissionId.SYSTEM_AUDIO_ACCESS -> strings.permSystemAudioAccess
-    PermissionId.MONITORING_SERVICE -> strings.permMonitoringService
 }
 
 /** Localized short description (purpose) for a permission. */
@@ -71,7 +67,6 @@ fun permissionDescription(id: PermissionId, strings: AppStrings): String = when 
     PermissionId.BATTERY_OPTIMIZATION -> strings.permBatteryDesc
     PermissionId.STORAGE_MEDIA -> strings.permStorageDesc
     PermissionId.SYSTEM_AUDIO_ACCESS -> strings.permSystemAudioAccessDesc
-    PermissionId.MONITORING_SERVICE -> strings.permMonitoringServiceDesc
 }
 
 /**
@@ -100,6 +95,20 @@ fun permissionStatusColor(status: PermissionStatus, colors: ScColors): Color = w
     PermissionStatus.NOT_GRANTED -> colors.Warning
     PermissionStatus.DISABLED -> colors.Danger
 }
+
+/**
+ * Row action label — "Enable" while the permission is off, "Manage" while it
+ * is on. Both actions open the correct Android system settings page for that
+ * permission; the app never flips a fake UI-only state (Android Settings is
+ * the source of truth, and the status is re-checked on every resume).
+ */
+fun permissionActionLabel(status: PermissionStatus, strings: AppStrings): String =
+    when (status) {
+        PermissionStatus.GRANTED -> strings.permActionManage
+        PermissionStatus.NOT_GRANTED,
+        PermissionStatus.DISABLED,
+        -> strings.permActionEnable
+    }
 
 /**
  * Auto-refreshes permission statuses whenever the screen is visible — covers

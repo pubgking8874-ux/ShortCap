@@ -234,7 +234,7 @@ object UrduStrings : AppStrings {
     override val languageChinese = "چینی"
     override val languageSpanish = "ہسپانوی"
 
-    // ---- Study Mode (General section) ----
+    // ---- Study Mode (Monitoring section) ----
     override val studyTitle = "اسٹڈی موڈ"
     override val studySessionSection = "سیشن"
     override val studySettingsSection = "ترتیبات"
@@ -450,6 +450,8 @@ object UrduStrings : AppStrings {
     override val permissionsTitle = "اجازتیں"
     override val permStatusEnabled = "فعال"
     override val permStatusDisabled = "غیر فعال"
+    override val permActionEnable = "فعال کریں"
+    override val permActionManage = "منظم کریں"
     override val permLastChecked = "آخری جانچ"
     override val permNeverChecked = "کبھی نہیں"
     override val permDetailWhyTitle = "یہ اجازت کیوں ضروری ہے"
@@ -468,8 +470,6 @@ object UrduStrings : AppStrings {
     override val permStorageDesc = "صرف پروفائل تصویر کے انتخاب اور مستقبل کے بیک اپ کے لیے استعمال ہوتا ہے۔"
     override val permSystemAudioAccess = "سسٹم آڈیو رسائی"
     override val permSystemAudioAccessDesc = "اسٹڈی موڈ کے ساؤنڈ موڈ کے لیے فون کو ساؤنڈ، وائبریشن اور خاموش موڈ کے درمیان تبدیل کرنے کے لیے درکار ہے۔"
-    override val permMonitoringService = "مانیٹرنگ سروس"
-    override val permMonitoringServiceDesc = "شورٹس کیپ مانیٹرنگ کو پس منظر میں فعال رکھتی ہے۔"
 
     // ---- Notifications ----
     override val notificationsTitle = "اطلاعات"

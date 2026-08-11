@@ -153,14 +153,14 @@ fun SettingsNavHost(
         composable(SettingsDestinations.GENERAL) {
             GeneralScreen(
                 onOpenLanguage = { navController.navigate(SettingsDestinations.LANGUAGE) },
-                onOpenStudyMode = { navController.navigate(SettingsDestinations.STUDY_MODE) },
                 onBack = { navController.backOrClose(onClose) },
             )
         }
 
         composable(SettingsDestinations.STUDY_MODE) {
-            // Study Mode — complete feature inside the existing General
-            // section. State flows from AppUiState (StudyModeSettings /
+            // Study Mode — complete feature inside the Monitoring section
+            // (relocated from General; UI, logic and data unchanged). State
+            // flows from AppUiState (StudyModeSettings /
             // StudySession / StudySummary); the timestamp-based session keeps
             // the countdown exact across backgrounding, and a future backend
             // syncs through the StudyRepository seam behind the same shapes.
@@ -278,6 +278,9 @@ fun SettingsNavHost(
                 monitoringPaused = state.monitoringPaused,
                 onToggleMonitoring = viewModel::setMonitoringEnabled,
                 onToggleStrictMode = viewModel::setStrictMode,
+                // Study Mode — the complete feature (relocated from General),
+                // opening the SAME StudyModeScreen and flows as before.
+                onOpenStudyMode = { navController.navigate(SettingsDestinations.STUDY_MODE) },
                 onOpenShortsControl = { navController.navigate(SettingsDestinations.SHORTS_CONTROL) },
                 onOpenSchedule = { navController.navigate(SettingsDestinations.SCHEDULE) },
                 onBack = { navController.backOrClose(onClose) },

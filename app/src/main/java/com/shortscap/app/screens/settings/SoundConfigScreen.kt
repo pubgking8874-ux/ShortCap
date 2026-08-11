@@ -64,7 +64,10 @@ import com.shortscap.app.theme.ScTextStyles
  *                 persisted and restored when the user returns.
  *  - ZERO files → a clean "No sounds available" empty state.
  *
- * "Current" and "Add from your device" remain available in every state.
+ * "Current" stays available in every state; "Add from your device" is shown
+ * only for the four custom-sound categories (Break Reminder, Study Schedule
+ * Reminder, Shorts Limit Warning, Shorts Limit Reached) and stays available
+ * there in every state.
  * Preview plays the real bundled file via AssetManager and never triggers any
  * reminder / notification / Study Mode / Shorts-limit behavior. Scanning is
  * dynamic — no filenames are hardcoded, so files re-bundled from the source
@@ -172,13 +175,19 @@ fun SoundConfigScreen(
                 }
             }
 
-            // ---- Add from your device — kept in every state. ----
-            ScPremiumNavCard(
-                icon = Icons.Filled.MusicNote,
-                title = strings.soundAddFromDevice,
-                subtitle = strings.soundAddFromDeviceDesc,
-                onClick = onAddFromDevice,
-            )
+            // ---- Add from your device — ONLY for the four categories that
+            //      support custom sounds (Break Reminder, Study Schedule
+            //      Reminder, Shorts Limit Warning, Shorts Limit Reached).
+            //      Every other category uses its bundled sounds only, so the
+            //      row is simply not composed (no empty space, no placeholder).
+            if (categorySupportsCustomSound(category)) {
+                ScPremiumNavCard(
+                    icon = Icons.Filled.MusicNote,
+                    title = strings.soundAddFromDevice,
+                    subtitle = strings.soundAddFromDeviceDesc,
+                    onClick = onAddFromDevice,
+                )
+            }
         }
     }
 }

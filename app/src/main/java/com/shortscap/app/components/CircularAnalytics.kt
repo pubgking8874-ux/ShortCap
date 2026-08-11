@@ -162,7 +162,7 @@ fun ScCircularAnalyticsCarousel(
     studyRemainingMillis: Long = 0L,
     studyTotalMillis: Long = 0L,
     // Tapping the active Study Mode page → "Stop Study Mode?" → the shared
-    // Exit Passcode verification (same flow as General → Study Mode).
+    // Exit Passcode verification (same flow as Study Mode).
     onStopStudyMode: (() -> Unit)? = null,
 ) {
     if (metrics.isEmpty()) return

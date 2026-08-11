@@ -12,7 +12,6 @@ import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.shortscap.app.accessibility.AccessibilityServiceStatus
-import com.shortscap.app.monitoring.MonitoringService
 
 /**
  * PermissionRepository — the single data seam for the Permissions module.
@@ -54,7 +53,6 @@ object PermissionRepository {
         PermissionId.BATTERY_OPTIMIZATION -> batteryStatus(context)
         PermissionId.STORAGE_MEDIA -> storageStatus(context)
         PermissionId.SYSTEM_AUDIO_ACCESS -> systemAudioAccessStatus(context)
-        PermissionId.MONITORING_SERVICE -> monitoringServiceStatus(context)
     }
 
     // ---- Future backend seams (placeholders only — not implemented) ----
@@ -152,13 +150,21 @@ object PermissionRepository {
     }
 
     private fun storageStatus(context: Context): PermissionStatus {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
+        // The permission set follows the actual Android media permission
+        // model per OS version: full media access (Android 13), full OR
+        // partial "Select photos" access (Android 14+ — either counts as
+        // granted), and the classic external-storage permission below 13.
+        val permissions = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
-        val granted = ContextCompat.checkSelfPermission(context, permission) ==
-            PackageManager.PERMISSION_GRANTED
+        val granted = permissions.any {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
         return if (granted) PermissionStatus.GRANTED else PermissionStatus.NOT_GRANTED
     }
 
@@ -176,22 +182,4 @@ object PermissionRepository {
             PermissionStatus.NOT_GRANTED
         }
 
-    /**
-     * Monitoring Service — Enabled ONLY when the foreground service is
-     * ACTUALLY running AND everything it requires is still configured
-     * (monitoring switched on, Usage Access + Accessibility granted). Never
-     * assumed from merely opening the page; a service killed by the system
-     * or an OEM reads as Disabled until it restarts.
-     */
-    private fun monitoringServiceStatus(context: Context): PermissionStatus =
-        if (
-            MonitoringService.isRunning &&
-            MonitoringService.isMonitoringEnabled(context) &&
-            isUsageAccessGranted(context) &&
-            AccessibilityServiceStatus.isEnabled(context)
-        ) {
-            PermissionStatus.GRANTED
-        } else {
-            PermissionStatus.NOT_GRANTED
-        }
 }

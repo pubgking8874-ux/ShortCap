@@ -234,7 +234,7 @@ object ChineseStrings : AppStrings {
     override val languageChinese = "中文"
     override val languageSpanish = "西班牙语"
 
-    // ---- Study Mode (General section) ----
+    // ---- Study Mode (Monitoring section) ----
     override val studyTitle = "学习模式"
     override val studySessionSection = "会话"
     override val studySettingsSection = "设置"
@@ -450,6 +450,8 @@ object ChineseStrings : AppStrings {
     override val permissionsTitle = "权限"
     override val permStatusEnabled = "已启用"
     override val permStatusDisabled = "已停用"
+    override val permActionEnable = "启用"
+    override val permActionManage = "管理"
     override val permLastChecked = "上次检查"
     override val permNeverChecked = "从未"
     override val permDetailWhyTitle = "为什么需要此权限"
@@ -468,8 +470,6 @@ object ChineseStrings : AppStrings {
     override val permStorageDesc = "仅用于个人资料图片选择和未来的备份功能。"
     override val permSystemAudioAccess = "系统音频访问"
     override val permSystemAudioAccessDesc = "学习模式的“声音模式”需要在声音、振动和静音模式之间切换手机。"
-    override val permMonitoringService = "监控服务"
-    override val permMonitoringServiceDesc = "让 ShortsCap 监控在后台保持运行。"
 
     // ---- Notifications ----
     override val notificationsTitle = "通知"

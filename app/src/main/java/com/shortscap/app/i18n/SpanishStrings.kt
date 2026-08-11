@@ -234,7 +234,7 @@ object SpanishStrings : AppStrings {
     override val languageChinese = "Chino"
     override val languageSpanish = "Español"
 
-    // ---- Study Mode (General section) ----
+    // ---- Study Mode (Monitoring section) ----
     override val studyTitle = "Modo Estudio"
     override val studySessionSection = "Sesión"
     override val studySettingsSection = "Ajustes"
@@ -450,6 +450,8 @@ object SpanishStrings : AppStrings {
     override val permissionsTitle = "Permisos"
     override val permStatusEnabled = "Habilitado"
     override val permStatusDisabled = "Deshabilitado"
+    override val permActionEnable = "Activar"
+    override val permActionManage = "Gestionar"
     override val permLastChecked = "Última comprobación"
     override val permNeverChecked = "Nunca"
     override val permDetailWhyTitle = "Por qué se requiere este permiso"
@@ -468,8 +470,6 @@ object SpanishStrings : AppStrings {
     override val permStorageDesc = "Se usa solo para seleccionar la imagen de perfil y futuras funciones de respaldo."
     override val permSystemAudioAccess = "Acceso de audio del sistema"
     override val permSystemAudioAccessDesc = "Necesario para que el Modo Estudio cambie el teléfono entre los modos de sonido, vibración y silencio."
-    override val permMonitoringService = "Servicio de monitoreo"
-    override val permMonitoringServiceDesc = "Mantiene el monitoreo de ShortsCap activo en segundo plano."
 
     // ---- Notifications ----
     override val notificationsTitle = "Notificaciones"

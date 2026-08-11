@@ -65,9 +65,9 @@ import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
 /**
- * Study Mode — the complete Study Mode feature, living inside the EXISTING
- * General settings section (General → Study Mode). No new navigation item,
- * no duplicate controls anywhere else in the app.
+ * Study Mode — the complete Study Mode feature, living inside the
+ * Monitoring settings section (Settings → Monitoring → Study Mode).
+ * No new navigation item, no duplicate controls anywhere else in the app.
  *
  * Sections:
  *   STATUS     — Active / Inactive + the ON/OFF activation toggle (the single

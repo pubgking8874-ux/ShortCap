@@ -5,7 +5,7 @@ package com.shortscap.app.study
  *
  * The Exit Passcode is the ONLY way to manually end an active Study
  * Mode session before its countdown finishes. It lives entirely inside the
- * Study Mode feature (General section) and controls ONLY the ability to end
+ * Study Mode feature (Monitoring section) and controls ONLY the ability to end
  * a session early — it never touches blocking settings, restriction
  * configuration, Monitoring, Activity/History data or normal authentication.
  *
@@ -20,7 +20,7 @@ enum class FocusRecoveryMethod { EMAIL, MOBILE }
 /**
  * Entry point for the Exit Passcode flow overlay — the SAME verification,
  * status and recovery screens are used from BOTH the Home page and
- * General → Study Mode, so there is exactly one passcode UI in the app.
+ * Study Mode, so there is exactly one passcode UI in the app.
  * [SETUP] is the first-time create flow; [VERIFY] gates ending an active
  * Study Mode session early; [STATUS] is the passcode status/management
  * screen opened from the Study Mode row once a passcode exists.

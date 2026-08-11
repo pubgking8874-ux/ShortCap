@@ -234,7 +234,7 @@ object HindiStrings : AppStrings {
     override val languageChinese = "चीनी"
     override val languageSpanish = "स्पेनिश"
 
-    // ---- Study Mode (General section) ----
+    // ---- Study Mode (Monitoring section) ----
     override val studyTitle = "स्टडी मोड"
     override val studySessionSection = "सत्र"
     override val studySettingsSection = "सेटिंग्स"
@@ -450,6 +450,8 @@ object HindiStrings : AppStrings {
     override val permissionsTitle = "अनुमतियाँ"
     override val permStatusEnabled = "सक्षम"
     override val permStatusDisabled = "अक्षम"
+    override val permActionEnable = "सक्षम करें"
+    override val permActionManage = "प्रबंधित करें"
     override val permLastChecked = "अंतिम जाँच"
     override val permNeverChecked = "कभी नहीं"
     override val permDetailWhyTitle = "यह अनुमति क्यों आवश्यक है"
@@ -468,8 +470,6 @@ object HindiStrings : AppStrings {
     override val permStorageDesc = "केवल प्रोफ़ाइल चित्र चयन और भविष्य के बैकअप के लिए उपयोग होता है।"
     override val permSystemAudioAccess = "सिस्टम ऑडियो एक्सेस"
     override val permSystemAudioAccessDesc = "स्टडी मोड के साउंड मोड के लिए फ़ोन को साउंड, वाइब्रेट और साइलेंट मोड के बीच बदलने हेतु आवश्यक है।"
-    override val permMonitoringService = "मॉनिटरिंग सेवा"
-    override val permMonitoringServiceDesc = "शॉर्ट्सकैप मॉनिटरिंग को बैकग्राउंड में सक्रिय रखती है।"
 
     // ---- Notifications ----
     override val notificationsTitle = "सूचनाएँ"

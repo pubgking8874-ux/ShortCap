@@ -779,10 +779,11 @@ The Monitoring screen (`screens/settings/MonitoringScreen.kt`) is a full page wi
 | --- | --- | --- |
 | 1 | Monitoring | **Device Monitoring** — master switch + **Enabled / Disabled** status (same vocabulary as the Permissions screen) + a small circular **info button** opening a dialog explaining what is monitored, why the required Android permissions matter, and what happens if one is disabled |
 | 2 | Strict Mode | Switch ("Prevent bypassing restrictions.") |
-| 3 | Shorts | **Shorts Control** — opens the dedicated per-platform screen (YouTube Shorts / Instagram Reels / Facebook Reels / Snapchat Spotlight, each with its own real brand icon + independent switch) |
-| 4 | Monitoring Schedule | Dedicated page (UI only; start/end time + weekdays/weekends later) |
+| 3 | Study Mode | **Study Mode** — the complete study-focus feature relocated from the General section (duration, break reminder, schedule, allowed apps/websites, summary, start session) |
+| 4 | Shorts | **Shorts Control** — opens the dedicated per-platform screen (YouTube Shorts / Instagram Reels / Facebook Reels / Snapchat Spotlight, each with its own real brand icon + independent switch) |
+| 5 | Monitoring Schedule | Dedicated page (UI only; start/end time + weekdays/weekends later) |
 
-Removed from Monitoring: **Break Reminder / Reminder Interval** (it now lives exclusively in **Study Mode** under the General section), **Enable App Blocking**, **Blocked Apps**, **Allowed Apps**, **Daily Screen Time Limit**, the per-platform Shorts toggles and the read-only Statistics tiles — the underlying concepts/models are preserved where needed for the future Settings/Restriction section; only this page's dependency was removed.
+Removed from Monitoring: **Break Reminder / Reminder Interval** (it now lives exclusively in **Study Mode**, which now sits in the Monitoring section), **Enable App Blocking**, **Blocked Apps**, **Allowed Apps**, **Daily Screen Time Limit**, the per-platform Shorts toggles and the read-only Statistics tiles — the underlying concepts/models are preserved where needed for the future Settings/Restriction section; only this page's dependency was removed.
 
 All pickers are clean Material 3 dialogs styled with the ShortsCap dark theme; the current selection is highlighted with a checkmark.
 
@@ -896,13 +897,13 @@ Urdu also flips the app’s **layout direction to RTL** (`LocalLayoutDirection`)
 
 ---
 
-# Study Mode (General section)
+# Study Mode (Monitoring section)
 
 ## What was added
 
-**Study Mode** is a complete, connected study-focus feature living inside the **existing General settings section** (Settings → General → Study Mode). No new navigation item, no Journal section, and no duplicate Study Mode controls anywhere else in the app. It is fully separate from Device Monitoring, Shorts Monitoring, Activity and History data — it has its own `study/` package, its own models and its own `StudyRepository` backend seam.
+**Study Mode** is a complete, connected study-focus feature living inside the **Monitoring settings section** (Settings → Monitoring → Study Mode). No new navigation item, no Journal section, and no duplicate Study Mode controls anywhere else in the app. It is fully separate from Device Monitoring, Shorts Monitoring, Activity and History data — it has its own `study/` package, its own models and its own `StudyRepository` backend seam.
 
-## Study Mode screen (General → Study Mode)
+## Study Mode screen (Monitoring → Study Mode)
 
 | Section | Controls |
 | --- | --- |
@@ -920,14 +921,14 @@ Urdu also flips the app’s **layout direction to RTL** (`LocalLayoutDirection`)
 - **Restricted Mode** is activated automatically: Strict Mode is forced ON for the session (the previous value is remembered), and while a session is active the user **cannot manually disable** Strict Mode or Monitoring — the ViewModel ignores those toggles until 00:00.
 - **Timestamp-based countdown** — the session stores `startTimeMillis`, `endTimeMillis` and a ticking `currentTimeMillis` (remaining = end − current), so the timer stays exact when the app goes to the background or is reopened. A one-second ticker + an on-resume expiry check end the session at 00:00, restore the normal Strict Mode state and update the summary.
 - **HOME** — while a session is active the existing circular analytics carousel leads with a dedicated **Study Mode page** ("Study Mode Active" + countdown ring + a reusable **Watch/Timer sweep-hand animation** with a small lock badge). The existing Watch Time / Shorts Count pages stay behind it, untouched, and return to the front automatically at 00:00.
-- **Two exit locations, one shared state** — an active session can be ended early from **Home** (tap the active Study Mode circle) or from **General → Study Mode** (tap the active session card). Both open the same "Stop Study Mode?" confirmation, which routes into the **same** Focus Exit Passcode verification screen. There is exactly ONE `StudyModeState` (inactive / active + startTime / endTime / remaining) and ONE passcode + recovery system — Home and General always mirror each other; they can never disagree.
+- **Two exit locations, one shared state** — an active session can be ended early from **Home** (tap the active Study Mode circle) or from **Settings → Monitoring → Study Mode** (tap the active session card). Both open the same "Stop Study Mode?" confirmation, which routes into the **same** Focus Exit Passcode verification screen. There is exactly ONE `StudyModeState` (inactive / active + startTime / endTime / remaining) and ONE passcode + recovery system — Home and Study Mode always mirror each other; they can never disagree.
 
 ## Focus Exit Passcode (Study Mode protection & recovery)
 
-A complete **Focus Exit Passcode** system lives inside Study Mode (General → Study Mode → **Focus Protection**). It controls ONLY the ability to manually end an active session before 00:00 — it never changes blocking settings, restriction configuration, Monitoring, Activity/History data or normal authentication, and natural completion at 00:00 never requires it.
+A complete **Focus Exit Passcode** system lives inside Study Mode (Settings → Monitoring → Study Mode → **Focus Protection**). It controls ONLY the ability to manually end an active session before 00:00 — it never changes blocking settings, restriction configuration, Monitoring, Activity/History data or normal authentication, and natural completion at 00:00 never requires it.
 
 - **Setup (first time)** — "Set Focus Exit Passcode": hidden passcode field with Show/Hide eye, **min 8 characters, no artificial maximum, no Forgot option**; success toast + return to Study Mode.
-- **Protected exit (from both Home and General → Study Mode)** — an active session can only be ended early via the passcode. Tapping the active Study Mode card (Home circle or the Study Mode session card) shows "Stop Study Mode?" → **Stop Study Mode** → the shared **"Enter Focus Exit Passcode"** screen. A correct passcode ends the session immediately (countdown stops, restrictions restored, "Study Mode ended successfully."); an incorrect one keeps Study Mode fully active with a calm "Incorrect Focus Exit Passcode." error so the user can retry. If no passcode has been set yet, the flow routes to passcode setup first.
+- **Protected exit (from both Home and Study Mode)** — an active session can only be ended early via the passcode. Tapping the active Study Mode card (Home circle or the Study Mode session card) shows "Stop Study Mode?" → **Stop Study Mode** → the shared **"Enter Focus Exit Passcode"** screen. A correct passcode ends the session immediately (countdown stops, restrictions restored, "Study Mode ended successfully."); an incorrect one keeps Study Mode fully active with a calm "Incorrect Focus Exit Passcode." error so the user can retry. If no passcode has been set yet, the flow routes to passcode setup first.
 - **Recovery (Forgot Passcode?)** — only reachable from the verification screen: Recover → choose **Email** or **Mobile** (two separate cards, no assumption) → Send Verification Code → dedicated 6-digit OTP page (resend countdown; clearly says email or mobile, no sensitive data shown) → Create New Passcode (New + Confirm with eye toggles, min 8, must match) → returns to the verification screen so the new passcode works immediately.
 - **Design** — a dedicated "Study Focus Protection & Recovery" visual identity (lock/focus icon, clean card, ShortsCap dark theme); it deliberately looks **nothing like** the Sign In / Sign Up / auth OTP screens.
 - **Security / backend-ready** — the passcode is **never stored as plain text** (per-install random salt + SHA-256 hash, constant-time verification; the future backend uses a proper KDF). OTP is a LOCAL MOCK (random 6-digit code, 5-minute expiry, single-use) surfaced as a subtle "Demo code" line only until the backend sends it via email/SMS; the old passcode becomes invalid immediately after recovery.
@@ -945,9 +946,9 @@ A complete **Focus Exit Passcode** system lives inside Study Mode (General → S
 - `study/FocusPasscodeModels.kt`, `study/FocusPasscodeRepository.kt`, `study/FocusPasscodePreferenceStore.kt` — Focus Exit Passcode module (recovery method, mock OTP seam, salted-hash storage)
 - `screens/settings/StudyModeScreen.kt`, `screens/settings/StudyAllowedItemsScreen.kt` — **new** screens
 - `screens/settings/FocusPasscodeScreens.kt` — **new** 7-screen Focus Exit Passcode flow (setup / verify / recover / email / mobile / OTP / create)
-- `screens/settings/GeneralScreen.kt` — Study Mode row added inside the existing General section
+- `screens/settings/MonitoringScreen.kt` — Study Mode row as the third item inside the Monitoring section (relocated from the General section)
 - `navigation/SettingsNavHost.kt` — `settings_study_mode` + `settings_study_allowed` routes
-- `navigation/FocusPasscodeNavHost.kt` — **new** dedicated root-level overlay hosting ALL passcode screens (setup / verify / recover / email / mobile / OTP / create) so Home and General → Study Mode share the exact same flow
+- `navigation/FocusPasscodeNavHost.kt` — **new** dedicated root-level overlay hosting ALL passcode screens (setup / verify / recover / email / mobile / OTP / create) so Home and Study Mode share the exact same flow
 - `ShortsCapApp.kt` — renders the `FocusPasscodeNavHost` overlay above the settings overlay
 - `components/CircularAnalytics.kt` — tappable Study Mode page injected into the Home carousel (countdown + reusable `ScStudyAnimation` Watch/Timer animation + lock badge; `StudyAnimationType` enum ready for future Book/Focus variants from Appearance)
 - `screens/home/HomeScreen.kt` — active Study Mode circle opens "Stop Study Mode?" → Focus Exit Passcode

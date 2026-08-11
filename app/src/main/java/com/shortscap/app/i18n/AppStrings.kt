@@ -283,7 +283,7 @@ interface AppStrings {
     /** "Switching to <language>…" shown while the new language applies. */
     fun switchingTo(languageName: String): String
 
-    // ---- Study Mode (General section) ----
+    // ---- Study Mode (Monitoring section) ----
     val studyTitle: String
     val studySessionSection: String
     val studySettingsSection: String
@@ -437,7 +437,7 @@ interface AppStrings {
     val studyHomeTitle: String
 
     // "Stop Study Mode?" confirmation — the shared early-exit gate on the Home
-    // page AND General → Study Mode (leads to the Exit Passcode).
+    // page AND Study Mode (leads to the Exit Passcode).
     val studyStopTitle: String
     val studyStopMessage: String
     val studyStopAction: String
@@ -559,6 +559,12 @@ interface AppStrings {
     val permStatusEnabled: String
     val permStatusDisabled: String
 
+    // Permission row actions — the tap action shown on each row: "Enable"
+    // while the permission is off, "Manage" while it is on. Both open the
+    // correct Android system settings page (Android is the source of truth).
+    val permActionEnable: String
+    val permActionManage: String
+
     // Permission detail page
     val permLastChecked: String
     val permNeverChecked: String
@@ -583,10 +589,6 @@ interface AppStrings {
     val permSystemAudioAccess: String
     /** Purpose shown on the System Audio Access permission detail page. */
     val permSystemAudioAccessDesc: String
-    /** "Monitoring Service" — the foreground service that keeps monitoring active in the background. */
-    val permMonitoringService: String
-    /** Purpose shown on the Monitoring Service permission detail page. */
-    val permMonitoringServiceDesc: String
 
     // ---- Notifications ----
     val notificationsTitle: String

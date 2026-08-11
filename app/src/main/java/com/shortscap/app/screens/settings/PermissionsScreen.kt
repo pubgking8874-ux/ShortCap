@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,19 +46,24 @@ import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
 /**
- * Permissions — clean status overview, NOT a permission-request page.
+ * Permissions — real Android permission-status overview (NOT a fake in-app
+ * permission page). Every row reflects the ACTUAL Android system state,
+ * re-checked automatically on every resume.
  *
- * Permissions are requested during first-time onboarding; this page only
- * reflects the current state. Each permission is a compact settings row
- * (icon · name · colored status · chevron) — no cards, no big buttons.
+ * Each permission is a compact settings row (icon · name · colored status ·
+ * action pill). Tap behavior:
+ *  - Disabled → "● Disabled" + [Enable] — opens the correct Android settings
+ *    page for that permission so the user can grant it there.
+ *  - Enabled  → "● Enabled"  + [Manage] — opens the same Android settings
+ *    page so the user can review, and if desired revoke, it there. Android
+ *    does not let the app revoke most of these programmatically, so the
+ *    system page is always the revocation path — never a fake in-app
+ *    "Disable" toggle.
  *
- * Tap behavior:
- *  - Already granted → opens a simple detail page (status + purpose).
- *  - Not granted / disabled → opens the corresponding Android Settings screen
- *    directly so the user can enable it there.
- *
- * Statuses are detected automatically on every resume (first open AND after
- * returning from Android Settings) — no manual refresh button.
+ * Only if Android exposes no settings screen for a permission does the row
+ * fall back to the informational detail page. Statuses refresh on every
+ * resume (first open AND after returning from Android Settings) — no manual
+ * refresh button and no app restart required.
  */
 @Composable
 fun PermissionsScreen(
@@ -100,19 +103,15 @@ fun PermissionsScreen(
                     PermissionRow(
                         info = info,
                         onClick = {
-                            when (info.status) {
-                                // Enabled → opens the simple detail page;
-                                // Disabled → opens the Android settings screen.
-                                PermissionStatus.GRANTED -> onOpenDetail(id)
-                                else -> {
-                                    // Some items (e.g. the Monitoring Service)
-                                    // have NO Android settings page — open
-                                    // returns false and the row falls back to
-                                    // the informational detail page instead of
-                                    // an irrelevant system screen.
-                                    if (!PermissionActions.open(context, id)) onOpenDetail(id)
-                                }
-                            }
+                            // Real permission management: the row ALWAYS opens
+                            // the correct Android system settings page for
+                            // this permission — "Enable" when off, "Manage"
+                            // when on. Android Settings is the source of
+                            // truth; on return this screen re-checks every
+                            // status automatically. Only if Android exposes
+                            // NO settings page (none of the seven do) does it
+                            // fall back to the informational detail page.
+                            if (!PermissionActions.open(context, id)) onOpenDetail(id)
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -124,8 +123,10 @@ fun PermissionsScreen(
 
 /**
  * Compact settings row — icon tile + permission name + colored status text +
- * chevron. Sits inside the grouped container with a divider above/below;
- * only a soft accent tint highlights the row while pressed.
+ * action pill (Enable / Manage). Sits inside the grouped container with a
+ * divider above/below; only a soft accent tint highlights the row while
+ * pressed. Tapping anywhere on the row (including the pill) opens the
+ * permission's Android settings page.
  */
 @Composable
 private fun PermissionRow(
@@ -189,12 +190,22 @@ private fun PermissionRow(
             style = ScTextStyles.BodySemiBold.copy(fontSize = 13.sp),
             maxLines = 1,
         )
-        Spacer(Modifier.width(6.dp))
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = colors.TextDisabled,
-            modifier = Modifier.size(18.dp),
-        )
+        Spacer(Modifier.width(10.dp))
+        // Action pill — "Enable" when off, "Manage" when on. Tapping the row
+        // (or the pill) opens the correct Android system settings page; the
+        // real state is only ever decided by Android, never by this pill.
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(colors.Accent.copy(alpha = 0.12f))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Text(
+                permissionActionLabel(info.status, strings),
+                color = colors.Accent,
+                style = ScTextStyles.BodySemiBold.copy(fontSize = 12.sp),
+                maxLines = 1,
+            )
+        }
     }
 }

@@ -56,11 +56,14 @@ import com.shortscap.app.theme.ScTextStyles
  *                      status + small circular info button that explains what
  *                      is monitored and why permissions matter)
  *   STRICT MODE      → Strict Mode switch
+ *   STUDY MODE       → Study Mode (relocated from the General section; kept
+ *                      exactly as it was — same card, same design)
  *   SHORTS           → Shorts Control (opens the dedicated per-platform screen)
  *   MONITORING SCHEDULE → Monitoring Schedule page
  *
- * Break Reminder / Break Duration is NOT here — it belongs exclusively to
- * Study Mode in the General section (StudyModeScreen owns that feature).
+ * Break Reminder / Break Duration is NOT a separate monitoring item — it
+ * belongs exclusively to Study Mode (StudyModeScreen owns that feature),
+ * which now lives in this section.
  *
  * App Blocking, Daily Screen Time Limit, per-platform Shorts toggles and the
  * read-only Statistics tiles no longer live here (their underlying concepts
@@ -83,6 +86,7 @@ fun MonitoringScreen(
     monitoringPaused: Boolean = false,
     onToggleMonitoring: (Boolean) -> Unit,
     onToggleStrictMode: (Boolean) -> Unit,
+    onOpenStudyMode: () -> Unit,
     onOpenShortsControl: () -> Unit,
     onOpenSchedule: () -> Unit,
     onBack: () -> Unit,
@@ -127,6 +131,15 @@ fun MonitoringScreen(
                 trailing = {
                     ScSwitch(on = settings.strictModeEnabled, onToggle = { onToggleStrictMode(!settings.strictModeEnabled) })
                 },
+            )
+
+            // ---- Study Mode — relocated from the General section. The entry
+            //      keeps its exact original design (same card, icon, title);
+            //      the complete feature lives on its own StudyModeScreen. ----
+            ScPremiumNavCard(
+                iconKey = IconKey.STUDY_MODE,
+                title = strings.studyTitle,
+                onClick = onOpenStudyMode,
             )
 
             // ---- Section 3 — Shorts Control (dedicated screen) ----

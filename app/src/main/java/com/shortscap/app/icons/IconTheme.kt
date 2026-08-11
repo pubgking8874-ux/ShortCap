@@ -131,7 +131,6 @@ object IconTheme {
         IconKey.PERM_BATTERY -> Icons.Filled.BatteryChargingFull
         IconKey.PERM_STORAGE -> Icons.Filled.PhotoLibrary
         IconKey.PERM_SYSTEM_AUDIO -> Icons.Filled.VolumeUp
-        IconKey.PERM_MONITORING_SERVICE -> Icons.Filled.Timelapse
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> Icons.Filled.HelpOutline
@@ -292,7 +291,6 @@ private object VibrantPalette {
         IconKey.PERM_BATTERY -> lime
         IconKey.PERM_STORAGE -> cyan
         IconKey.PERM_SYSTEM_AUDIO -> orange
-        IconKey.PERM_MONITORING_SERVICE -> teal
 
         // Dashboard drawer
         IconKey.HELP_SUPPORT -> blue

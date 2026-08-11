@@ -43,9 +43,10 @@ import java.util.Date
 
 /**
  * Permission detail page — a simple read-only view showing the permission's
- * status and purpose. Opened only from an already-granted (or future) row on
- * the Permissions page, so it never requests anything and holds no action
- * buttons. Status refreshes automatically on resume.
+ * status and purpose. Serves as the graceful fallback when Android exposes
+ * no settings screen for a permission (the Permissions rows themselves open
+ * the real Android settings pages directly). It never requests anything and
+ * holds no action buttons. Status refreshes automatically on resume.
  */
 @Composable
 fun PermissionDetailScreen(

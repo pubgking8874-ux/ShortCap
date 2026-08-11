@@ -32,7 +32,7 @@ import com.shortscap.app.viewmodel.AppViewModel
  *
  * It is rendered at the app root (ShortsCapApp) as a full-screen overlay and
  * is opened from BOTH the Home page (tap active Study Mode → verify) and
- * General → Study Mode (active card / Exit Passcode row). Both entry points
+ * Study Mode (active card / Exit Passcode row). Both entry points
  * land on the exact same screens, so there is exactly ONE verification UI,
  * ONE passcode and ONE recovery system in the app — and both callers observe
  * the SAME global Study Mode state, so they can never disagree. Closing the

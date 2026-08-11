@@ -63,13 +63,6 @@ object PermissionActions {
             PermissionId.SYSTEM_AUDIO_ACCESS -> listOf(
                 Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
             )
-            // Monitoring Service — Android exposes NO user-toggleable settings
-            // page for a foreground service. There is deliberately nothing to
-            // open here: this item functions as an informational/status
-            // control, so [open] returns false and the Permissions screen
-            // shows the detail page instead (never an irrelevant system page
-            // and never a fake in-app permission screen).
-            PermissionId.MONITORING_SERVICE -> emptyList()
         }
         for (intent in intents) {
             if (tryLaunch(context, intent)) return true

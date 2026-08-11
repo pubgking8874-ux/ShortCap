@@ -107,6 +107,23 @@ fun categoryIcon(category: SoundEffectCategory): ImageVector = when (category) {
     SoundEffectCategory.NOTIFICATION_SOUND -> Icons.Filled.Notifications
 }
 
+/**
+ * The ONLY categories that support "Add from your device" (custom sounds) —
+ * per product spec: Break Reminder + Study Schedule Reminder (Study Mode)
+ * and Shorts Limit Warning + Shorts Limit Reached (Monitoring). Every other
+ * category uses its bundled sounds only.
+ */
+private val CUSTOM_SOUND_CATEGORIES = setOf(
+    SoundEffectCategory.BREAK_REMINDER,
+    SoundEffectCategory.SCHEDULE_REMINDER,
+    SoundEffectCategory.SHORTS_LIMIT_WARNING,
+    SoundEffectCategory.SHORTS_LIMIT_REACHED,
+)
+
+/** Whether "Add from your device" is available for [category]. */
+fun categorySupportsCustomSound(category: SoundEffectCategory): Boolean =
+    category in CUSTOM_SOUND_CATEGORIES
+
 /** Localized sound-library label. */
 fun soundLabel(strings: AppStrings, sound: AppSound): String = when (sound) {
     AppSound.DEFAULT -> strings.appSoundDefault

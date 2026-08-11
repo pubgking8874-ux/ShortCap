@@ -139,7 +139,7 @@ data class AppUiState(
     val settingsDestination: SettingsDestination? = null,
     val monitoring: MonitoringSettings = MonitoringSettings(),
 
-    // ---- Study Mode (General section) — SEPARATE from Device Monitoring,
+    // ---- Study Mode (Monitoring section) — SEPARATE from Device Monitoring,
     // Shorts Monitoring, Activity and History data. Lives in its own
     // study/ package with its own repository seam; the active session is
     // timestamp-based so the countdown stays exact across backgrounding. ----
@@ -164,7 +164,7 @@ data class AppUiState(
 
     // The Focus Passcode flow overlay (SETUP first-time create, or VERIFY to
     // end an active session). ONE shared flow — opened from BOTH the Home
-    // page and General → Study Mode, so every exit path uses the exact same
+    // page and Study Mode, so every exit path uses the exact same
     // verification + recovery screens (single Study Mode state, single
     // passcode, single recovery system — never two).
     val focusPasscodeFlow: FocusPasscodeEntry? = null,
@@ -604,7 +604,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closeSettingsScreen() = _uiState.update { it.copy(settingsDestination = null) }
 
-    // ---- Focus Passcode flow overlay (shared by Home + General → Study Mode) ----
+    // ---- Focus Passcode flow overlay (shared by Home + Study Mode) ----
     // One overlay, one passcode UI, one recovery system. Rendered at the app
     // root on top of everything; closing it returns to whatever screen opened
     // it (Home or Study Mode), both of which observe the SAME Study Mode state.
@@ -660,7 +660,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    // ---- Study Mode (General section; backend seam: StudyRepository) ----
+    // ---- Study Mode (Monitoring section; backend seam: StudyRepository) ----
     // State is held in AppUiState (studySettings / activeStudySession /
     // studySummary) and is fully separate from monitoring, shorts, activity
     // and history data. The session is timestamp-based: remaining time is
