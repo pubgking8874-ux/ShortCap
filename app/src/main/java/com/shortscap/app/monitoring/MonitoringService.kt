@@ -10,13 +10,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.shortscap.app.MainActivity
 import com.shortscap.app.R
 import com.shortscap.app.accessibility.AccessibilityServiceStatus
 import com.shortscap.app.permissions.PermissionRepository
+import com.shortscap.app.study.StudySessionAlerts
 
 /**
  * MonitoringService — the foreground service behind ShortsCap's continuous
@@ -44,6 +47,30 @@ import com.shortscap.app.permissions.PermissionRepository
  */
 class MonitoringService : Service() {
 
+    /**
+     * Background Study Session watch — while this foreground service is
+     * running (Study Mode forces monitoring on for the whole session), it
+     * checks the persisted active session on a light cadence. When the
+     * session's wall-clock end time has passed, it delivers the "Study
+     * Session Ended" alert exactly once (sound + Android notification) via the
+     * persisted-idempotent StudySessionAlerts — so the end event is real and
+     * background-capable even when ShortsCap's UI is never opened (e.g. the
+     * user is in YouTube / Chrome / Instagram / WhatsApp, or the process was
+     * restarted START_STICKY with no Activity at all). The ViewModel still
+     * owns restriction-state restoration and session clearing when the app
+     * next comes forward; the flag prevents any duplicate delivery.
+     */
+    private val sessionEndWatcher = object : Runnable {
+        override fun run() {
+            if (isRunning) {
+                StudySessionAlerts.fireEndAlert(this@MonitoringService)
+                handler.postDelayed(this, SESSION_END_CHECK_MILLIS)
+            }
+        }
+    }
+
+    private val handler = Handler(Looper.getMainLooper())
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -51,6 +78,8 @@ class MonitoringService : Service() {
         createNotificationChannel()
         startForegroundCompat()
         isRunning = true
+        handler.removeCallbacks(sessionEndWatcher)
+        handler.post(sessionEndWatcher)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -64,6 +93,9 @@ class MonitoringService : Service() {
         if (!isRunning) {
             isRunning = true
             startForegroundCompat()
+            // A sticky/restart re-entry re-arms the watcher too.
+            handler.removeCallbacks(sessionEndWatcher)
+            handler.post(sessionEndWatcher)
         }
         return START_STICKY
     }
@@ -77,6 +109,7 @@ class MonitoringService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        handler.removeCallbacks(sessionEndWatcher)
         super.onDestroy()
     }
 
@@ -143,6 +176,10 @@ class MonitoringService : Service() {
     companion object {
         const val CHANNEL_ID = "monitoring"
         const val NOTIFICATION_ID = 1
+
+        /** Cadence of the background Study Session watch — 1s keeps the end
+         *  alert prompt without being a hot loop. */
+        const val SESSION_END_CHECK_MILLIS = 1_000L
 
         private const val PREFS_NAME = "monitoring_service_prefs"
         private const val KEY_MONITORING_ENABLED = "monitoring_enabled"

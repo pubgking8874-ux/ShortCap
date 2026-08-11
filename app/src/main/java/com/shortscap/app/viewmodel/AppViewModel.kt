@@ -39,6 +39,8 @@ import com.shortscap.app.sounds.LocalSoundRepository
 import com.shortscap.app.sounds.SoundEffectCategory
 import com.shortscap.app.sounds.SoundEffectsConfig
 import com.shortscap.app.sounds.SoundEffectsRepository
+import com.shortscap.app.sounds.SoundTriggerer
+import com.shortscap.app.study.StudySessionAlerts
 import com.shortscap.app.study.DeviceSoundModeResult
 import com.shortscap.app.study.BreakReminderConfig
 import com.shortscap.app.study.FocusPasscodeEntry
@@ -936,6 +938,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Persist across process death / app reopen (timestamp-based restore).
         studyStore.saveActiveSession(session, previousStrict, previousMonitoring)
         startStudyTicker()
+        // Sound & Effects: the session genuinely started here — play the
+        // user's selected Study Session Start sound (never on popup open,
+        // cancel, duration change or preview).
+        SoundTriggerer.play(getApplication(), SoundEffectCategory.STUDY_SESSION_START)
         showToast { it.studySessionStartedToast }
     }
 
@@ -970,6 +976,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun finishStudySession(manualEnd: Boolean = false) {
         studyTickerJob?.cancel()
         studyTickerJob = null
+        // Only sound the end when a session was actually being ended — this
+        // method is also reachable from a stray/redundant expiry check, and
+        // an already-cleared session must never play the end sound twice.
+        val hadActiveSession = _uiState.value.activeStudySession != null
         // Restore the exact restriction states the user had before the session.
         val restoreStrict = strictModeBeforeStudy ?: false
         val restoreMonitoring = monitoringBeforeStudy ?: true
@@ -994,6 +1004,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // The session restored the user's normal monitoring state — resync the
         // foreground service (starts/stops to match the restored config).
         syncMonitoringService()
+        // The session genuinely ended (natural 00:00, passcode exit, or
+        // expiry-on-resume): deliver the END alert — the user's selected
+        // "Study Session End" sound exactly once + the global Android
+        // notification. It is persisted-idempotent via StudySessionAlerts, so
+        // the same session can never play/sound twice, even if the background
+        // MonitoringService fired it first while the app was closed. Must run
+        // BEFORE clearActiveSession (it reads the persisted session + flag).
+        if (hadActiveSession) StudySessionAlerts.fireEndAlert(getApplication())
         // The session is over — nothing to persist anymore.
         studyStore.clearActiveSession()
         showToast { if (manualEnd) it.focusPasscodeEndedToast else it.studySessionCompleteToast }

@@ -1,6 +1,8 @@
 package com.shortscap.app.sounds
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * LocalSoundRepository — reads the audio files bundled in the app under
@@ -28,7 +30,15 @@ object LocalSoundRepository {
      * supported audio file inside it, sorted by name. Runs on the IO
      * dispatcher — never call from the main thread.
      */
-    suspend fun loadSounds(context: Context, category: SoundEffectCategory): List<LocalSound> {
+    suspend fun loadSounds(context: Context, category: SoundEffectCategory): List<LocalSound> =
+        withContext(Dispatchers.IO) { availableSounds(context, category) }
+
+    /**
+     * Synchronous scan of the category folder (the same rules as [loadSounds];
+     * a cheap AssetManager listing + extension filter, so callers that need an
+     * instant answer — e.g. the event sound dispatcher — use this directly).
+     */
+    fun availableSounds(context: Context, category: SoundEffectCategory): List<LocalSound> {
         val dir = SoundFolderMap.assetDir(category)
         val files = runCatching {
             context.assets.list(dir).orEmpty()
@@ -44,6 +54,19 @@ object LocalSoundRepository {
                 assetPath = assetPath,
             )
         }
+    }
+
+    /**
+     * The sound that SHOULD play for [category]: the user's explicit
+     * selection if it still exists in the bundle, otherwise the folder's
+     * default (its first file), otherwise null when no playable audio exists.
+     * This mirrors the "current sound" resolution on SoundConfigScreen, so the
+     * event path and the visible UI always agree on the same single file.
+     */
+    fun selectedOrDefault(context: Context, category: SoundEffectCategory): LocalSound? {
+        val available = availableSounds(context, category)
+        val selectedId = selectedSound(context, category)
+        return available.firstOrNull { it.id == selectedId } ?: available.firstOrNull()
     }
 
     private fun isSupported(fileName: String): Boolean =

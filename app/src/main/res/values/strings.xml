@@ -18,6 +18,16 @@
     <string name="monitoring_notification_text">Usage monitoring is active in the background.</string>
 
     <!--
+        Study Mode — one-shot notification posted when an active Study Mode
+        session reaches its end time. Compact/banner style: it works whether
+        ShortsCap is open or in the background and never launches the app on
+        its own (only when the user taps the notification).
+    -->
+    <string name="study_session_notification_channel">Study Mode</string>
+    <string name="study_session_ended_title">Study Session Ended</string>
+    <string name="study_session_ended_text">Your study session has ended.</string>
+
+    <!--
         Brain overlay — the small monitoring indicator shown above supported
         short-video apps (accessibility label read by TalkBack).
     -->

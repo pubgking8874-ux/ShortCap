@@ -10,8 +10,11 @@ import android.content.Context
  * ThemePreferenceStore pattern (SharedPreferences).
  *
  * Only the CURRENT session is stored here (plus the pre-session restriction
- * states to restore at 00:00). Settings and history stay in memory / the
- * future backend (StudyRepository) — this store exists purely so \"the
+ * states to restore at 00:00 and the end-alert fired flag so the "session
+ * ended" sound + notification cannot be delivered twice for one session,
+ * whichever caller — ViewModel ticker, resume check or the background
+ * MonitoringService — fires it first). Settings and history stay in memory /
+ * the future backend (StudyRepository) — this store exists purely so \"the
  * application is reopened\" never resets or loses a running session.
  */
 class StudyPreferenceStore(context: Context) {
@@ -38,6 +41,7 @@ class StudyPreferenceStore(context: Context) {
             .putString(KEY_WEBSITES, session.allowedWebsites.joinToString(SEP))
             .putBoolean(KEY_PREV_STRICT, previousStrictMode)
             .putBoolean(KEY_PREV_MONITORING, previousMonitoringEnabled)
+            .putBoolean(KEY_END_ALERT, false)
             .apply()
     }
 
@@ -65,8 +69,20 @@ class StudyPreferenceStore(context: Context) {
             ),
             previousStrictMode = prefs.getBoolean(KEY_PREV_STRICT, false),
             previousMonitoringEnabled = prefs.getBoolean(KEY_PREV_MONITORING, true),
+            endAlertFired = prefs.getBoolean(KEY_END_ALERT, false),
         )
     }
+
+    /**
+     * Marks the current session's end alert (sound + notification) as already
+     * delivered, so the same session can never fire it twice from any caller.
+     */
+    fun markEndAlertFired() {
+        prefs.edit().putBoolean(KEY_END_ALERT, true).apply()
+    }
+
+    /** True once the current session's end alert was delivered. */
+    fun endAlertFired(): Boolean = prefs.getBoolean(KEY_END_ALERT, false)
 
     fun clearActiveSession() {
         prefs.edit().clear().apply()
@@ -77,6 +93,8 @@ class StudyPreferenceStore(context: Context) {
         val session: StudySession,
         val previousStrictMode: Boolean,
         val previousMonitoringEnabled: Boolean,
+        /** True when the end alert (sound + notification) was already delivered. */
+        val endAlertFired: Boolean,
     )
 
     private companion object {
@@ -94,5 +112,6 @@ class StudyPreferenceStore(context: Context) {
         const val KEY_WEBSITES = "session_allowed_websites"
         const val KEY_PREV_STRICT = "session_prev_strict"
         const val KEY_PREV_MONITORING = "session_prev_monitoring"
+        const val KEY_END_ALERT = "session_end_alert_fired"
     }
 }
