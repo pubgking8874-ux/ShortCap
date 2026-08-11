@@ -8,10 +8,15 @@
         requests and the system-settings redirects are driven from
         PermissionActions / PermissionRepository.
     -->
-    <!-- Internet access for the website favicon system (FaviconRepository):
-         downloads a site's official favicon.ico (with a public lookup
-         fallback) and caches it locally. No other network use today. -->
+    <!-- Internet access for the website favicon system (FaviconRepository:
+         downloads a site's official favicon.ico and caches it locally) and
+         for local website-domain verification (DomainVerifier: DNS lookup +
+         lightweight HTTPS reachability before a domain can be blocked).
+         ACCESS_NETWORK_STATE lets the verifier detect offline mode instantly
+         instead of waiting for a DNS timeout. Both are normal permissions,
+         granted automatically at install — never requested at runtime. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!--
         Sound Mode → Android device ringer mode (Sound / Vibrate / Silent).
         Changing the ringer via AudioManager.setRingerMode requires this

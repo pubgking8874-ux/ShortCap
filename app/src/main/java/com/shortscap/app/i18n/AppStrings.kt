@@ -166,6 +166,11 @@ interface AppStrings {
     val webBlockWebsite: String
     val webEnterUrlLabel: String
     val webUrlPlaceholder: String
+    val webVerifyChecking: String
+    val webVerifyVerified: String
+    val webVerifyInvalid: String
+    val webVerifyNotFound: String
+    val webVerifyTemporary: String
     val webWebTime: String
     val webRecentTitle: String
     val webEmptyRecentTitle: String

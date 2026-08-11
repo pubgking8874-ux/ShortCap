@@ -18,14 +18,17 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -39,6 +42,12 @@ import com.shortscap.app.icons.IconKey
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScCursorBrush
 import com.shortscap.app.theme.ScTextStyles
+import com.shortscap.app.web.DomainNormalizer
+import com.shortscap.app.web.DomainValidator
+import com.shortscap.app.web.DomainVerifier
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Website Blocking & Management — the MAIN Web screen (the Web tab root).
@@ -46,6 +55,11 @@ import com.shortscap.app.theme.ScTextStyles
  * Website blocking stays the primary feature: the URL input + Block Website
  * action sits at the top, followed by the Blocked / Allowed / Web Time
  * overview cards and the Blocked / Allowed / Recent navigation.
+ *
+ * A domain must pass local format validation (DomainValidator) and
+ * DNS/reachability verification (DomainVerifier, on the device — no
+ * backend) before it can be blocked; the Block Website button stays
+ * disabled until the current input is verified.
  *
  * The Web Time card is the ONLY entry point to the Web Usage Analytics
  * screen — analytics never replaces this page.
@@ -66,21 +80,58 @@ fun WebBlockingScreen(
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var url by rememberSaveable { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var verifyState by remember { mutableStateOf(VerifyUiState.Idle) }
+    var verifyJob by remember { mutableStateOf<Job?>(null) }
+    var duplicateError by remember { mutableStateOf<String?>(null) }
 
-    fun block() {
-        val d = normalizeWebDomain(url)
-        when {
-            !isValidWebDomain(d) -> error = strings.webAddInvalid
-            else -> if (onBlockWebsite(d)) {
-                url = ""
-                error = null
-            } else {
-                error = strings.webAddDuplicate
+    /**
+     * (Re)validates and re-verifies the current input. Called on every URL
+     * change: the previous verification is cancelled, the state resets, and a
+     * short debounce prevents a DNS lookup on every keystroke while typing.
+     */
+    fun startVerification() {
+        verifyJob?.cancel()
+        duplicateError = null
+        val normalized = DomainNormalizer.normalize(url)
+        if (normalized == null || !DomainValidator.isValidDomain(normalized)) {
+            verifyState = if (url.isBlank()) VerifyUiState.Idle else VerifyUiState.Invalid
+            return
+        }
+        verifyState = VerifyUiState.Checking
+        verifyJob = scope.launch {
+            delay(VERIFY_DEBOUNCE_MS)
+            // The job is cancelled on input change, so a stale run can never
+            // overwrite a newer state; double-check the input anyway.
+            val stillCurrent = DomainNormalizer.normalize(url)
+            if (stillCurrent != normalized) return@launch
+            verifyState = when (DomainVerifier.verify(context, normalized)) {
+                DomainVerifier.Result.Verified -> VerifyUiState.Verified
+                DomainVerifier.Result.NotFound -> VerifyUiState.NotFound
+                DomainVerifier.Result.TemporaryFailure -> VerifyUiState.TemporaryFailure
             }
         }
     }
+
+    /** Only a successfully verified domain may be added to the blocklist. */
+    fun block() {
+        if (verifyState != VerifyUiState.Verified) return
+        val normalized = DomainNormalizer.normalize(url) ?: return
+        if (onBlockWebsite(normalized)) {
+            url = ""
+            verifyJob?.cancel()
+            verifyState = VerifyUiState.Idle
+            duplicateError = null
+        } else {
+            duplicateError = strings.webAddDuplicate
+        }
+    }
+
+    // Re-verify on every input change AND on first composition / tab re-entry
+    // (rememberSaveable restores the typed URL but not this transient state).
+    LaunchedEffect(url) { startVerification() }
 
     Column(
         modifier = Modifier
@@ -106,10 +157,7 @@ fun WebBlockingScreen(
                     Icon(Icons.Filled.Link, contentDescription = null, tint = colors.TextSecondary, modifier = Modifier.size(16.dp))
                     BasicTextField(
                         value = url,
-                        onValueChange = {
-                            url = it
-                            error = null
-                        },
+                        onValueChange = { url = it },
                         textStyle = TextStyle(color = colors.TextPrimary, fontSize = 14.sp),
                         cursorBrush = ScCursorBrush(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -122,12 +170,28 @@ fun WebBlockingScreen(
                         },
                     )
                 }
-                error?.let { Text(it, color = colors.Danger, style = ScTextStyles.Caption) }
+                val statusText = when (verifyState) {
+                    VerifyUiState.Idle -> null
+                    VerifyUiState.Checking -> strings.webVerifyChecking
+                    VerifyUiState.Invalid -> strings.webVerifyInvalid
+                    VerifyUiState.NotFound -> strings.webVerifyNotFound
+                    VerifyUiState.TemporaryFailure -> strings.webVerifyTemporary
+                    VerifyUiState.Verified -> strings.webVerifyVerified
+                }
+                val statusColor = when (verifyState) {
+                    VerifyUiState.Verified -> colors.Success
+                    VerifyUiState.Invalid, VerifyUiState.NotFound -> colors.Danger
+                    VerifyUiState.TemporaryFailure -> colors.Warning
+                    else -> colors.TextSecondary
+                }
+                statusText?.let { Text(it, color = statusColor, style = ScTextStyles.Caption) }
+                duplicateError?.let { Text(it, color = colors.Danger, style = ScTextStyles.Caption) }
                 ScButton(
                     label = strings.webBlockWebsite,
                     variant = ScButtonVariant.PRIMARY,
                     icon = Icons.Filled.Block,
                     onClick = ::block,
+                    enabled = verifyState == VerifyUiState.Verified,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -171,3 +235,9 @@ fun WebBlockingScreen(
         }
     }
 }
+
+/** Debounce between keystrokes and the DNS/reachability verification. */
+private const val VERIFY_DEBOUNCE_MS = 450L
+
+/** Verification state of the current URL input on the Website Blocking screen. */
+private enum class VerifyUiState { Idle, Checking, Invalid, NotFound, TemporaryFailure, Verified }
