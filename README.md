@@ -19,6 +19,7 @@ This document explains everything from scratch: what the app does, the tech stac
 9. [Dependencies](#dependencies)
 10. [Change Log — what was modified and when](#change-log--what-was-modified-and-when)
 11. [Troubleshooting](#troubleshooting)
+12. [Backend Implementation](#backend-implementation)
 
 ---
 
@@ -87,35 +88,44 @@ ShortCap/
 ├── gradle.properties              # Gradle/JVM settings
 ├── gradle/wrapper/                # Gradle wrapper (8.10.2)
 ├── README.md
-└── app/
-    ├── build.gradle.kts           # app module: SDK levels, dependencies
-    └── src/main/
-        ├── AndroidManifest.xml
-        ├── res/                   # launcher icons, styles.xml (XML app theme)
-        └── java/com/shortscap/app/
-            ├── MainActivity.kt        # entry point (edge-to-edge, Compose)
-            ├── ShortsCapApp.kt        # root composition: theme + chrome + screens
-            ├── components/            # reusable UI building blocks
-            │   ├── AppDrawer.kt       # navigation drawer + scrim
-            │   ├── BottomNavBar.kt    # floating bottom navigation pill
-            │   ├── CircularAnalytics.kt # animated circular widget + swipe carousel
-            │   ├── CommonComponents.kt # card, button, chip, switch, skeleton, etc.
-            │   ├── ProfileMenu.kt     # profile popover
-            │   ├── ScToast.kt         # toast overlay
-            │   └── TopBar.kt          # top app bar (hamburger | logo | avatar)
-            ├── model/Models.kt        # data classes & enums
-            ├── navigation/ScNavHost.kt # tab dispatch
-            ├── screens/
-            │   ├── activity/ActivityScreen.kt
-            │   ├── home/HomeScreen.kt
-            │   ├── settings/SettingsScreen.kt
-            │   └── web/WebScreen.kt
-            ├── theme/
-            │   ├── Color.kt           # ScColors palettes + LocalScColors
-            │   ├── Theme.kt           # ThemeMode + ShortsCapTheme
-            │   ├── ThemePreferenceStore.kt # SharedPreferences persistence
-            │   └── Type.kt            # typography
-            └── viewmodel/AppViewModel.kt # single source of truth (StateFlow)
+├── app/
+│   ├── build.gradle.kts           # app module: SDK levels, dependencies
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── res/                   # launcher icons, styles.xml (XML app theme)
+│       └── java/com/shortscap/app/
+│           ├── MainActivity.kt        # entry point (edge-to-edge, Compose)
+│           ├── ShortsCapApp.kt        # root composition: theme + chrome + screens
+│           ├── components/            # reusable UI building blocks
+│           │   ├── AppDrawer.kt       # navigation drawer + scrim
+│           │   ├── BottomNavBar.kt    # floating bottom navigation pill
+│           │   ├── CircularAnalytics.kt # animated circular widget + swipe carousel
+│           │   ├── CommonComponents.kt # card, button, chip, switch, skeleton, etc.
+│           │   ├── ProfileMenu.kt     # profile popover
+│           │   ├── ScToast.kt         # toast overlay
+│           │   └── TopBar.kt          # top app bar (hamburger | logo | avatar)
+│           ├── model/Models.kt        # data classes & enums
+│           ├── navigation/ScNavHost.kt # tab dispatch
+│           ├── screens/
+│           │   ├── activity/ActivityScreen.kt
+│           │   ├── home/HomeScreen.kt
+│           │   ├── settings/SettingsScreen.kt
+│           │   └── web/WebScreen.kt
+│           ├── theme/
+│           │   ├── Color.kt           # ScColors palettes + LocalScColors
+│           │   ├── Theme.kt           # ThemeMode + ShortsCapTheme
+│           │   ├── ThemePreferenceStore.kt # SharedPreferences persistence
+│           │   └── Type.kt            # typography
+│           └── viewmodel/AppViewModel.kt # single source of truth (StateFlow)
+
+└── backend/                       # server backend skeleton (architecture only)
+    ├── app/                       # FastAPI application (placeholder modules)
+    ├── migrations/                # Alembic (configured later)
+    ├── tests/                     # pytest package layout (empty)
+    ├── requirements.txt           # planned Python dependencies (not installed)
+    ├── .env.example               # environment template (no real secrets)
+    ├── alembic.ini                # Alembic configuration (placeholder)
+    └── README.md                  # backend architecture overview
 ```
 
 ---
@@ -1404,7 +1414,7 @@ Add Website   → dialog with Block/Allow choice
 
 ### Main Web screen — Website Blocking hub (`screens/web/WebBlockingScreen.kt`)
 
-- **URL input + Block Website** remains the primary, prominent action at the top of the tab (validates domains; `normalizeWebDomain` strips scheme / `www.` / paths, rejects invalid input inline).
+- **URL input + Block Website** remains the primary, prominent action at the top of the tab — now backed by a **3-layer local domain-verification pipeline** (`DomainNormalizer` → `DomainValidator` → `DomainVerifier`) so only real, reachable domains can be blocked (see *Website Domain Verification* below).
 - Blocking an **allowed** website flips it to blocked (upsert — no duplicate row); already-blocked domains are reported inline.
 - **Three compact overview cards** near the top: Blocked count, Allowed count, and **Web Time** (today's total usage, clickable → opens analytics). All three cards are tappable and navigate.
 - **Blocked / Allowed / Recent** chips open their own dedicated screens — nothing expands inline on the main page.
@@ -1466,7 +1476,7 @@ Added an automatic **website identity / favicon system** to the Web section (Blo
 
 ### Other changes
 
-- `AndroidManifest.xml`: added the `INTERNET` permission (favicon download only).
+- `AndroidManifest.xml`: added the `INTERNET` permission (favicon downloads + website domain verification) and `ACCESS_NETWORK_STATE` (instant offline detection for the verifier).
 - `components/EntityIcon.kt`: website entities now render through the favicon system app-wide (any future list picks it up automatically).
 
 ### Files
@@ -1478,6 +1488,36 @@ Added an automatic **website identity / favicon system** to the Web section (Blo
 *Favicon system + blocking readiness completed August 7, 2026 · ShortsCap v1.1.1 · Build 2026072801*
 
 ---
+
+## UPDATE — Website Domain Verification before Blocking (August 11, 2026)
+
+The main Web screen's **Block Website** action is now gated by a **local, on-device domain verification pipeline** — no backend, no API, no new services. A domain must prove it exists before it can be added to the blocklist.
+
+### Three-layer verification (`web/` package)
+
+1. **Layer 1 — Format validation (`DomainNormalizer` + `DomainValidator`)**
+   - `DomainNormalizer.normalize()` extracts a bare hostname: strips scheme (http/https only), repeated `www.`, path/query/fragment and trailing FQDN dots; rejects e-mails (`hello@youtube.com`) and unsupported schemes (`ftp://`). `youtube.com` / `www.youtube.com` / `https://youtube.com/` all → `youtube.com`.
+   - `DomainValidator.isValidDomain()` — synchronous regex check; `youtube..com` and random text fail here with **✕ Invalid website address**, no network is touched.
+2. **Layer 2 — DNS lookup (`DomainVerifier`)**
+   - `InetAddress.getAllByName()` on `Dispatchers.IO` with a 4 s timeout. NXDOMAIN → **✕ Domain not found**; a DNS timeout/transient failure is never treated as proof of non-existence.
+3. **Layer 3 — Lightweight reachability (`DomainVerifier`)**
+   - A single HEAD request (HTTPS first, HTTP fallback, short timeouts, redirects followed). *Any* HTTP status (even 4xx/5xx) proves the host answers → **✓ Domain verified**. Connection/SSL/timeout failures → **⚠ Could not verify website right now** (blocked until verification succeeds).
+
+### UI behavior (`screens/web/WebBlockingScreen.kt`)
+
+- The **Block Website button is disabled** until the current input is verified — it stays disabled for empty, invalid, unresolved and temporarily-unverifiable input.
+- A live status line under the field shows `Checking domain...` → `✓ Domain verified` / `✕ Invalid website address` / `✕ Domain not found` / `⚠ Could not verify website right now`, using the app's existing Success/Danger/Warning colors.
+- **Re-verification on every change**: editing the URL cancels the previous check (450 ms debounce avoids a DNS lookup per keystroke) and resets the state — a stale "verified" can never carry over to a different domain.
+- Offline devices get **⚠ Could not verify website right now** immediately via a `ConnectivityManager` pre-check (no DNS-timeout wait).
+- Blocking still uses the existing `blockWebsite` upsert + duplicate handling; the blocking engine, rule storage and all other Web screens are untouched.
+
+### Files
+
+- New: `web/DomainNormalizer.kt`, `web/DomainValidator.kt`, `web/DomainVerifier.kt`
+- Modified: `screens/web/WebBlockingScreen.kt` (verification state machine + disabled-until-verified button), `AndroidManifest.xml` (`ACCESS_NETWORK_STATE`), i18n catalogs (5 keys × 6 languages)
+- Verified: `:app:compileDebugKotlin` passes.
+
+*Website domain verification completed August 11, 2026*
 
 ## Global Chart Style System (`Settings → Appearance → Chart`) — New
 
@@ -1691,3 +1731,80 @@ New implementation entry — a **simple touch-based visualizer** for the Graph/L
 **Verified:** `:app:compileDebugKotlin` and `:app:test` both pass; code review confirmed graph-only scoping, gesture coexistence (tap + drag), scroll compatibility and no regressions.
 
 *Slide-to-inspect Graph chart interaction completed August 8, 2026 · ShortsCap v1.1.1*
+
+---
+
+# Backend Implementation
+
+Server backend for ShortsCap — Python **FastAPI** + **SQLAlchemy (MySQL)**.
+Located in the `backend/` directory; the Android app is **not** touched by the
+backend work.
+
+> **Status:** Phase 2 (running FastAPI server) + Phase 3 (database foundation).
+> Auth, OAuth, routers, engines, and migrations are implemented in later phases.
+
+## Reserved technology stack
+
+| Area | Choice |
+| --- | --- |
+| Language | Python 3.14 |
+| API framework | FastAPI |
+| ORM | SQLAlchemy 2.x |
+| Database (dev) | MySQL |
+| Database (prod) | AWS RDS MySQL |
+| MySQL driver | PyMySQL |
+| Migrations | Alembic (configured later) |
+| Config | pydantic-settings (env-driven) |
+
+## Implemented so far
+
+### Phase 2 — running server
+
+- `backend/app/main.py` — minimal FastAPI app with `GET /` health response.
+  Verified via Uvicorn at <http://127.0.0.1:8000/> and Swagger
+  <http://127.0.0.1:8000/docs>.
+
+### Phase 3 — database foundation
+
+- `backend/app/config.py` — `pydantic-settings` `Settings`, fully env-driven
+  (reads `.env` / environment variables; see `backend/.env.example`). No
+  credentials in source; the DB URL is built from `DB_HOST` / `DB_PORT` /
+  `DB_USER` / `DB_PASSWORD` / `DB_NAME`.
+- `backend/app/database.py` — SQLAlchemy engine (MySQL via PyMySQL,
+  `pool_pre_ping`, `pool_recycle`), declarative `Base`, `SessionLocal`,
+  FastAPI `get_db()` dependency, and a real `check_database_connection()` helper
+  (never fabricates success).
+- `backend/app/models/user.py` — first model `User` (table `users`) with the
+  field set mirroring the Android auth/profile requirements
+  (`ProfileData` in `model/Models.kt`): `id`, `name`, `email` (unique),
+  `phone` (unique, optional — mobile OTP login), `gender`, `date_of_birth`,
+  `created_at`, `updated_at`.
+- `backend/scripts/check_db.py` — connectivity check reporting the **real**
+  connection state:
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m scripts.check_db
+  ```
+- `backend/requirements.txt` — now includes `pydantic-settings`, `SQLAlchemy`,
+  `PyMySQL` (in addition to Phase 2 `fastapi` + `uvicorn`).
+
+## Database connection status
+
+- Local MySQL server exists on this machine (`MySQL80` service) but the backend
+  currently has **no valid `.env` credentials**, so its real status is
+  `not_configured` (access denied) — as reported by `scripts/check_db.py`.
+- **AWS RDS production: NOT CONFIGURED** — no RDS instance provisioned yet; the
+  same pydantic-settings config will point at RDS purely via env vars.
+
+To connect: copy `backend/.env.example` to `backend/.env`, fill in real
+`DB_*` values, then rerun the check.
+
+## Next phases (not yet implemented)
+
+Database tables/migrations beyond `users`, OTP / Google / JWT auth endpoints,
+monitoring / study / shorts / web-blocking engines, sync endpoints, analytics,
+and notifications backend — each one at a time.
+
+---
+
+*Backend Phase 3 (database foundation) completed August 11, 2026*

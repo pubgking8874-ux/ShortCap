@@ -19,6 +19,7 @@ import com.shortscap.app.MainActivity
 import com.shortscap.app.R
 import com.shortscap.app.accessibility.AccessibilityServiceStatus
 import com.shortscap.app.permissions.PermissionRepository
+import com.shortscap.app.study.BreakCycle
 import com.shortscap.app.study.StudySessionAlerts
 
 /**
@@ -63,6 +64,11 @@ class MonitoringService : Service() {
     private val sessionEndWatcher = object : Runnable {
         override fun run() {
             if (isRunning) {
+                // Background break cycle: starts/ends breaks (BREAK_START /
+                // BREAK_END sounds) against the same persisted state as the
+                // ViewModel ticker, so the sounds fire exactly once even with
+                // ShortsCap's UI never open.
+                BreakCycle.check(this@MonitoringService)
                 StudySessionAlerts.fireEndAlert(this@MonitoringService)
                 handler.postDelayed(this, SESSION_END_CHECK_MILLIS)
             }

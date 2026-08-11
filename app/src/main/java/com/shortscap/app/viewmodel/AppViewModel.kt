@@ -41,6 +41,7 @@ import com.shortscap.app.sounds.SoundEffectsConfig
 import com.shortscap.app.sounds.SoundEffectsRepository
 import com.shortscap.app.sounds.SoundTriggerer
 import com.shortscap.app.study.StudySessionAlerts
+import com.shortscap.app.study.BreakCycle
 import com.shortscap.app.study.DeviceSoundModeResult
 import com.shortscap.app.study.BreakReminderConfig
 import com.shortscap.app.study.FocusPasscodeEntry
@@ -937,6 +938,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         syncMonitoringService()
         // Persist across process death / app reopen (timestamp-based restore).
         studyStore.saveActiveSession(session, previousStrict, previousMonitoring)
+        // Arm the Break Reminder cycle for this session (no-op when disabled).
+        BreakCycle.initialize(getApplication(), session)
         startStudyTicker()
         // Sound & Effects: the session genuinely started here — play the
         // user's selected Study Session Start sound (never on popup open,
@@ -957,11 +960,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 delay(1000)
                 val now = System.currentTimeMillis()
                 val session = _uiState.value.activeStudySession ?: break
-                if (now >= session.endTimeMillis) {
+                // Break cycle: starts a due break (BREAK_START, extending the
+                // session end by the break duration) or ends an overdue one
+                // (BREAK_END). The background MonitoringService drives the
+                // same persisted cycle, so break sounds fire exactly once. The
+                // result always carries the AUTHORITATIVE persisted session
+                // end — mirror it even when the service won the race, so the
+                // session can never finish mid-break.
+                val endAfterCheck = BreakCycle.check(getApplication()).sessionEndMillis
+                var effective = session
+                if (endAfterCheck != session.endTimeMillis) {
+                    effective = session.copy(endTimeMillis = endAfterCheck)
+                }
+                if (now >= effective.endTimeMillis) {
                     finishStudySession()
                     break
                 }
-                _uiState.update { it.copy(activeStudySession = session.copy(currentTimeMillis = now)) }
+                _uiState.update { it.copy(activeStudySession = effective.copy(currentTimeMillis = now)) }
             }
         }
     }
@@ -1105,7 +1120,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun checkStudySessionExpiry() {
         val session = _uiState.value.activeStudySession ?: return
-        if (System.currentTimeMillis() >= session.endTimeMillis) finishStudySession()
+        // Catch up on any break transition that happened while the app was
+        // away (a break that finished plays its end sound here, exactly once)
+        // and mirror the authoritative persisted session end.
+        val endAfterCheck = BreakCycle.check(getApplication()).sessionEndMillis
+        var effective = session
+        if (endAfterCheck != session.endTimeMillis) {
+            effective = session.copy(endTimeMillis = endAfterCheck)
+        }
+        _uiState.update { it.copy(activeStudySession = effective) }
+        if (System.currentTimeMillis() >= effective.endTimeMillis) finishStudySession()
         else startStudyTicker() // resume ticking after backgrounding
     }
 

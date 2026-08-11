@@ -74,6 +74,36 @@ class StudyPreferenceStore(context: Context) {
     }
 
     /**
+     * Persists the in-progress Break Reminder cycle for the active session.
+     * [breakStartAtMillis] is when the current break started (-1 = not in a
+     * break); [nextBreakAtMillis] is the wall-clock time of the next planned
+     * break (-1 = none planned). Written atomically by [BreakCycle], so the
+     * ViewModel ticker and the background MonitoringService can both drive the
+     * cycle without ever double-firing a break sound.
+     */
+    fun saveBreakCycle(breakStartAtMillis: Long, nextBreakAtMillis: Long) {
+        prefs.edit()
+            .putLong(KEY_BREAK_START, breakStartAtMillis)
+            .putLong(KEY_NEXT_BREAK, nextBreakAtMillis)
+            .apply()
+    }
+
+    /** When the current break started (wall-clock); -1 = not in a break. */
+    fun breakStartAt(): Long = prefs.getLong(KEY_BREAK_START, -1L)
+
+    /** Wall-clock time of the next planned break; -1 = none planned. */
+    fun nextBreakAt(): Long = prefs.getLong(KEY_NEXT_BREAK, -1L)
+
+    /**
+     * Persists a session end extended by a break (the session total is study
+     * time + break time), so a restore after process death uses the extended
+     * end and never finishes the session early.
+     */
+    fun extendSessionEnd(newEndMillis: Long) {
+        prefs.edit().putLong(KEY_END, newEndMillis).apply()
+    }
+
+    /**
      * Marks the current session's end alert (sound + notification) as already
      * delivered, so the same session can never fire it twice from any caller.
      */
@@ -113,5 +143,7 @@ class StudyPreferenceStore(context: Context) {
         const val KEY_PREV_STRICT = "session_prev_strict"
         const val KEY_PREV_MONITORING = "session_prev_monitoring"
         const val KEY_END_ALERT = "session_end_alert_fired"
+        const val KEY_BREAK_START = "session_break_start_at"
+        const val KEY_NEXT_BREAK = "session_next_break_at"
     }
 }
