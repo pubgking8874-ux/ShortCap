@@ -1,5 +1,7 @@
 package com.shortscap.app.navigation
 
+import android.app.Activity
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -7,8 +9,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.shortscap.app.activity.ActivityPeriod
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.screens.activity.ActivityReportScreen
@@ -18,6 +30,9 @@ import com.shortscap.app.screens.settings.SettingsScreen
 import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.viewmodel.AppUiState
 import com.shortscap.app.viewmodel.AppViewModel
+
+/** Double-back-to-exit window — a second Back press within this many ms exits. */
+private const val EXIT_CONFIRM_WINDOW_MS = 2000L
 
 /**
  * Mirrors the root conditional block:
@@ -34,6 +49,57 @@ import com.shortscap.app.viewmodel.AppViewModel
  */
 @Composable
 fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
+    // ---- Double-back-to-exit at any tab root (no child screen open). ----
+    // The four bottom tabs are direct state swaps with no back stack, so when
+    // no sub-screen / overlay is open a Back press has nothing to navigate
+    // back to. First press shows "Press back again to exit"; a second press
+    // within [EXIT_CONFIRM_WINDOW_MS] finishes the activity. The pending
+    // first press is a plain timestamp (auto-resets after the window) and is
+    // also cleared on ANY navigation (tab switch, or entering/leaving a child
+    // screen), so a stale press can never exit the app from a different
+    // context.
+    //
+    // This handler is composed BEFORE the tab content and the overlay
+    // BackHandlers (Settings / Drawer / Profile / Passcode), so those
+    // child-screen handlers always take precedence (Compose dispatches back
+    // callbacks in reverse registration order) — double-back-to-exit fires
+    // only when the user is genuinely at a tab root with nothing else open.
+    val atTabRoot = state.settingsDestination == null &&
+        state.drawerScreen == null &&
+        !state.drawerOpen &&
+        !state.profileScreenOpen &&
+        state.focusPasscodeFlow == null &&
+        !(state.screen == ScScreen.ACTIVITY &&
+            (state.activityReport != null || state.activityRangeDetail != null))
+    val context = LocalContext.current
+    var lastBackAt by remember { mutableLongStateOf(0L) }
+    BackHandler(enabled = atTabRoot) {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastBackAt <= EXIT_CONFIRM_WINDOW_MS) {
+            (context as? Activity)?.finish()
+        } else {
+            lastBackAt = now
+            viewModel.showToast { it.exitConfirmToast }
+        }
+    }
+    // Reset the pending first press whenever the root context changes
+    // (tab switch, or entering/leaving a child screen / overlay).
+    LaunchedEffect(atTabRoot, state.screen) {
+        lastBackAt = 0L
+    }
+    // Also reset whenever the app returns to the foreground (e.g. after the
+    // user comes back from an Android system settings page opened from the
+    // Permissions flow) — returning from a system screen can never count as
+    // the "second press".
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) lastBackAt = 0L
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val scroll = rememberScrollState()
     androidx.compose.foundation.layout.Box(
         modifier = Modifier

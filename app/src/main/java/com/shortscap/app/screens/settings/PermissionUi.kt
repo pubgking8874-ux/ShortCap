@@ -96,19 +96,6 @@ fun permissionStatusColor(status: PermissionStatus, colors: ScColors): Color = w
     PermissionStatus.DISABLED -> colors.Danger
 }
 
-/**
- * Row action label — "Enable" while the permission is off, "Manage" while it
- * is on. Both actions open the correct Android system settings page for that
- * permission; the app never flips a fake UI-only state (Android Settings is
- * the source of truth, and the status is re-checked on every resume).
- */
-fun permissionActionLabel(status: PermissionStatus, strings: AppStrings): String =
-    when (status) {
-        PermissionStatus.GRANTED -> strings.permActionManage
-        PermissionStatus.NOT_GRANTED,
-        PermissionStatus.DISABLED,
-        -> strings.permActionEnable
-    }
 
 /**
  * Auto-refreshes permission statuses whenever the screen is visible — covers

@@ -15,6 +15,10 @@ import kotlinx.coroutines.withContext
  * supported audio extensions (mp3, wav, m4a, aac, ogg) are returned;
  * everything else (including mp4) is ignored.
  *
+ * One deliberate exception: [CATEGORY_FILE_EXCLUSIONS] hides a specific file
+ * from ONE category's list ("Gentle Chime" from Break Reminder) without
+ * deleting the bundled asset or affecting any other category that uses it.
+ *
  * Bundling keeps the sounds working after the app is built and installed —
  * there is NO runtime dependency on a Downloads path or a storage permission.
  */
@@ -34,15 +38,30 @@ object LocalSoundRepository {
         withContext(Dispatchers.IO) { availableSounds(context, category) }
 
     /**
+     * Files deliberately hidden from ONE category's sound list while the asset
+     * itself stays bundled (and keeps playing wherever else it is used).
+     *
+     * Currently "Gentle Chime.mp3" is excluded ONLY from Break Reminder (the
+     * "Study break Reminder" folder) — it remains fully available in Study
+     * Session End and anywhere else it is bundled.
+     */
+    private val CATEGORY_FILE_EXCLUSIONS: Map<SoundEffectCategory, Set<String>> = mapOf(
+        SoundEffectCategory.BREAK_REMINDER to setOf("gentle chime.mp3"),
+    )
+
+    /**
      * Synchronous scan of the category folder (the same rules as [loadSounds];
      * a cheap AssetManager listing + extension filter, so callers that need an
      * instant answer — e.g. the event sound dispatcher — use this directly).
+     * Applies [CATEGORY_FILE_EXCLUSIONS] so an excluded file never appears in
+     * that category's list nor becomes its default sound.
      */
     fun availableSounds(context: Context, category: SoundEffectCategory): List<LocalSound> {
         val dir = SoundFolderMap.assetDir(category)
+        val excluded = CATEGORY_FILE_EXCLUSIONS[category].orEmpty()
         val files = runCatching {
             context.assets.list(dir).orEmpty()
-                .filter { isSupported(it) }
+                .filter { isSupported(it) && it.lowercase() !in excluded }
                 .sortedBy { it.lowercase() }
         }.getOrDefault(emptyList())
 

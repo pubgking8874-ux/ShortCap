@@ -331,7 +331,7 @@ Splash → Welcome → Sign In
 
 ## What was added
 
-Settings → **Permissions** is a clean, minimal **permission status overview** — it is **not** a permission-request page (permissions are requested during first-time onboarding/setup). Each permission appears as a compact **settings row** (icon · name · colored status · chevron) — no oversized cards, no big "Grant Permission" buttons. Rows are auto-refreshed whenever the screen resumes (first open AND returning from Android Settings), so statuses are always current with **no manual refresh button**. Uses the ShortsCap Premium Dark theme and mirrors modern Android settings screens.
+Settings → **Permissions** is a clean, minimal **permission status overview** — it is **not** a permission-request page (permissions are requested during first-time onboarding/setup). Each permission appears as a compact **settings row** (icon · name · colored status) with **no action buttons** — the entire row is the tap target, opening the correct Android settings page for that permission (works the same whether the status is Enabled or Disabled; the status text is informational only). Rows are auto-refreshed whenever the screen resumes (first open AND returning from Android Settings), so statuses always reflect the real Android system state with **no manual refresh button**. Uses the ShortsCap Premium Dark theme and mirrors modern Android settings screens.
 
 ## Supported Permissions
 
@@ -339,27 +339,29 @@ Settings → **Permissions** is a clean, minimal **permission status overview** 
 | --- | --- | --- | --- |
 | 1 | **Usage Access** | Monitor application usage time | Enabled |
 | 2 | **Accessibility Service** | App blocking & restriction enforcement | Enabled |
-| 3 | **Display Over Other Apps** | Show blocking screens when restricted apps open | Enabled |
+| 3 | **Display Over Other Apps** | ShortsCap's small monitoring Brain indicator above supported short-video apps | Enabled |
 | 4 | **Notification Permission** | Reminders & monitoring alerts | Enabled |
 | 5 | **Ignore Battery Optimization** | Reliable background operation | Enabled |
 | 6 | **Storage / Media Access** | Profile image selection & future backups | Enabled |
+| 7 | **System Audio Access** | Study Mode's Sound Mode (ring-mode control) | Enabled |
 
 ## Tap behavior
 
-- **Enabled** → opens a simple **detail page** showing the permission's status and purpose (no actions there).
-- **Disabled** → opens the **corresponding Android Settings screen directly** so the user can enable it (`PermissionActions`): Usage Access, Accessibility, Overlay, Notification, Battery Optimization, and App-details (storage) pages.
+- **The entire row is the action target** — there are no separate "Enable" / "Manage" buttons. Tapping anywhere on a row (Enabled **or** Disabled) opens the **corresponding Android Settings screen** via `PermissionActions`: Usage Access, Accessibility, Overlay/Display Over Other Apps, App Notification, Battery Optimization, App-details (Storage), and Notification Policy Access (System Audio Access) pages.
+- Android does not let the app revoke most of these programmatically, so the system settings page is always the grant **and** revoke path — the app never shows a fake in-app "Disable" toggle.
+- Only if Android exposes **no** settings screen for a permission does the row fall back to the informational **detail page**.
 
 ## Permission Status System
 
 - **One consistent status vocabulary** — every permission shows only **Enabled** (active/working) or **Disabled** (missing, denied, or inactive); the underlying Android states are normalized in the UI.
 - **Status colors** — 🟢 green = Enabled; 🟠 orange / 🔴 red = Disabled (color reflects the internal state — not granted vs denied).
-- **Live OS checks** — `permissions/PermissionRepository.kt` resolves every status from the Android OS: Usage Access via `AppOpsManager`, Accessibility via `ENABLED_ACCESSIBILITY_SERVICES`, overlay via `Settings.canDrawOverlays`, notifications via `NotificationManagerCompat`, battery via `PowerManager`, storage via `ContextCompat.checkSelfPermission`.
+- **Live OS checks** — `permissions/PermissionRepository.kt` resolves every status from the Android OS: Usage Access via `AppOpsManager`, Accessibility via `ENABLED_ACCESSIBILITY_SERVICES`, overlay via `Settings.canDrawOverlays`, notifications via `NotificationManagerCompat`, battery via `PowerManager`, storage via `ContextCompat.checkSelfPermission` (version-aware: `READ_MEDIA_*` on Android 13+, including partial "Select photos" access on 14+), System Audio Access via `isNotificationPolicyAccessGranted`.
 - **Automatic refresh** — `RefreshPermissionsOnResume` (a `LifecycleEventObserver`) re-checks all permissions every time a Permissions screen reaches `ON_RESUME`; returning from Android Settings updates the UI instantly.
 - **Last checked time** — every `PermissionInfo` stamps `lastCheckedAt`; the detail page shows it (or "Never").
 
 ## Permission Detail Page
 
-A simple read-only page (opened only from an already-granted row) showing: permission icon + title, **current status** (colored), **why this permission is required** (purpose), and **last checked** time. No action buttons, no inline expansion.
+A simple read-only page serving as the graceful fallback when Android exposes no settings screen for a permission (the rows themselves open the real Android settings pages directly). Shows: permission icon + title, **current status** (colored), **why this permission is required** (purpose), and **last checked** time. No action buttons, no inline expansion.
 
 ## Backend Integration Ready
 
@@ -1161,7 +1163,7 @@ A **centralized, app-wide icon system** was added to ShortsCap. Users pick an **
 - **Settings** — General, Monitoring, Permissions, Notifications, Appearance, Data Backup, About, Reset All Settings
 - **General** — Language
 - **Monitoring** — Device Monitoring, Strict Mode, Shorts Control, Monitoring Schedule
-- **Permissions** — all 6 permission rows + detail page hero (each row keeps its recognizable icon and gains its own color in Vibrant)
+- **Permissions** — all 7 permission rows + detail page hero (each row keeps its recognizable icon and gains its own color in Vibrant)
 - **Notifications** — the 6 categories + every option row (options inherit their category color in Vibrant)
 - **Appearance** — Theme, **Icons**, Text Size
 - **Help & Support** — FAQ, Contact Support, Report a Bug (+ FAQ accordion tiles)

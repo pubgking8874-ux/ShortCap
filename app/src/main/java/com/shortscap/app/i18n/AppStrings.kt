@@ -49,6 +49,9 @@ interface AppStrings {
     val toastPreferenceSaved: String
     val toastAddWebsite: String
 
+    /** "Press back again to exit" — first Back press at a tab root. */
+    val exitConfirmToast: String
+
     // ---- Drawer ----
     val drawerHelp: String
     val drawerPrivacy: String
@@ -558,12 +561,6 @@ interface AppStrings {
     // shown as a permission status.
     val permStatusEnabled: String
     val permStatusDisabled: String
-
-    // Permission row actions — the tap action shown on each row: "Enable"
-    // while the permission is off, "Manage" while it is on. Both open the
-    // correct Android system settings page (Android is the source of truth).
-    val permActionEnable: String
-    val permActionManage: String
 
     // Permission detail page
     val permLastChecked: String
