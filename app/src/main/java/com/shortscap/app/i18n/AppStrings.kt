@@ -6,8 +6,9 @@ import com.shortscap.app.study.StudyDay
 /**
  * The complete user-facing string catalog for the logged-in ShortsCap
  * experience. Every screen, dialog, toast and content description in the
- * Dashboard (Home, Activity, Web, Settings + sub-pages, Drawer + sub-pages,
- * Profile) reads its text from [AppStrings] — never from hardcoded literals.
+ * Dashboard (Home, Activity, Rank, Web, Settings + sub-pages, Drawer +
+ * sub-pages, Profile) reads its text from [AppStrings] — never from
+ * hardcoded literals.
  *
  * One implementation per [AppLanguage] lives in its own file (EnglishStrings,
  * HindiStrings, UrduStrings, ChineseStrings, SpanishStrings). The interface
@@ -108,6 +109,54 @@ interface AppStrings {
     val reportShortsUsage: String
     val reportShortsWatched: String
     val reportTrend: String
+
+    // ---- Rank ----
+    /** Bottom-nav label + screen title. */
+    val rankTitle: String
+    /** "Your Rank" — the user's own ranking label on the status card. */
+    val rankYourRank: String
+    /** "Your Score" — the user's own score label (fixed wording, NOT "Focus Score"). */
+    val rankYourScore: String
+    /** Formats the weekly movement hint, e.g. "+3 positions this week". */
+    fun rankPositionChange(positions: Int): String
+    /** "This Week" — time filter option. */
+    val rankThisWeek: String
+    /** "This Month" — time filter option. */
+    val rankThisMonth: String
+    /** "Leaderboard" — heading above the full ranking list. */
+    val rankLeaderboard: String
+    /** "1st Place" — podium heading. */
+    val rankFirstPlace: String
+    /** "2nd Place" — podium heading. */
+    val rankSecondPlace: String
+    /** "3rd Place" — podium heading. */
+    val rankThirdPlace: String
+    /** "You" — label for the current user's row in the leaderboard. */
+    val rankYou: String
+    /** Column header / progress metric name — the user's score. */
+    val rankScore: String
+    /** "Your Progress" — the metrics placeholder section heading. */
+    val rankYourProgress: String
+    /** "Shorts" — progress metric label. */
+    val rankShorts: String
+    /** "Distracting Apps" — progress metric label. */
+    val rankDistractingApps: String
+    /** "Study Sessions" — progress metric label. */
+    val rankStudySessions: String
+    /** Formats a score value, e.g. "Score 86". */
+    fun rankScoreValue(value: Int): String
+    /** "Ahead by" — prefix for the movement badge, e.g. "Ahead by 3 positions". */
+    val rankAheadBy: String
+    /** "Behind by" — prefix for the movement badge, e.g. "Behind by 2 positions". */
+    val rankBehindBy: String
+    /** "No change this week" — movement badge when the rank is unchanged. */
+    val rankNoChange: String
+    /** "Loading ranking..." — loading placeholder state. */
+    val rankLoading: String
+    /** "No ranking data yet" — empty placeholder state. */
+    val rankEmpty: String
+    /** "Unable to load ranking" — error placeholder state. */
+    val rankError: String
 
     // ---- Web ----
     val webTitle: String

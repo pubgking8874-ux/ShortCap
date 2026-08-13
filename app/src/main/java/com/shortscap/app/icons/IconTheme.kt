@@ -64,6 +64,10 @@ object IconTheme {
         // Bottom navigation
         IconKey.HOME -> Icons.Filled.Home
         IconKey.ACTIVITY -> Icons.Filled.Schedule
+        // Rank — trophy (achievement / leaderboard / winning). Distinct from
+        // Activity's chart-style icon (Schedule/BarChart) so the two tabs stay
+        // visually separate in the bottom navigation.
+        IconKey.RANK -> Icons.Filled.EmojiEvents
         IconKey.WEB -> Icons.Filled.Language
         IconKey.SETTINGS -> Icons.Filled.Settings
 
@@ -233,6 +237,7 @@ private object VibrantPalette {
         // Bottom navigation
         IconKey.HOME -> blue
         IconKey.ACTIVITY -> cyan
+        IconKey.RANK -> indigo
         IconKey.WEB -> teal
         IconKey.SETTINGS -> purple
 

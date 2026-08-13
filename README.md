@@ -25,7 +25,8 @@ This document explains everything from scratch: what the app does, the tech stac
 
 ## Features
 
-- **4 main screens** (bottom navigation): Home, Activity, Web, Settings.
+- **5 main screens** (bottom navigation): Home, Activity, **Rank** (center), Web, Settings.
+- **Rank**: dedicated leaderboard tab — Your Rank / Your Score status card, This Week | This Month filter, Top 3 podium, full leaderboard (current user highlighted), and a Your Progress metrics section. Trophy icon + calm count-up / entrance animations; **mock data only** (backend, score engine and database come later).
 - **Home dashboard**: greeting, a large animated **circular analytics widget** (swipeable metric pages — "Today's Shorts Watch Time" and "Today's Shorts Watched" — with page indicators), Quick Stats cards, and Recent Activity.
 - **Activity**: usage timeline bar chart, most-used-apps donut chart, unlock/session stat cards, and expandable reports.
 - **Web**: searchable Blocked / Allowed / Recent site lists with per-site toggles and a website count summary.
@@ -109,6 +110,7 @@ ShortCap/
 │           ├── screens/
 │           │   ├── activity/ActivityScreen.kt
 │           │   ├── home/HomeScreen.kt
+│           │   ├── rank/RankScreen.kt  # leaderboard tab (mock data)
 │           │   ├── settings/SettingsScreen.kt
 │           │   └── web/WebScreen.kt
 │           ├── theme/
@@ -286,6 +288,22 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 - **Create Account now collects only Email + Password** (per the master spec — **Full Name** and **Confirm Password** removed; the password strength indicator and the Terms checkbox remain). Layout: Logo → heading → tagline → Email → Password → Create Account → "Sign up with" [Google] [Mobile Number] → "Already have an account? Sign In" → Privacy • Terms.
 - **Email verification step added without a new screen:** after Create Account, the shared **OTP Verification** screen is reused as the email-verification step (new `mode=email_verify`; it already shows "code sent to <email>"), then **Complete Profile** → **Dashboard**. The full Email flow now matches the spec: `Email → Password → Create Account → Verify Email → Complete Profile → Dashboard`.
 - Google → Complete Profile → Dashboard and Mobile → OTP → Complete Profile → Dashboard were already wired (Phase 6.4) and are unchanged.
+
+### Phase 7 — Rank tab: bottom navigation + dedicated leaderboard screen *(Aug 13, 2026 — UI only, mock data)*
+**Files:** `model/Models.kt` (`ScScreen.RANK`), `ShortsCapApp.kt` (bottom-nav items — now **five**, Rank centered: Home | Activity | Rank | Web | Settings), `icons/IconModels.kt` (`IconKey.RANK`), `icons/IconTheme.kt` (Rank icon mapping), `i18n/AppStrings.kt` + all five language files (English / Hindi / Urdu / Chinese / Spanish — full Rank string catalog), `navigation/ScNavHost.kt` (`ScScreen.RANK → RankScreen()`), `screens/rank/RankScreen.kt` (**new**), `i18n/ChineseStrings.kt` (template fix in `rankPositionChange`)
+
+- **Bottom navigation grows from 4 to 5 items** — Rank sits in the **center** (Home | Activity | Rank | Web | Settings); Home, Activity, Web and Settings are untouched.
+- **New `RankScreen`** — a dedicated tab (not a dialog/sheet, not inside Home or Settings) with the required structure: **Your Rank / Your Score** hero status card (+ movement badge), **This Week | This Month** pill filter, **Top 3 podium** (2nd | 1st | 3rd, bottom-aligned pedestals), **full leaderboard** (rank / name / score rows; the current user's row is subtly highlighted as "You"), and a **Your Progress** 2×2 metrics section (Shorts, Distracting Apps, Study Sessions, Your Score).
+- **All values are clearly marked mock placeholders** — no backend calls, no leaderboard tables, no score engine, no Rank settings, no ranking APIs. Loading / Empty / Error UI states are prepared behind a `RankUiState` sealed type (defaults to mock data) so the future backend plugs in without UI redesign.
+- **Fully wired into the existing global systems**: theme (`LocalScColors` — Dark / Light / System), language (`LocalAppStrings` — all 5 catalogs, RTL-aware), font & text size (`ScTextStyles`, which resolve the active global font at use time), and icons (`IconTheme` + `IconKey.RANK` + active icon style).
+- **Calm animations only**: score count-ups, staggered podium / leaderboard entrances, and one animated progress bar.
+
+### Phase 7.1 — Rank icon refinement: trophy + animation *(Aug 13, 2026 — visual only)*
+**Files:** `icons/IconTheme.kt` (Rank icon → trophy), `screens/rank/RankScreen.kt` (status-card trophy entrance animation, "#" removed)
+
+- **Rank icon changed from the bar-chart to a trophy** (`Icons.Filled.EmojiEvents`) everywhere it is used — the **bottom navigation** and the **Rank screen header/status card** — so it no longer looks like Activity's chart-style icon. Activity's icon is unchanged; Rank stays in the center position.
+- **"#" removed** from the user's rank — the status card now reads **Your Rank / 12** (no prefix). "Your Rank" and "Your Score" labels are unchanged.
+- **Subtle one-shot trophy animation** on the Rank screen header: soft scale-in with a gentle bounce/settle (0.85 → 1.08 → 1.00) plus a faint glow pulse. It plays **once per Rank screen entry** (not on recomposition, never loops, no per-frame work) using lightweight native Compose animation — works offline, respects the existing theme colors.
 
 ---
 

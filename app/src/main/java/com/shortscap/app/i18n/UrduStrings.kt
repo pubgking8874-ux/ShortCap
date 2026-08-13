@@ -87,6 +87,32 @@ object UrduStrings : AppStrings {
     override val reportShortsWatched = "دیکھے گئے شارٹس"
     override val reportTrend = "رجحان"
 
+    // ---- Rank ----
+    override val rankTitle = "رینک"
+    override val rankYourRank = "آپ کی رینک"
+    override val rankYourScore = "آپ کا اسکور"
+    override fun rankPositionChange(positions: Int): String =
+        if (positions > 0) "+$positions مقام اس ہفتے" else "$positions مقام اس ہفتے"
+    override val rankThisWeek = "اس ہفتے"
+    override val rankThisMonth = "اس مہینے"
+    override val rankLeaderboard = "لیڈر بورڈ"
+    override val rankFirstPlace = "پہلا مقام"
+    override val rankSecondPlace = "دوسرا مقام"
+    override val rankThirdPlace = "تیسرا مقام"
+    override val rankYou = "آپ"
+    override val rankScore = "اسکور"
+    override val rankYourProgress = "آپ کی پیش رفت"
+    override val rankShorts = "شارٹس"
+    override val rankDistractingApps = "توجہ ہٹانے والی ایپس"
+    override val rankStudySessions = "مطالعہ سیشن"
+    override fun rankScoreValue(value: Int): String = "اسکور $value"
+    override val rankAheadBy = "آگے"
+    override val rankBehindBy = "پیچھے"
+    override val rankNoChange = "اس ہفتے کوئی تبدیلی نہیں"
+    override val rankLoading = "رینکنگ لوڈ ہو رہی ہے..."
+    override val rankEmpty = "ابھی کوئی رینکنگ ڈیٹا نہیں"
+    override val rankError = "رینکنگ لوڈ نہیں ہو سکی"
+
     // ---- Web ----
     override val webTitle = "ویب"
     override val webSearchPlaceholder = "ویب سائٹس تلاش کریں"

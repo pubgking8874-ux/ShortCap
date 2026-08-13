@@ -87,6 +87,32 @@ object HindiStrings : AppStrings {
     override val reportShortsWatched = "देखे गए शॉर्ट्स"
     override val reportTrend = "रुझान"
 
+    // ---- Rank ----
+    override val rankTitle = "रैंक"
+    override val rankYourRank = "आपकी रैंक"
+    override val rankYourScore = "आपका स्कोर"
+    override fun rankPositionChange(positions: Int): String =
+        if (positions > 0) "+$positions स्थान इस सप्ताह" else "$positions स्थान इस सप्ताह"
+    override val rankThisWeek = "इस सप्ताह"
+    override val rankThisMonth = "इस महीने"
+    override val rankLeaderboard = "लीडरबोर्ड"
+    override val rankFirstPlace = "पहला स्थान"
+    override val rankSecondPlace = "दूसरा स्थान"
+    override val rankThirdPlace = "तीसरा स्थान"
+    override val rankYou = "आप"
+    override val rankScore = "स्कोर"
+    override val rankYourProgress = "आपकी प्रगति"
+    override val rankShorts = "शॉर्ट्स"
+    override val rankDistractingApps = "ध्यान भटकाने वाले ऐप्स"
+    override val rankStudySessions = "अध्ययन सत्र"
+    override fun rankScoreValue(value: Int): String = "स्कोर $value"
+    override val rankAheadBy = "आगे"
+    override val rankBehindBy = "पीछे"
+    override val rankNoChange = "इस सप्ताह कोई बदलाव नहीं"
+    override val rankLoading = "रैंकिंग लोड हो रही है..."
+    override val rankEmpty = "अभी कोई रैंकिंग डेटा नहीं है"
+    override val rankError = "रैंकिंग लोड करने में असमर्थ"
+
     // ---- Web ----
     override val webTitle = "वेब"
     override val webSearchPlaceholder = "वेबसाइट खोजें"

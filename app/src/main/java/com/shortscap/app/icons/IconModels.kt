@@ -46,6 +46,7 @@ enum class IconKey {
     // ---- Bottom navigation ----
     HOME,
     ACTIVITY,
+    RANK,
     WEB,
     SETTINGS,
 

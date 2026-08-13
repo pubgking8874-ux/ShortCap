@@ -87,6 +87,32 @@ object ChineseStrings : AppStrings {
     override val reportShortsWatched = "观看的短视频"
     override val reportTrend = "趋势"
 
+    // ---- Rank ----
+    override val rankTitle = "排名"
+    override val rankYourRank = "您的排名"
+    override val rankYourScore = "您的分数"
+    override fun rankPositionChange(positions: Int): String =
+        if (positions > 0) "本周上升${positions}位" else "本周下降${-positions}位"
+    override val rankThisWeek = "本周"
+    override val rankThisMonth = "本月"
+    override val rankLeaderboard = "排行榜"
+    override val rankFirstPlace = "第一名"
+    override val rankSecondPlace = "第二名"
+    override val rankThirdPlace = "第三名"
+    override val rankYou = "您"
+    override val rankScore = "分数"
+    override val rankYourProgress = "您的进度"
+    override val rankShorts = "短视频"
+    override val rankDistractingApps = "分散注意力的应用"
+    override val rankStudySessions = "学习时段"
+    override fun rankScoreValue(value: Int): String = "分数 $value"
+    override val rankAheadBy = "领先"
+    override val rankBehindBy = "落后"
+    override val rankNoChange = "本周无变化"
+    override val rankLoading = "正在加载排名..."
+    override val rankEmpty = "暂无排名数据"
+    override val rankError = "无法加载排名"
+
     // ---- Web ----
     override val webTitle = "网页"
     override val webSearchPlaceholder = "搜索网站"

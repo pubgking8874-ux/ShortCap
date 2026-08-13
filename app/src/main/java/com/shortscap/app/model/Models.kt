@@ -3,8 +3,8 @@ package com.shortscap.app.model
 import androidx.compose.ui.graphics.Color
 import com.shortscap.app.icons.IconKey
 
-/** Bottom nav destinations — order preserved: home, activity, web, settings */
-enum class ScScreen { HOME, ACTIVITY, WEB, SETTINGS }
+/** Bottom nav destinations — order preserved: home, activity, rank, web, settings */
+enum class ScScreen { HOME, ACTIVITY, RANK, WEB, SETTINGS }
 
 /** Kind of entity shown with a leading icon — installed apps vs websites */
 enum class ScEntityType { APP, WEBSITE }

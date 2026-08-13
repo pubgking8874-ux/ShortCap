@@ -71,6 +71,7 @@ import com.shortscap.app.viewmodel.AppViewModel
 private val bottomNavItems = listOf(
     NavItemSpec(ScScreen.HOME, IconKey.HOME),
     NavItemSpec(ScScreen.ACTIVITY, IconKey.ACTIVITY),
+    NavItemSpec(ScScreen.RANK, IconKey.RANK),
     NavItemSpec(ScScreen.WEB, IconKey.WEB),
     NavItemSpec(ScScreen.SETTINGS, IconKey.SETTINGS),
 )

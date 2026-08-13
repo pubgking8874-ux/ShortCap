@@ -26,6 +26,7 @@ import com.shortscap.app.model.ScScreen
 import com.shortscap.app.screens.activity.ActivityReportScreen
 import com.shortscap.app.screens.activity.ActivityScreen
 import com.shortscap.app.screens.home.HomeScreen
+import com.shortscap.app.screens.rank.RankScreen
 import com.shortscap.app.screens.settings.SettingsScreen
 import com.shortscap.app.study.FocusPasscodeEntry
 import com.shortscap.app.viewmodel.AppUiState
@@ -38,19 +39,20 @@ private const val EXIT_CONFIRM_WINDOW_MS = 2000L
  * Mirrors the root conditional block:
  *   {screen === "home" && <HomeScreen loading={loading} />}
  *   {screen === "activity" && <ActivityScreen />}
+ *   {screen === "rank" && <RankScreen />}
  *   {screen === "web" && <WebScreen toast={showToast} />}
  *   {screen === "settings" && <SettingsScreen />}
  *
  * Simple `when` dispatch is used rather than Navigation-Compose's back-stack
  * navigation, since the RN app has no history/back-stack semantics between
- * these four tabs — each tap is a direct state swap, which this preserves
+ * these five tabs — each tap is a direct state swap, which this preserves
  * exactly. (Navigation Compose remains wired in for any deeper drill-down
  * screens added later, e.g. a website detail screen pushed from WebScreen.)
  */
 @Composable
 fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
     // ---- Double-back-to-exit at any tab root (no child screen open). ----
-    // The four bottom tabs are direct state swaps with no back stack, so when
+    // The five bottom tabs are direct state swaps with no back stack, so when
     // no sub-screen / overlay is open a Back press has nothing to navigate
     // back to. First press shows "Press back again to exit"; a second press
     // within [EXIT_CONFIRM_WINDOW_MS] finishes the activity. The pending
@@ -182,6 +184,8 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
             // The Web tab is a dedicated nav stack: analytics root + Blocked /
             // Allowed rule screens (WebNavHost), all data via WebRepository.
             ScScreen.WEB -> WebNavHost(state = state, viewModel = viewModel)
+
+            ScScreen.RANK -> RankScreen()
 
             ScScreen.SETTINGS -> SettingsScreen(
                 onOpenDestination = viewModel::openSettingsScreen,

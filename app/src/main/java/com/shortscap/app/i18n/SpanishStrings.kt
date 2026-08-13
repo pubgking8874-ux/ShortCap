@@ -87,6 +87,32 @@ object SpanishStrings : AppStrings {
     override val reportShortsWatched = "Shorts vistos"
     override val reportTrend = "Tendencia"
 
+    // ---- Rank ----
+    override val rankTitle = "Ranking"
+    override val rankYourRank = "Tu ranking"
+    override val rankYourScore = "Tu puntuación"
+    override fun rankPositionChange(positions: Int): String =
+        if (positions > 0) "+$positions puestos esta semana" else "$positions puestos esta semana"
+    override val rankThisWeek = "Esta semana"
+    override val rankThisMonth = "Este mes"
+    override val rankLeaderboard = "Clasificación"
+    override val rankFirstPlace = "1er Puesto"
+    override val rankSecondPlace = "2do Puesto"
+    override val rankThirdPlace = "3er Puesto"
+    override val rankYou = "Tú"
+    override val rankScore = "Puntuación"
+    override val rankYourProgress = "Tu progreso"
+    override val rankShorts = "Shorts"
+    override val rankDistractingApps = "Apps que distraen"
+    override val rankStudySessions = "Sesiones de estudio"
+    override fun rankScoreValue(value: Int): String = "Puntuación $value"
+    override val rankAheadBy = "Por delante"
+    override val rankBehindBy = "Por detrás"
+    override val rankNoChange = "Sin cambios esta semana"
+    override val rankLoading = "Cargando ranking..."
+    override val rankEmpty = "Aún no hay datos de ranking"
+    override val rankError = "No se pudo cargar el ranking"
+
     // ---- Web ----
     override val webTitle = "Web"
     override val webSearchPlaceholder = "Buscar sitios web"
