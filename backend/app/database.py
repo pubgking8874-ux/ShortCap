@@ -45,7 +45,8 @@ def get_db() -> Generator[Session, None, None]:
 def check_database_connection() -> dict:
     """Attempt a REAL connection — never fabricates success.
 
-    Returns a status dict used by the Phase 3 verification script and report.
+    Returns a status dict used by the health endpoint and verification script.
+    Never returns the connection URL or password — only the database name.
     """
     from sqlalchemy import text
 
@@ -55,11 +56,11 @@ def check_database_connection() -> dict:
         return {
             "status": "success",
             "message": "Connected",
-            "database": settings.database_url,
+            "database": settings.DB_NAME,
         }
-    except Exception as exc:  # noqa: BLE001 - surface any connect error
+    except Exception:  # noqa: BLE001 - surface connection state without secrets
         return {
             "status": "not_configured",
-            "message": f"Not configured: {exc}",
-            "database": settings.database_url,
+            "message": "Connection not configured or failed",
+            "database": settings.DB_NAME,
         }

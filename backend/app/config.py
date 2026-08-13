@@ -25,18 +25,24 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # --- Database (MySQL) ---
-    DB_HOST: str = "localhost"
+    DB_HOST: str = "127.0.0.1"
     DB_PORT: int = 3306
     DB_USER: str = "root"
     DB_PASSWORD: str = ""
-    DB_NAME: str = "shortscap"
+    DB_NAME: str = "shortscap_db"
 
     @property
     def database_url(self) -> str:
         """SQLAlchemy URL for MySQL. Same shape works for AWS RDS (host/creds via env)."""
-        return (
-            f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}"
-            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        from sqlalchemy.engine import URL
+
+        return URL.create(
+            drivername="mysql+pymysql",
+            username=self.DB_USER,
+            password=self.DB_PASSWORD,
+            host=self.DB_HOST,
+            port=self.DB_PORT,
+            database=self.DB_NAME,
         )
 
 

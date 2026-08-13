@@ -1740,8 +1740,9 @@ Server backend for ShortsCap — Python **FastAPI** + **SQLAlchemy (MySQL)**.
 Located in the `backend/` directory; the Android app is **not** touched by the
 backend work.
 
-> **Status:** Phase 2 (running FastAPI server) + Phase 3 (database foundation).
-> Auth, OAuth, routers, engines, and migrations are implemented in later phases.
+> **Status:** Phase 2 (running FastAPI server) + Phase 3 (database foundation) +
+> environment configuration. Data models beyond `User`, auth, OAuth, routers,
+> engines, and migrations are implemented in later phases.
 
 ## Reserved technology stack
 
@@ -1750,54 +1751,69 @@ backend work.
 | Language | Python 3.14 |
 | API framework | FastAPI |
 | ORM | SQLAlchemy 2.x |
-| Database (dev) | MySQL |
+| Database (dev) | MySQL Community Server 8.0.43 (local) |
 | Database (prod) | AWS RDS MySQL |
 | MySQL driver | PyMySQL |
 | Migrations | Alembic (configured later) |
-| Config | pydantic-settings (env-driven) |
+| Config | pydantic-settings + python-dotenv (env-driven) |
+| Env file | `backend/.env` (git-ignored) |
 
 ## Implemented so far
 
 ### Phase 2 — running server
 
-- `backend/app/main.py` — minimal FastAPI app with `GET /` health response.
+- `backend/app/main.py` — FastAPI app with `GET /` health response.
   Verified via Uvicorn at <http://127.0.0.1:8000/> and Swagger
   <http://127.0.0.1:8000/docs>.
 
-### Phase 3 — database foundation
+### Phase 3 — database foundation & environment configuration
 
+- `backend/.env` — environment file created from `.env.example` with the local
+  MySQL configuration (`DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER=root`,
+  `DB_NAME=shortscap_db`; `DB_PASSWORD` is intentionally left blank and must be
+  filled in manually — it is **never** committed, logged, or echoed).
 - `backend/app/config.py` — `pydantic-settings` `Settings`, fully env-driven
-  (reads `.env` / environment variables; see `backend/.env.example`). No
-  credentials in source; the DB URL is built from `DB_HOST` / `DB_PORT` /
-  `DB_USER` / `DB_PASSWORD` / `DB_NAME`.
+  (reads `.env` / environment variables). No credentials in source; the DB URL
+  is built from `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`.
 - `backend/app/database.py` — SQLAlchemy engine (MySQL via PyMySQL,
   `pool_pre_ping`, `pool_recycle`), declarative `Base`, `SessionLocal`,
-  FastAPI `get_db()` dependency, and a real `check_database_connection()` helper
-  (never fabricates success).
+  FastAPI `get_db()` dependency, and a safe `check_database_connection()` that
+  performs a real query and never exposes the password/connection URL.
+- `backend/app/main.py` — added **`GET /health/db`** database health endpoint.
+  On success returns `{"status": "connected", "database": "shortscap_db"}`;
+  on failure returns HTTP 503 with `{"status": "not_connected", ...}`. It never
+  leaks the password, connection string, or internal error details.
 - `backend/app/models/user.py` — first model `User` (table `users`) with the
   field set mirroring the Android auth/profile requirements
   (`ProfileData` in `model/Models.kt`): `id`, `name`, `email` (unique),
   `phone` (unique, optional — mobile OTP login), `gender`, `date_of_birth`,
-  `created_at`, `updated_at`.
+  `created_at`, `updated_at`. *(No application tables are created yet.)*
 - `backend/scripts/check_db.py` — connectivity check reporting the **real**
   connection state:
   ```powershell
   cd backend
   .venv\Scripts\python -m scripts.check_db
   ```
-- `backend/requirements.txt` — now includes `pydantic-settings`, `SQLAlchemy`,
-  `PyMySQL` (in addition to Phase 2 `fastapi` + `uvicorn`).
+- `backend/requirements.txt` — includes `fastapi`, `uvicorn`,
+  `pydantic-settings`, `SQLAlchemy`, `PyMySQL` (python-dotenv ships with
+  pydantic-settings).
 
 ## Database connection status
 
-- Local MySQL server exists on this machine (`MySQL80` service) but the backend
-  currently has **no valid `.env` credentials**, so its real status is
-  `not_configured` (access denied) — as reported by `scripts/check_db.py`.
+- **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service
+  running, database `shortscap_db` created. The backend `.env` is configured for
+  it, but `DB_PASSWORD` is **blank** pending manual entry — so the real status
+  is `not_configured` until the password is set in `backend/.env`.
 - **AWS RDS production: NOT CONFIGURED** — no RDS instance provisioned yet; the
   same pydantic-settings config will point at RDS purely via env vars.
 
-To connect: copy `backend/.env.example` to `backend/.env`, fill in real
-`DB_*` values, then rerun the check.
+To connect: edit `backend/.env`, set `DB_PASSWORD` to the local MySQL root
+password, then rerun:
+```powershell
+cd backend
+.venv\Scripts\python -m scripts.check_db
+```
+or call `GET /health/db` — expected success: `{"status": "connected", "database": "shortscap_db"}`.
 
 ## Next phases (not yet implemented)
 

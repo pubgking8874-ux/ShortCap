@@ -15,12 +15,12 @@ from app.database import check_database_connection
 
 def main() -> int:
     result = check_database_connection()
-    print("ShortsCap backend — MySQL connectivity (Phase 3)")
+    print("ShortsCap backend — MySQL connectivity")
     print(f"  status      : {result['status']}")
     print(f"  message     : {result['message']}")
-    print(f"  database URL: {result['database']}")
-    print("\nNext step if NOT CONFIGURED: create backend/.env from backend/.env.example")
-    print("with valid DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME, then rerun this check.")
+    print(f"  database    : {result['database']}")
+    print("\nNext step if NOT CONFIGURED: set DB_* values in backend/.env")
+    print("(DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME), then rerun this check.")
     return 0 if result["status"] == "success" else 1
 
 
