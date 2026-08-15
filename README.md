@@ -1758,11 +1758,13 @@ Server backend for ShortsCap — Python **FastAPI** + **SQLAlchemy (MySQL)**.
 Located in the `backend/` directory; the Android app is **not** touched by the
 backend work.
 
-> **Status:** Phase 2 (running FastAPI server) + Phase 3 (database foundation) +
-> environment configuration + Phase 4/5 (24 approved SQLAlchemy models + Alembic
-> migration applied) + Phase 6/7 (settings data layer incl. monitoring / shorts /
-> notifications / leaderboard / permissions) + **Phase 8 (study data layer —
-> study schedules / sessions / breaks / events APIs)**. Auth, OAuth, engines,
+> **Status:** Phase 2 (running FastAPI server) + Phase 3 (database foundation +
+> environment configuration) + Phase 4 (24 approved SQLAlchemy models) +
+> Phase 5 (Alembic migration applied — the 24 MySQL tables now exist) +
+> Phase 6 (settings data layer) + Phase 7 (settings extended to monitoring /
+> shorts / notifications / leaderboard / permissions) + Phase 8 (study data
+> layer — schedules / sessions / breaks / events) + **Phase 9 (monitoring data
+> layer — app usage sync / monitoring events / summary)**. Auth, OAuth, engines,
 > and the remaining routers are implemented in later phases.
 
 ## Reserved technology stack
@@ -1819,6 +1821,46 @@ backend work.
   `pydantic-settings`, `SQLAlchemy`, `PyMySQL` (python-dotenv ships with
   pydantic-settings).
 
+### Phase 4 — approved SQLAlchemy models *(Aug 13, 2026)*
+
+- All **24 approved models** implemented as SQLAlchemy 2.x models in
+  `backend/app/models/` and registered on the shared `Base` metadata via
+  `backend/app/models/__init__.py` (users, devices, settings, study,
+  monitoring, shorts, web, notifications, feedback, leaderboard, …).
+- Relationships, foreign keys, unique constraints and indexes per the approved
+  schema. **No tables were created in this phase** — that happened in Phase 5.
+
+### Phase 5 — Alembic migration & actual MySQL tables *(Aug 13, 2026)*
+
+- Alembic configured (`migrations/env.py` uses the SAME declarative `Base` and
+  the same env-driven database URL as the app — nothing hardcoded, no secrets
+  printed).
+- Initial migration **`70d943e5af25` — "create approved schema tables"**
+  applied with `alembic upgrade head`; `shortscap_db` now contains the **24
+  approved tables** (plus Alembic's own `alembic_version` table).
+- Verified with `SHOW TABLES`, `DESCRIBE`, FK/index checks, `alembic current`
+  (`70d943e5af25 (head)`); FastAPI restart verified (`/`, `/health/db`, `/docs`).
+
+### Phase 6 — settings data layer *(Aug 13, 2026)*
+
+- First vertical slice: Router → Schema → Service → Repository → SQLAlchemy →
+  MySQL for `user_settings` — `GET /settings` (creates app defaults on first
+  use) and `PUT /settings` (partial update only; unspecified fields preserved).
+- Validation mirrors the app: `theme` ∈ dark|light|system, `language` ∈
+  en|hi|ur|zh|es, `timezone` = valid IANA name.
+- Temporary development identity introduced: the **`X-Dev-User-Id`** header
+  (development only — replaced by Cognito later).
+
+### Phase 7 — settings backend extended *(Aug 14, 2026)*
+
+- The same pattern applied to the remaining settings domains —
+  `GET/PUT /settings/monitoring` (device monitoring / strict mode),
+  `GET/PUT /settings/shorts` (limits / warnings), `GET/PUT /settings/notifications`
+  (preferences), `GET/PUT /settings/leaderboard` (participation/display only —
+  no scoring), `GET/PUT /settings/permissions` (last-known sync mirror; Android
+  is the real authority).
+- No new tables, no schema changes; same temporary dev identity.
+
 ### Phase 8 — study data layer *(Aug 15, 2026)*
 
 - **Study Schedule API** — `POST/GET /study/schedules`,
@@ -1847,6 +1889,38 @@ backend work.
   state/history; it is not a real-time timer.
 - See `backend/README.md` → *Phase 8 — Study Data Layer* for full detail.
 
+### Phase 9 — monitoring data layer *(Aug 15, 2026)*
+
+- **App usage synchronization** — `POST /monitoring/app-usage/sync` accepts
+  one or a batch of aggregated daily usage summaries (device / package /
+  date / duration / launches) and persists them to `app_usage` for the
+  current user. **Idempotent:** re-syncing the same summary overwrites its
+  values (user + device + package + date lookup) — no uncontrolled duplicates.
+- **Monitoring history** — `GET /monitoring/app-usage` with filters
+  (`device_id`, `package_name`, `date_from` / `date_to`) and simple
+  `page` / `page_size` pagination; only the current user's rows are returned.
+- **Monitoring events** — `POST /monitoring/events` (validated event types:
+  `MONITORING_STARTED`, `MONITORING_STOPPED`, `LIMIT_WARNING`, `LIMIT_REACHED`,
+  `APP_RESTRICTED`) and `GET /monitoring/events` with `event_type` /
+  `device_id` / `app_package` / `start_date` / `end_date` filters; aware
+  timestamps are normalized to naive UTC.
+- **Monitoring summary** — `GET /monitoring/summary` (total usage seconds,
+  total launches, monitored apps count, event count) via DB aggregation.
+- **Device ownership** — usage/events must reference a device belonging to the
+  current user (unknown or another user's device → 404).
+- **Android remains the real-time monitoring authority** — the backend only
+  stores synchronized historical data; no server-side monitoring loop, no
+  timers, no app detection.
+- **Architecture** — same Router → Schema → Service → Repository → SQLAlchemy
+  → MySQL pattern; no new tables, no schema changes, no migration.
+- **MySQL persistence** — verified end to end (see
+  `backend/scripts/verify_monitoring.py`); existing Settings and Study
+  endpoints still pass.
+- **Temporary development identity** — same `X-Dev-User-Id` header
+  (`backend/app/routers/deps.py`); Cognito planned later. Reports and
+  Rank/Your Score are planned later too.
+- See `backend/README.md` → *Phase 9 — Monitoring Data Layer* for full detail.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service
@@ -1866,9 +1940,10 @@ or call `GET /health/db` — expected success: `{"status": "connected", "databas
 
 ## Next phases (not yet implemented)
 
-Database tables/migrations beyond `users`, OTP / Google / JWT auth endpoints,
-monitoring / study / shorts / web-blocking engines, sync endpoints, analytics,
-and notifications backend — each one at a time.
+OTP / Google / JWT / Cognito auth endpoints (replaces the temporary
+`X-Dev-User-Id`), device-monitoring / study / shorts / web-blocking
+enforcement engines, Android → backend sync, analytics, reports, leaderboard
+scoring, and the notifications backend — each one at a time.
 
 ---
 

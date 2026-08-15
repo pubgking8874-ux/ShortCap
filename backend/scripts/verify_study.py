@@ -367,22 +367,29 @@ def main() -> None:
                 and s1.ended_at is not None
             )
             record("session FK + status + timestamps correct", fk_ok, str(s1))
-            duration_ok = s1.actual_duration_seconds == int(
-                (s1.ended_at - s1.started_at).total_seconds()
-            )
+            # MySQL DATETIME stores whole seconds, so the round-tripped
+            # difference can be off by at most 1s from the full-precision
+            # in-memory computation when the session straddles a second
+            # boundary — allow a 1s tolerance.
+            db_duration = int((s1.ended_at - s1.started_at).total_seconds())
+            duration_ok = s1.actual_duration_seconds is not None and abs(
+                s1.actual_duration_seconds - db_duration
+            ) <= 1
             record(
-                "session actual_duration == ended_at - started_at",
+                "session actual_duration == ended_at - started_at (+-1s storage tolerance)",
                 duration_ok,
-                f"actual={s1.actual_duration_seconds}",
+                f"actual={s1.actual_duration_seconds} db={db_duration}",
             )
 
         b1 = next((b for b in breaks if b.id == break_id), None)
         if b1 is not None:
+            db_break_duration = int((b1.ended_at - b1.started_at).total_seconds())
             record(
-                "break FK + duration correct",
+                "break FK + duration correct (+-1s storage tolerance)",
                 b1.study_session_id == session_id
                 and b1.status == "completed"
-                and b1.duration_seconds == int((b1.ended_at - b1.started_at).total_seconds()),
+                and b1.duration_seconds is not None
+                and abs(b1.duration_seconds - db_break_duration) <= 1,
                 str(b1),
             )
 

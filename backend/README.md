@@ -9,8 +9,10 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > GET/PUT `/settings` API with a temporary dev identity) + Phase 7 (settings
 > backend extended to monitoring / shorts / notifications / leaderboard /
 > permissions) + Phase 8 (study data layer: study schedule / session / break
-> / event APIs on the existing approved tables). Auth, OAuth, engines, and
-> the remaining routers are implemented in later phases, one at a time.
+> / event APIs on the existing approved tables) + Phase 9 (monitoring data
+> layer: app usage sync / monitoring events / summary on the existing
+> approved tables). Auth, OAuth, engines, and the remaining routers are
+> implemented in later phases, one at a time.
 
 ## Reserved technology stack
 
@@ -159,6 +161,14 @@ backend/
     history and study event history. No new tables, no schema changes, no
     new migration.
   - See the [Phase 8 — Study Data Layer](#phase-8--study-data-layer)
+    section below for the full detail.
+- **Phase 9 — monitoring data layer (app usage / events / summary):**
+  - Full vertical slice for the existing monitoring tables
+    (`app_usage`, `monitoring_events`): idempotent app-usage sync, usage
+    history with filters + pagination, monitoring event submission and
+    history, and a basic read-only summary. No new tables, no schema
+    changes, no new migration.
+  - See the [Phase 9 — Monitoring Data Layer](#phase-9--monitoring-data-layer)
     section below for the full detail.
 
 ## Connection status
@@ -460,6 +470,126 @@ Android connectivity (the Android `StudyRepository` calls these APIs in a
 later phase), the study schedule engine, break-reminder delivery, real-time
 timers, and any new study features.
 
+## Phase 9 — Monitoring Data Layer
+
+Phase 9 implements the backend **monitoring data layer** — app usage
+summaries, monitoring events and a basic summary — using the **existing
+approved tables** (`app_usage`, `monitoring_events`; `monitoring_settings`
+was already handled by the Settings layer in Phase 7 and is reused, not
+recreated). No new tables were created, no schema was changed, and no Alembic
+migration was added.
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Router | `app/routers/monitoring.py` | All `/monitoring/*` endpoints; reads the temporary dev identity from the `X-Dev-User-Id` header (shared `app/routers/deps.py`) |
+| Schemas | `app/schemas/monitoring.py` | Input/output models: `AppUsageRecord` / `AppUsageResponse`, `MonitoringEventCreate` / `MonitoringEventResponse`, `MonitoringSummary` |
+| Services | `app/services/monitoring/{usage,event,errors}.py` | Device ownership, timestamp normalization (naive UTC), idempotent sync coordination, summary aggregation |
+| Repositories | `app/repositories/monitoring/{usage,event}.py` | DB operations only (create / lookup / upsert / filtered list / aggregate) |
+| Wiring | `app/main.py` | `include_router(monitoring_router)` under the existing `SQLAlchemyError` handler |
+
+### App usage synchronization
+
+- `POST /monitoring/app-usage/sync` — accepts **one or a batch** of aggregated
+daily usage summaries (`device_id`, `package_name`, `app_name`, `usage_date`,
+`duration_seconds`, `launch_count`) and persists them to `app_usage` for the
+current user. The user identity always comes from the development header — a
+client-supplied `user_id` is never trusted.
+- **Idempotent duplicate handling:** the schema has no unique constraint on
+(user, device, package, date), so the repository performs a careful
+lookup-then-upsert — re-syncing the same summary **overwrites** its aggregate
+values (last sync wins) instead of inserting duplicate rows. No schema change
+was needed.
+- **Validation:** `duration_seconds` / `launch_count` ≥ 0; `package_name` must
+be a valid Android package shape (e.g. `com.example.app`); `app_name`, when
+provided, must not be blank → invalid input returns **422**.
+
+### Monitoring history
+
+- `GET /monitoring/app-usage` — the current user's usage history (newest date
+first) with filters: `device_id`, `package_name`, `date_from` / `date_to` (on
+`usage_date`), plus simple `page` / `page_size` pagination (default 50, max
+100). Only the caller's own rows are returned.
+
+### Monitoring events
+
+- `POST /monitoring/events` — persist one event (`device_id`, `event_type`,
+optional `app_package` / `metadata_json` / `occurred_at`). Supported event
+types map to existing Android concepts and are limited to:
+  `MONITORING_STARTED`, `MONITORING_STOPPED`, `LIMIT_WARNING`,
+  `LIMIT_REACHED`, `APP_RESTRICTED` — no invented taxonomy.
+- `GET /monitoring/events` — the current user's events (newest first) with
+filters: `event_type`, `device_id`, `app_package`, `start_date` / `end_date`
+(on `occurred_at`), plus `page` / `page_size` pagination.
+- **Timestamps:** `occurred_at` defaults to the server's current UTC time;
+aware datetimes are normalized to the backend's naive-UTC convention before
+storage (`app/utils/datetime.py`) — no silent timezone reinterpretation.
+
+### Monitoring summary
+
+- `GET /monitoring/summary` — read-only summary via DB aggregation:
+  `total_app_usage_seconds`, `total_launches`, `monitored_apps_count`
+  (distinct packages) and `event_count`. Deliberately minimal — weekly /
+  monthly reports, Your Score, leaderboard and ranking are later phases.
+
+### Device ownership
+
+Monitoring data must reference a device that exists AND belongs to the
+current user — an unknown device or another user's device returns **404**
+(never exposing other users' records).
+
+### Repository / service / router architecture
+
+Same pattern as Settings and Study: Router → Pydantic Schema → Service →
+Repository → SQLAlchemy Model → MySQL. Repositories contain database
+operations only; services own device ownership, validation, timestamp
+normalization and sync coordination; routers contain no database queries; no
+raw SQL lives in services.
+
+### Android remains the real-time monitoring authority
+
+The backend is a data / synchronization API only. There is **no** real-time
+monitoring loop, no server-side app detection, no polling of Android, no
+WebSocket monitoring and no server-side timers. Android detects usage,
+collects duration/launch counts, handles restrictions/notifications locally
+and syncs observed summaries here; the backend validates, stores and serves
+history for future Reports and Your Score/Rank calculations.
+
+### MySQL persistence
+
+Verified end to end: every sync/event action creates the correct row in
+`app_usage` / `monitoring_events` with correct foreign keys, ownership,
+timestamps and (for usage) idempotent overwrite behavior; events match the
+submitted actions. See `scripts/verify_monitoring.py`.
+
+### Current development identity
+
+The same temporary `X-Dev-User-Id` header (shared `app/routers/deps.py`) —
+**development only, NOT a production authentication mechanism**. Cognito is
+planned for a later phase and will replace only the identity/authentication
+boundary.
+
+### Verification
+
+- `scripts/verify_monitoring.py` — full monitoring flow (usage sync → history
+  → events → summary), duplicate-sync behavior, invalid-input cases, user
+  isolation, direct MySQL row checks, and a regression pass over the existing
+  Settings and Study endpoints. Start the server first:
+
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m uvicorn app.main:app --reload
+  .venv\Scripts\python -m scripts.verify_monitoring
+  ```
+
+- Manual testing is also available through Swagger at
+  <http://127.0.0.1:8000/docs> (send the `X-Dev-User-Id` header, e.g. `1`).
+
+### Not part of this phase
+
+Android connectivity, the real-time device-monitoring engine, restriction /
+notification enforcement, offline buffering, weekly/monthly reports,
+Your Score / leaderboard / ranking, and any new monitoring features.
+
 ## Database Migration
 
 - **Alembic is configured** (`alembic.ini` + `migrations/`) and connected to
@@ -488,11 +618,11 @@ timers, and any new study features.
 
 ## Planned / next (NOT implemented yet)
 
-Android → backend sync (settings, study sessions/history), OTP / Google /
-JWT / Cognito auth endpoints (replaces the temporary `X-Dev-User-Id`),
-monitoring / shorts / web-blocking engines and the study schedule/reminder
-engine, leaderboard scoring, sync endpoints, analytics, and notification
-backends — each one at a time.
+Android → backend sync (settings, study, monitoring), OTP / Google / JWT /
+Cognito auth endpoints (replaces the temporary `X-Dev-User-Id`), the
+real-time device-monitoring / shorts / web-blocking engines and the study
+schedule/reminder engine, reports, leaderboard scoring, analytics, and
+notification backends — each one at a time.
 
 ## Notes
 
