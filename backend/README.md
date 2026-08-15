@@ -19,8 +19,13 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > monitoring pipeline — registry → adapters → aggregator → global budget →
 > local store) + Phase 12 (web data layer: blocked-website CRUD with domain
 > normalization, website events, web summary on the existing approved
-> tables). Auth, OAuth, engines, and the remaining routers are implemented in
-> later phases, one at a time.
+> tables) + Phase 13 (reporting / insights layer: read-only daily / weekly /
+> monthly reports over existing historical data with previous-period
+> comparison) + Phase 14A (Your Score specification & validation) +
+> Phase 14B (Your Score engine — read-only `GET /score/daily|weekly|monthly`
+> implementing the approved spec exactly; Rank/leaderboard NOT included).
+> Auth, OAuth, engines, and the remaining routers are implemented in later
+> phases, one at a time.
 
 ## Reserved technology stack
 
@@ -212,6 +217,35 @@ constraint. One Alembic migration: **`657ba9f4d4f8`** (applied, verified).
     basic read-only summary. No new tables, no schema changes, no new
     migration.
   - See the [Phase 12 — Web Data Layer](#phase-12--web-data-layer)
+    section below for the full detail.
+- **Phase 13 — reporting / insights layer (daily / weekly / monthly reports):**
+  - Read-only reports computed from existing historical data
+    (`study_sessions` / `break_sessions`, `app_usage` /
+    `monitoring_events`, `shorts_usage`, `website_events`) via SQL
+    aggregation — daily / weekly (ISO week, Mon–Sun) / monthly, with
+    per-domain metrics (study / monitoring / shorts / web), Shorts platform
+    breakdown, top apps, a daily trend and previous-period comparison
+    (zero-guarded: no fake percentages). No report tables, no schema
+    changes, no new migration.
+  - See the [Phase 13 — Reports / Insights](#phase-13--reports--insights)
+    section below for the full detail.
+- **Phase 14A — Your Score specification (spec + validation only):**
+  - The full mathematical specification (weights, formulas, caps, missing
+    data, inactivity, anti-gaming, leaderboard compatibility) lives in
+    `docs/your_score_spec.md` and is validated by
+    `scripts/score_spec_simulation.py` (6 profiles A–F, sensitivity,
+    distribution, anti-gaming). **The score engine is NOT implemented.**
+    No schema change, no Android change, no Rank.
+  - See the [Phase 14A — Your Score Specification](#phase-14a--your-score-specification)
+    section below for the full detail.
+- **Phase 14B — Your Score engine (implemented):**
+  - Production read-only score engine implementing the approved Phase 14A
+    spec exactly: `GET /score/daily|weekly|monthly` with component
+    breakdown, activity/coverage info and deterministic explanations.
+    Weights 40/25/20/10/5, inactivity gate, coverage scaling, anti-gaming
+    (≥ 300 s sessions, volume cap, day-based consistency), no score
+    storage, no leaderboard/rank.
+  - See the [Phase 14B — Your Score Engine](#phase-14b--your-score-engine)
     section below for the full detail.
 
 ## Connection status
@@ -1080,8 +1114,373 @@ boundary. AWS deployment is planned even later.
 ### Not part of this phase
 
 Android connectivity / real-time blocking engine, offline buffering,
-weekly/monthly reports, Your Score / Rank / leaderboard, scoring formulas,
-and any new Web features.
+Your Score / Rank / leaderboard, scoring formulas, and any new Web
+features. (Reports are now implemented in Phase 13.)
+
+## Phase 13 — Reports / Insights
+
+Phase 13 implements the backend **reporting / insights layer** — read-only
+daily, weekly and monthly reports calculated from EXISTING historical data
+via SQL aggregation. No new tables, no schema changes, no Alembic migration
+— the raw data remains the source of truth.
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Router | `app/routers/reports.py` | `GET /reports/daily`, `GET /reports/weekly`, `GET /reports/monthly`; reads the temporary dev identity from the `X-Dev-User-Id` header (shared `app/routers/deps.py`) |
+| Schemas | `app/schemas/reports.py` | `ReportResponse` (period + study / monitoring / shorts / web sections + optional trend & comparison), `PeriodInfo`, `StudyMetrics`, `MonitoringMetrics`, `ShortsMetrics`, `WebMetrics`, `DailyTrendEntry`, `Comparison` |
+| Service | `app/services/reporting.py` | `ReportingService` — period math, aggregation coordination, previous-period comparison, trend assembly, response assembly |
+| Repository | `app/repositories/reports.py` | `ReportingRepository` — read-only SQL aggregations (SUM / COUNT / GROUP BY) over the existing tables; no writes |
+| Wiring | `app/main.py` | `include_router(reports_router)` under the existing `SQLAlchemyError` handler |
+
+### Report periods
+
+- `GET /reports/daily?date=YYYY-MM-DD` — one UTC calendar day. `date`
+  defaults to the server's current UTC date. Optional
+  `include_comparison=false` drops the comparison block.
+- `GET /reports/weekly?date=...` — the ISO week (Monday–Sunday) containing
+  `date`, including a 7-entry `daily_trend` (Mon→Sun).
+- `GET /reports/monthly?date=...` — the calendar month containing `date`,
+  including a per-day `daily_trend` spanning the whole month.
+- Dates are interpreted as UTC calendar dates (the backend's documented
+  naive-UTC convention).
+
+### Per-domain metrics
+
+| Domain | Fields | Source tables |
+| --- | --- | --- |
+| study | `total_study_seconds`, `completed_sessions`, `cancelled_sessions`, `break_seconds`, `completed_breaks` | `study_sessions` (ended in period, terminal status; durations from `actual_duration_seconds` = `ended_at − started_at`), `break_sessions` (joined through the owning study session for user isolation) |
+| monitoring | `total_app_usage_seconds`, `monitored_apps_count`, `monitoring_event_count`, `top_apps` (duration-ranked, max 5) | `app_usage`, `monitoring_events` |
+| shorts | `total_shorts_count`, `total_duration_seconds`, `warning_count`, `limit_reached_count`, `platform_breakdown` | `shorts_usage` (daily summaries; warning/limit counts = days flagged) |
+| web | `total_block_attempts`, `total_blocked_events`, `total_unblock_events`, `unique_blocked_domains` | `website_events` |
+
+- **Study duration** comes from server-stored timestamps only
+  (`actual_duration_seconds`), never client-supplied values, and the
+  reporting layer runs no timers.
+- **Shorts platform breakdown** reflects only platforms that actually have
+data (Phase 11A `platform` / `surface` columns; pre-architecture rows appear
+as the `UNKNOWN` marker). No platform is assumed to exist without data.
+- **Top apps** are ranked purely by usage duration — an app is never
+  labelled "distracting" because the schema has no category data for that.
+- **No-data periods** return a valid all-zero structure (HTTP 200), never an
+error, and days without data in a trend are honest zeros — missing
+observations are never invented.
+
+### Previous-period comparison
+
+Every report can include a `comparison` block (default on) for the four
+headline metrics — study time, Shorts time, app-usage time, block attempts —
+comparing the current period with the previous equivalent one (previous day
+/ previous ISO week / previous calendar month):
+
+```json
+{"study_seconds": {"current": 1200, "previous": 600, "change_percent": 100.0}}
+```
+
+`change_percent` is **None when the previous value is zero** (an explicit
+not-applicable state) — a division by zero is never turned into a fake
+percentage.
+
+### Repository / service / router architecture
+
+Router → Reporting Schema → Reporting Service → Reporting Repository →
+SQLAlchemy → MySQL. Complex aggregations live in the dedicated read-only
+`ReportingRepository` (SQL SUM / COUNT / GROUP BY — reports never load whole
+tables into Python); the service owns period math, comparison and assembly;
+no raw SQL lives in the service or router. Existing domain repositories are
+not modified.
+
+### User isolation
+
+The user identity always comes from the development header — a
+client-supplied `user_id` is never accepted. Every aggregation filters by
+the current user, so reports can never include another user's data.
+
+### No Score / Rank
+
+Reports contain factual metrics only. **Your Score, Rank, leaderboard and
+scoring formulas are intentionally NOT implemented** — a later Score Engine
+will consume this data (or the underlying raw rows).
+
+### Current development identity
+
+The same temporary `X-Dev-User-Id` header (shared `app/routers/deps.py`) —
+**development only, NOT a production authentication mechanism**. Cognito is
+planned for a later phase and will replace only the identity/authentication
+boundary. AWS deployment is planned even later.
+
+### Verification
+
+- `scripts/verify_reports.py` — seeds today's data through the real APIs
+  (study session + break, shorts sync, app-usage sync + monitoring events,
+  blocked website + web events) and seeds yesterday / previous-week /
+  previous-month rows directly in MySQL, then verifies the daily / weekly /
+  monthly values, platform breakdown, 7-day trend, previous-period
+  comparisons (including the zero-guard), a no-data period, user isolation
+  and direct-SQL cross-checks, plus a regression pass over Settings / Study
+  / Monitoring / Shorts / Web. Start the server first:
+
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m uvicorn app.main:app --reload
+  .venv\Scripts\python -m scripts.verify_reports
+  ```
+
+- Manual testing is also available through Swagger at
+  <http://127.0.0.1:8000/docs> (send the `X-Dev-User-Id` header, e.g. `1`).
+
+### Not part of this phase
+
+Rank, leaderboard, scoring formulas, weekly/monthly report storage (no
+summary tables), AWS deployment, Cognito, Android changes, new real-time
+monitoring, and new data-collection engines. (Your Score is now specified in
+Phase 14A — see below.)
+
+## Phase 14A — Your Score Specification
+
+**Status: SPECIFICATION AND VALIDATION ONLY. The production score engine is
+NOT implemented and NOT deployed.** This phase designed, simulated and
+documented the Your Score mathematical model; nothing in it modifies the
+database, Android, the leaderboard, or any production scoring code.
+
+| Deliverable | File | What it contains |
+| --- | --- | --- |
+| Specification | `docs/your_score_spec.md` | Full formal spec: range, weights, component formulas, caps, penalties, missing-data/inactivity rules, anti-gaming, aggregation, explanation output, leaderboard compatibility, required future changes |
+| Validation | `scripts/score_spec_simulation.py` | Pure-Python implementation of the spec formulas + 6 profiles (A–F), sensitivity, distribution sweep, anti-gaming checks, read-only MySQL data-availability inspection |
+
+### Score objective & factors
+
+A 0–100 score summarizing productive behavior: study performance,
+consistency, Shorts discipline, distracting-app control and web discipline.
+It rewards **productive** behavior — a user who studies effectively
+outperforms a user who merely uses the phone less — and **inactivity never
+produces a perfect score**.
+
+### Final recommended weights (validated)
+
+| Component | Weight |
+| --- | --- |
+| Study performance | 40 |
+| Shorts discipline | 25 |
+| Distraction control | 20 |
+| Web discipline | 10 |
+| Consistency | 5 |
+
+Formulas (summary — full math in the spec):
+
+- **Study** = 0.6·completion + 0.4·capped volume. Only *meaningful* sessions
+  (≥ 300 s, terminal status) count; volume caps at 150 min/day-equivalent
+  (linear-to-cap — 12 h study earns no more than the target).
+- **Shorts** = usage-weighted per-day discipline vs the user's configured
+  daily limit (fallback 30 min): at/under limit → 1.0; 2× limit → 0;
+  `warning_triggered`/`limit_reached` add small flag penalties.
+- **Distraction** = usage-weighted phone-time moderation (4 h/day
+  threshold). Explicit limitation: **no app categorization exists** — apps
+  are NOT labelled distracting; only excessive total phone time is
+  penalized (never rewarded below the full mark). A future categorization
+  phase is required to make this app-aware.
+- **Web** = 1.0 minus bounded persistence penalties (attempts capped 0.15,
+  unblocks 0.10, repeat domains 0.10, floor 0.5). A single blocked attempt
+  is NOT a sin — enforcement working is not punished; only persistence and
+  giving in cost points.
+- **Consistency** = min(1, active days / target) — days, never sessions.
+
+### Aggregation & bands
+
+Daily = one UTC day; weekly = ISO week; monthly = calendar month. Each
+period's components are computed on the period's **aggregates directly**
+(never summed daily scores), so the result is always 0–100. Bands: 90–100
+Excellent, 75–89 Strong, 60–74 Moderate, 40–59 Needs improvement, 0–39 Poor
+(keep for now; re-evaluate edges once real Android-synced data exists).
+
+### Missing data & inactivity (validated rules)
+
+- A component with no data contributes a **neutral 0.5** — never treated as
+  perfect (no Shorts data ≠ perfect Shorts discipline) and never as zero.
+- **Inactivity gate:** zero active days in the period → score 0 with
+  `insufficient_data` status (doing nothing = 0, never 100).
+- **Coverage:** fewer active days than required (3/week, 7/month) scales the
+  score by active/required with a `partial_data` status — one good day
+  cannot fabricate a good week.
+
+### Anti-gaming (design-time)
+
+Tiny sessions (< 300 s) excluded; volume capped; consistency counts days not
+sessions; completion on meaningful sessions only; inactivity earns nothing;
+Shorts discipline is limit-relative; web persistence backfires, single
+encounters don't; distraction is a moderation penalty not a low-usage
+reward. Future fraud rules (session-creation rate limits, open-without-
+activity detection) are flagged but NOT built.
+
+### Validation results (simulation)
+
+| Profile | Score |
+| --- | --- |
+| A — high study, low Shorts, low distraction | 98 (Excellent) |
+| B — low study, very low phone usage | 21 (Poor) |
+| C — high Shorts, low study | 34 (Poor) |
+| D — high study, moderate Shorts | 83 (Strong) |
+| E — no meaningful activity | 0 (insufficient_data) |
+| F — heavy study, extreme distraction | 75 (Strong) |
+
+Fairness: A > D > F > C > B > E — studying beats mere low usage (A > B),
+extreme distraction costs the full 20-point component (F < D), inactivity is
+0, heavy Shorts ranks near the bottom. Sensitivity deltas are bounded
+(+30 min study ≈ +1; crossing the Shorts limit ≈ +13; +1 violation day
+≈ −8). Distribution sweep (150 grid combos): min 30, median 69, p90 89,
+max 95 — no clustering at 100 or 0, useful separation.
+
+### Current limitations
+
+- **No app categorization** — distraction is phone-time moderation only.
+- **Missing-data neutrality** is conservative: an active user who avoids
+  Shorts entirely is scored neutrally, not rewarded (a future "avoidance
+  credit" is recommended).
+- **No real calibration data** — the dev DB holds no domain rows (verify
+  scripts clean up), so validation used controlled realistic simulations;
+  band edges and constants (limits, thresholds) must be recalibrated once
+  the Android sync boundary lands.
+- Planned-vs-actual study and schedule adherence are deferred (schedule
+  "due-ness" needs recurrence computation).
+
+### Leaderboard compatibility & schema impact
+
+Weekly/monthly scores can later write into the existing `leaderboard_scores`
+table (`period_type` = week/month, `period_start`/`period_end` = period
+bounds) — the schema is **sufficient as-is** (no rank column; rank derived
+later). **No schema change, no migration, no leaderboard logic in this
+phase.**
+
+### Implementation status (explicit)
+
+**Score engine implementation is NOT yet deployed.** The future engine
+phase adds a read-only `ScoreService` + `GET /score/*` endpoints returning
+the explanation structure (per-component points, e.g. study 34/40), and
+optionally writes weekly/monthly scores to `leaderboard_scores`. Until then
+this spec is the reviewed contract for that phase.
+
+### Verification
+
+- `scripts/score_spec_simulation.py` — run with
+  `.venv\Scripts\python -m scripts.score_spec_simulation`; prints the data
+  availability inspection, profile scores, fairness/sensitivity/
+  distribution/anti-gaming checks and exits non-zero on any failure. It is
+  read-only (never writes to MySQL) and is NOT the production engine.
+
+### Not part of this phase
+
+Rank, leaderboard logic, schema changes, Android changes, AWS, Cognito, new
+data collection. (The score engine is now implemented in Phase 14B.)
+
+## Phase 14B — Your Score Engine
+
+Phase 14B implements the **production Your Score engine** exactly per the
+approved Phase 14A specification — no redesign, no new weights, no changed
+range. The engine is read-only and deterministic; it never writes to the
+database (scores are calculated on demand; `leaderboard_scores` is NOT
+written) and contains no Rank/leaderboard logic.
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Router | `app/routers/score.py` | `GET /score/daily`, `GET /score/weekly`, `GET /score/monthly`; reads the temporary dev identity from the `X-Dev-User-Id` header (shared `app/routers/deps.py`) |
+| Schemas | `app/schemas/score.py` | `ScoreResponse` (period — reuses `PeriodInfo` from reports — + score, status, components, activity, explanation) |
+| Service | `app/services/scoring/score_service.py` | `ScoreService` — period math, data gathering, inactivity gate + coverage scaling, weighted assembly, clamp to 0–100, deterministic explanations |
+| Components | `app/services/scoring/{study,shorts,distraction,web,consistency}_score.py` | Pure, deterministic component formulas (no DB access, no writes) |
+| Queries | `app/services/scoring/queries.py` | Read-only SQL aggregations (grouped; no N+1) feeding the components |
+| Constants | `app/services/scoring/constants.py` | The approved weights/constants (single source of truth, mirrors the spec) |
+| Wiring | `app/main.py` | `include_router(score_router)` under the existing `SQLAlchemyError` handler |
+
+### Score API
+
+- `GET /score/daily?date=YYYY-MM-DD` — the current user's Your Score for
+  one UTC day (default: today).
+- `GET /score/weekly?date=...` — the ISO week (Mon–Sun) containing the date,
+  computed on the week's aggregates directly (never summed daily scores), so
+  the result stays in 0–100.
+- `GET /score/monthly?date=...` — the calendar month containing the date,
+  same direct aggregation.
+- Every response carries the full breakdown so the client can explain the
+  score:
+
+```json
+{"period": {"type": "weekly", "start_date": "2026-08-10", "end_date": "2026-08-16", "label": "2026-08-10 – 2026-08-16"},
+ "score": 82, "status": "sufficient_data",
+ "components": [{"name": "study", "value": 0.85, "status": "evaluated", "points": 34.0, "max": 40}, ...],
+ "activity": {"active_days": 6, "required_days": 3, "coverage": 1.0},
+ "explanation": {"summary": "Your Score: 82 (sufficient_data).",
+                  "positives": [...], "negatives": [...]}}
+```
+
+### Approved components & weights (unchanged from Phase 14A)
+
+| Component | Weight | Formula (summary) |
+| --- | --- | --- |
+| Study | 40 | 0.6·completion + 0.4·capped volume; meaningful sessions only (≥ 300 s, terminal); volume = min(1, total_min / (150·days)) |
+| Shorts | 25 | usage-weighted per-day discipline vs the user's configured limit (fallback 30 min); 2× limit → 0; flag penalties 0.9/0.95 |
+| Distraction | 20 | usage-weighted phone-time moderation (4 h/day threshold); enforcement-event penalty; NO app categorization (documented limitation) |
+| Web | 10 | 1 − bounded persistence penalties (attempts ≤ 0.15, unblocks ≤ 0.10, repeats ≤ 0.10, floor 0.5); single blocked attempts not punished |
+| Consistency | 5 | min(1, active_days / target) — days, never sessions; targets 1/5/20 |
+
+### Missing data & inactivity (approved behavior)
+
+- Missing component data → **neutral 0.5** (never perfect, never zero);
+  shown as `status: "neutral"` in the breakdown.
+- **Inactivity gate:** zero active days in the period → **score 0** with
+  `status: "insufficient_data"` (doing nothing can never reach 100).
+- **Coverage:** fewer active days than required (1 daily / 3 weekly /
+  7 monthly) scales the score and returns `status: "partial_data"` with the
+  coverage factor in `activity`.
+
+### Anti-gaming (implemented per spec)
+
+Sessions < 300 s excluded from study entirely; volume capped at 150
+min/day-equivalent (12 h study earns no more than the target); consistency
+counts distinct active days, never sessions; completion ratio on meaningful
+sessions only; inactivity earns nothing; Shorts discipline is
+limit-relative; web persistence (repeats/unblocks) costs points while single
+encounters don't; distraction is a moderation penalty, not a low-usage
+reward. (No aggressive fraud detection — future session-rate-limit rules
+remain flagged.)
+
+### Determinism, isolation, storage
+
+- **Deterministic:** identical input data always produces the identical
+  score, breakdown and explanation (verified by calling the same endpoint
+  twice).
+- **User isolation:** the score uses ONLY the current development user's
+  data — the identity always comes from the header; another user's request
+  returns 0 / `insufficient_data`, never their data.
+- **No storage, no cache:** scores are calculated dynamically on each
+  request (no cache unless performance testing later demonstrates a need);
+  `leaderboard_scores` is not written; no rank, no leaderboard, no other
+  users' scores anywhere.
+
+### Verification
+
+- `scripts/verify_score.py` — 83 checks: seeds controlled data at known
+  dates, then compares every /score response against an **independent
+  implementation of the approved formulas written in the script** (from the
+  spec, not imported from the app). Covers: productive profile, imperfect /
+  low-study–high-distraction day, high-Shorts week, high-study day,
+  inactivity (0 / insufficient_data), missing-data neutrality, 0–100
+  boundary, component breakdown (names/order/points/max), deterministic
+  repeat, user isolation, and daily / weekly / monthly scores, plus a
+  regression pass over Settings / Study / Monitoring / Shorts / Web /
+  Reports.
+
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m uvicorn app.main:app --reload
+  .venv\Scripts\python -m scripts.verify_score
+  ```
+
+- `scripts/score_spec_simulation.py` (Phase 14A) still passes unchanged —
+  the engine matches the validated model.
+
+### Not part of this phase
+
+Rank, leaderboard, weekly/monthly winners, other users' scores, score
+snapshot storage, caching, AWS, Cognito, Android changes, schema changes
+(none made — Alembic still `657ba9f4d4f8 (head)`).
 
 ## Cross-Platform Short-Form Content Architecture
 
