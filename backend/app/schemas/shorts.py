@@ -33,6 +33,19 @@ ShortsEventType = Literal[
     "LIMIT_REACHED",
 ]
 
+# Cross-platform short-form identity (Phase 11A) — mirrors the Android
+# `ShortPlatform` / `ShortSurface` enums. `UNKNOWN` is the explicit marker for
+# clients that do not (yet) send a value; it is never a fabricated platform.
+ShortPlatformLiteral = Literal[
+    "YOUTUBE", "INSTAGRAM", "TIKTOK", "SNAPCHAT", "FACEBOOK",
+    "MOJ", "X", "LINKEDIN", "UNKNOWN",
+]
+ShortSurfaceLiteral = Literal[
+    "YOUTUBE_SHORTS", "INSTAGRAM_REELS", "FACEBOOK_REELS", "TIKTOK_SHORT_FEED",
+    "SNAPCHAT_SPOTLIGHT", "X_SHORT_VIDEO", "LINKEDIN_SHORT_VIDEO",
+    "MOJ_SHORT_VIDEO", "UNKNOWN",
+]
+
 
 # ---------------------------------------------------------------------------
 # Shorts usage
@@ -48,6 +61,11 @@ class ShortsUsageRecord(BaseModel):
     enforcement system is authoritative for real-time limit state — this
     layer does not decide limits). The backend attaches the development user
     identity — a client-supplied user_id is never trusted.
+
+    `platform` / `surface` (Phase 11A) are OPTIONAL for backward
+    compatibility: when omitted they are stored as `UNKNOWN`. The logical
+    daily identity is (user + device + platform + surface + usage_date), so
+    the same platform/surface/day can never create duplicate rows.
     """
 
     device_id: int
@@ -56,6 +74,8 @@ class ShortsUsageRecord(BaseModel):
     duration_seconds: int = Field(default=0, ge=0)
     warning_triggered: bool = False
     limit_reached: bool = False
+    platform: ShortPlatformLiteral | None = None
+    surface: ShortSurfaceLiteral | None = None
 
 
 class ShortsUsageResponse(BaseModel):
@@ -71,6 +91,8 @@ class ShortsUsageResponse(BaseModel):
     user_id: int
     device_id: int | None = None
     usage_date: date | None = None
+    platform: str = "UNKNOWN"
+    surface: str = "UNKNOWN"
     shorts_count: int
     duration_seconds: int
     warning_triggered: bool

@@ -1764,9 +1764,13 @@ backend work.
 > Phase 6 (settings data layer) + Phase 7 (settings extended to monitoring /
 > shorts / notifications / leaderboard / permissions) + Phase 8 (study data
 > layer — schedules / sessions / breaks / events) + Phase 9 (monitoring data
-> layer — app usage sync / monitoring events / summary) + **Phase 10 (shorts
-> data layer — shorts usage sync / shorts events / shorts summary)**. Auth,
-> OAuth, engines, and the remaining routers are implemented in later phases.
+> layer — app usage sync / monitoring events / summary) + Phase 10 (shorts
+> data layer — shorts usage sync / shorts events / shorts summary) +
+> **Phase 11A (shorts usage schema update — `platform` / `surface` columns,
+> new idempotency key, Alembic migration `657ba9f4d4f8`)** +
+> **Phase 11B (Android: cross-platform Shorts detection integrated with the
+> monitoring pipeline)**. Auth, OAuth, engines, and the remaining routers are
+> implemented in later phases.
 
 ## Reserved technology stack
 
@@ -1956,6 +1960,117 @@ a batch of aggregated daily Shorts summaries (device / date / count /
   endpoints still pass.
 - **Scoring / ranking / Cognito / AWS** — all planned later, none implemented.
 - See `backend/README.md` → *Phase 10 — Shorts Data Layer* for full detail.
+
+### Cross-Platform Short-Form Content Architecture *(Aug 15, 2026 — architecture lock)*
+
+**Status: abstraction locked and documented — a full universal Shorts
+detector is NOT implemented.** Short-form content is treated as
+platform-independent (YouTube Shorts, Instagram Reels, TikTok, Snapchat
+Spotlight, Moj, X and LinkedIn video surfaces, Facebook Reels, and future
+platforms), never as a single-app feature.
+
+- **Platform vs surface** — `ShortPlatform` (YOUTUBE, INSTAGRAM, TIKTOK,
+  SNAPCHAT, FACEBOOK, MOJ, X, LINKEDIN, UNKNOWN) is the hosting app;
+  `ShortSurface` (YOUTUBE_SHORTS, INSTAGRAM_REELS, FACEBOOK_REELS,
+  TIKTOK_SHORT_FEED, SNAPCHAT_SPOTLIGHT, X_SHORT_VIDEO,
+  LINKEDIN_SHORT_VIDEO, MOJ_SHORT_VIDEO, UNKNOWN) is the specific short-form
+  place inside it. A platform may host long-form/live/chat/stories too, so
+  "app is running" never means "a Short is being watched".
+- **New Android abstraction** — `app/src/main/java/com/shortscap/app/shorts/`:
+  `ShortPlatformAdapter` interface (supports + detect →
+  `ShortDetectionResult` with platform/surface/`isShortForm`/confidence/
+  `DetectionMethod`/timestamp/metadata), 8 platform adapters (YouTube is the
+  only surface-positive one today via the Shorts activity class; the rest
+  conservatively report UNKNOWN), `ShortPlatformRegistry` (centralized
+  package→adapter mapping + `GenericShortVideoAdapter` fallback),
+  `ShortUsageAggregator` (detection separated from counting; the existing
+  3–5 second rule preserved: swipe < 2s → not counted, ≥ 3–5s → counted as
+  one Short), and `ShortsBudgetTracker` (ONE global Shorts budget across all
+  platforms + per-platform breakdown for future reports).
+- **Honest detection status** — no 100% accuracy claim; only YouTube Shorts
+  has a positive surface signal today; the accessibility service stays
+  privacy-minimal (foreground package only, no window content).
+- **Android remains the real-time authority** — the backend (Phase 10) is
+  the persistence/synchronization layer only; no server-side detection,
+  no WebSockets, no timers, no polling.
+- **Database review** — `shorts_events.metadata_json` can already carry
+  platform/surface/detectionMethod/confidence; `shorts_usage` originally
+  had **no platform/surface columns**. That required change is now
+  **applied in Phase 11A**: `platform` / `surface` columns (VARCHAR(50) NOT
+  NULL) + unique constraint on the new idempotency key
+  `(user_id, device_id, platform, surface, usage_date)` via migration
+  `657ba9f4d4f8` (see the Phase 11A entry above).
+- **Future platforms** — adding one needs only a new enum value + adapter +
+  registry entry; aggregator / backend sync / reporting / ranking keep
+  working unchanged.
+- See `backend/README.md` → *Cross-Platform Short-Form Content Architecture*
+  for the full detail (file-by-file table + implementation mapping).
+
+### Phase 11A — Shorts usage database schema update *(Aug 15, 2026)*
+
+- **Why:** `shorts_usage` had one daily summary per (user, device, date) and
+  could not distinguish YouTube Shorts from Instagram Reels / TikTok /
+  Snapchat Spotlight — platform-specific daily aggregation was impossible.
+- **Schema change:** added `platform` and `surface` (VARCHAR(50) NOT NULL) to
+  `shorts_usage`; existing/pre-architecture rows use the explicit `UNKNOWN`
+  marker (historical values are never fabricated).
+- **New idempotency key:** `(user_id, device_id, platform, surface,
+  usage_date)`, enforced by unique constraint
+  `uq_shorts_usage_user_device_platform_surface_date` — re-syncing the same
+  daily summary for the same platform/surface can never duplicate rows.
+- **Alembic migration:** revision **`657ba9f4d4f8`** — "add platform and
+  surface to shorts_usage" (down_revision `70d943e5af25`). **Applied** —
+  `alembic current` = `657ba9f4d4f8 (head)`; verified via `SHOW COLUMNS`
+  (both columns NOT NULL) and the unique index.
+- **Backward compatible:** `platform` / `surface` are optional in the sync
+  payload (stored as `UNKNOWN` when omitted; invalid values → 422); the
+  response always returns them. Same-day summaries for different
+  platforms/surfaces are separate rows; the summary endpoint aggregates them
+  into one global Shorts total.
+- **Scope:** `shorts_usage` only — Settings / Study / Monitoring tables and
+  endpoints untouched. Backend regression re-run (`verify_shorts.py` 67
+  checks, `verify_study.py`, `verify_monitoring.py` all PASS).
+- See `backend/README.md` → *Phase 11A — Shorts Usage Database Schema
+  Update* for full detail.
+
+### Phase 11B — Android: cross-platform Shorts detection integration *(Aug 15, 2026)*
+
+- **Connected the monitoring pipeline:** `MonitoringEventHub` →
+  `ShortPlatformRegistry` → platform adapters → `ShortDetectionResult` →
+  `ShortUsageAggregator` (3–5 second rule) → `ShortsBudgetTracker` (ONE
+  global budget across platforms) → `ShortsLocalStore` (local usage/event
+  records pending a future sync layer).
+- **New Android files:** `shorts/ShortsMonitoringPipeline.kt` (passive
+  orchestrator that tracks the foreground context, detects via the registry,
+  aggregates, updates the global budget and writes local records),
+  `shorts/ShortsLocalStore.kt` (in-memory local store preserving
+  platform/surface/detection method/confidence/timestamp/duration, with a
+  sync seam), `shorts/ShortsMonitoringPipelineTest.kt` (10 unit tests).
+- **Modified (minimal):** `MonitoringEventHub.kt` (listener + dispatch now
+  carry the window class name — privacy-minimal metadata, never content);
+  `ShortsCapAccessibilityService.kt` (passes `event.className` + subscribes
+  the pipeline on connect — still no window content, no synthetic
+  interaction).
+- **3–5 second rule preserved:** a context left before ~2s is never counted;
+  engagement reaching the 3–5s threshold counts as one Short with full
+  duration; each context is evaluated exactly once (no double counting).
+- **Global budget:** Shorts from every platform accumulate into one budget;
+  switching platforms never resets it (unit-tested: 4s YouTube + 4s
+  Instagram = 8s global).
+- **Local vs backend:** detector → aggregator → local store → future sync
+  layer; the detector never talks to FastAPI directly.
+- **Honest limitations:** only YouTube Shorts is positively detected today
+  (window class); all other platforms report UNKNOWN and are never counted;
+  per-short counts are session-level (window events cannot see individual
+  swipes).
+- **Verification:** `./gradlew :app:compileDebugKotlin` clean;
+  `./gradlew :app:testDebugUnitTest` 10/10 PASS; backend regression
+  (Settings / Study / Monitoring / Shorts verify scripts, `/health/db`,
+  `/docs`) all PASS — no backend changes in this phase.
+- **Not done:** actual backend sync from Android, ranking/score, reports,
+  AWS, Cognito, UI changes.
+- See `backend/README.md` → *Phase 11B — Cross-Platform Shorts Detection
+  Integration* for full detail.
 
 ## Database connection status
 

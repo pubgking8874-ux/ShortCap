@@ -3,11 +3,11 @@
 ShortsUsageRepository — database operations ONLY (no business rules).
 Validation, device ownership and normalization live in the service layer.
 
-Duplicate handling (idempotent sync): the schema has NO unique constraint on
-(user, device, usage_date), so instead of a database-level constraint the
-repository performs a careful lookup-then-upsert (the same strategy as the
-Monitoring layer): syncing the same daily summary twice OVERWRITES its values
-instead of inserting duplicate rows.
+Duplicate handling (idempotent sync): the schema enforces the logical daily
+identity (user_id, device_id, platform, surface, usage_date) with a UNIQUE
+constraint (Phase 11A), and the repository performs a careful
+lookup-then-upsert on that same key — syncing the same daily summary twice
+OVERWRITES its values instead of inserting duplicate rows.
 """
 
 from datetime import date
@@ -28,19 +28,23 @@ class ShortsUsageRepository:
         """Return one usage row by id, or None."""
         return self.db.query(ShortsUsage).filter(ShortsUsage.id == usage_id).first()
 
-    def get_by_user_device_date(
+    def get_by_user_device_platform_surface_date(
         self,
         user_id: int,
         device_id: int | None,
+        platform: str,
+        surface: str,
         usage_date: date,
     ) -> ShortsUsage | None:
         """Look up the row that a sync payload would map to
-        (user + device + usage_date)."""
+        (user + device + platform + surface + usage_date)."""
         return (
             self.db.query(ShortsUsage)
             .filter(
                 ShortsUsage.user_id == user_id,
                 ShortsUsage.device_id == device_id,
+                ShortsUsage.platform == platform,
+                ShortsUsage.surface == surface,
                 ShortsUsage.usage_date == usage_date,
             )
             .first()
@@ -67,6 +71,8 @@ class ShortsUsageRepository:
         self,
         user_id: int,
         device_id: int | None,
+        platform: str,
+        surface: str,
         usage_date: date,
         shorts_count: int,
         duration_seconds: int,
@@ -75,16 +81,22 @@ class ShortsUsageRepository:
     ) -> ShortsUsage:
         """Idempotent per-day upsert.
 
-        If a row for (user, device, usage_date) exists, its values are
-        OVERWRITTEN with the submitted values (last sync wins — re-syncing
-        the same summary never doubles it); otherwise a new row is inserted.
+        If a row for (user, device, platform, surface, usage_date) exists,
+        its values are OVERWRITTEN with the submitted values (last sync
+        wins — re-syncing the same summary never doubles it); otherwise a
+        new row is inserted. The unique constraint on that key is the
+        backstop against uncontrolled duplicates.
         """
-        usage = self.get_by_user_device_date(user_id, device_id, usage_date)
+        usage = self.get_by_user_device_platform_surface_date(
+            user_id, device_id, platform, surface, usage_date
+        )
         if usage is None:
             return self.create(
                 user_id,
                 {
                     "device_id": device_id,
+                    "platform": platform,
+                    "surface": surface,
                     "usage_date": usage_date,
                     "shorts_count": shorts_count,
                     "duration_seconds": duration_seconds,

@@ -12,9 +12,13 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > / event APIs on the existing approved tables) + Phase 9 (monitoring data
 > layer: app usage sync / monitoring events / summary on the existing
 > approved tables) + Phase 10 (shorts data layer: shorts usage sync /
-> shorts events / shorts summary on the existing approved tables). Auth,
-> OAuth, engines, and the remaining routers are implemented in later
-> phases, one at a time.
+> shorts events / shorts summary on the existing approved tables) +
+> Phase 11A (shorts usage schema update: `platform` + `surface` columns,
+> new idempotency key, Alembic migration `657ba9f4d4f8`) + Phase 11B
+> (Android: cross-platform Shorts detection integrated with the existing
+> monitoring pipeline — registry → adapters → aggregator → global budget →
+> local store). Auth, OAuth, engines, and the remaining routers are
+> implemented in later phases, one at a time.
 
 ## Reserved technology stack
 
@@ -180,6 +184,23 @@ backend/
     layer (Phase 7) and are reused, not duplicated. No new tables, no
     schema changes, no new migration.
   - See the [Phase 10 — Shorts Data Layer](#phase-10--shorts-data-layer)
+    section below for the full detail.
+- **Phase 11A — shorts usage database schema update (platform + surface):**
+  - Added `platform` / `surface` (VARCHAR(50) NOT NULL) to `shorts_usage` so
+daily Shorts usage can be stored separately per cross-platform
+platform/surface; new logical idempotency key
+(user, device, platform, surface, usage_date) enforced by a unique
+constraint. One Alembic migration: **`657ba9f4d4f8`** (applied, verified).
+  - See the [Phase 11A — Shorts Usage Database Schema Update](#phase-11a--shorts-usage-database-schema-update)
+    section below for the full detail.
+- **Phase 11B — Android: integrate cross-platform Shorts detection with the
+  monitoring pipeline:**
+  - Connected `MonitoringEventHub` → `ShortPlatformRegistry` → platform
+    adapters → `ShortDetectionResult` → `ShortUsageAggregator` (3–5 second
+    rule) → `ShortsBudgetTracker` (one global budget across platforms) →
+    `ShortsLocalStore` (local usage/event records pending a future sync
+    layer). No backend changes in this phase.
+  - See the [Phase 11B — Cross-Platform Shorts Detection Integration](#phase-11b--cross-platform-shorts-detection-integration)
     section below for the full detail.
 
 ## Connection status
@@ -732,6 +753,300 @@ warning/reached notification & sound delivery, offline buffering,
 weekly/monthly reports, Your Score / Rank / leaderboard, scoring formulas,
 and any new Shorts features.
 
+## Phase 11A — Shorts Usage Database Schema Update
+
+Phase 11A makes the `shorts_usage` table cross-platform ready: daily Shorts
+usage can now be stored **separately per platform and surface** so
+platform-specific daily aggregation is possible (the foundation the
+cross-platform Shorts architecture needs).
+
+**Why `platform` / `surface` were added:** the previous schema had a single
+daily summary per (user, device, date) — it could not distinguish YouTube
+Shorts from Instagram Reels, TikTok, Snapchat Spotlight, etc. Without the
+columns, platform-specific reporting and the per-platform breakdown required
+by the cross-platform architecture are impossible.
+
+**New logical idempotency key:**
+
+```
+user_id + device_id + platform + surface + usage_date
+```
+
+Enforced by the unique constraint
+`uq_shorts_usage_user_device_platform_surface_date` — re-syncing the same
+daily summary for the same platform/surface can never create uncontrolled
+duplicates (the repository lookup-then-upsert uses this exact key).
+
+**Migration strategy for existing rows (documented, safe):** pre-architecture
+rows receive the explicit marker value `UNKNOWN` for `platform` / `surface`
+via `server_default` — historical platform/surface values are NEVER invented
+or fabricated. If legacy rows would collide under the new key, the migration
+keeps the newest row per key and removes older duplicates before creating
+the unique constraint (defensive; the table was empty in practice).
+
+**Backward compatibility:** `platform` / `surface` are OPTIONAL in the sync
+payload — clients that do not send them get the `UNKNOWN` marker (never a
+fabricated value). The response schema always returns them. Invalid
+platform/surface values are rejected with 422.
+
+### Files changed
+
+| File | Change |
+| --- | --- |
+| `app/models/shorts_usage.py` | Added `platform` / `surface` columns (NOT NULL, default/`server_default` `UNKNOWN`) + `UniqueConstraint` on the 5-column key |
+| `app/schemas/shorts.py` | `ShortsUsageRecord` gains optional `platform` / `surface` (validated Literals); `ShortsUsageResponse` always returns them |
+| `app/repositories/shorts/usage.py` | Lookup/upsert key extended to (user, device, platform, surface, date) |
+| `app/services/shorts/usage.py` | Normalizes omitted platform/surface to `UNKNOWN` |
+| `migrations/versions/657ba9f4d4f8_*.py` | **New Alembic migration** — adds the 2 columns + unique constraint (reviewed; scoped to `shorts_usage` only) |
+
+### Migration
+
+- Revision: **`657ba9f4d4f8`** — "add platform and surface to shorts_usage"
+  (down_revision `70d943e5af25`).
+- Status: **applied** — `alembic current` reports `657ba9f4d4f8 (head)`;
+  `alembic history` shows `70d943e5af25 -> 657ba9f4d4f8 (head)`.
+- Verified in MySQL: `SHOW COLUMNS FROM shorts_usage` shows `platform`
+  varchar(50) NOT NULL and `surface` varchar(50) NOT NULL; the unique index
+  `uq_shorts_usage_user_device_platform_surface_date` exists on
+  (user_id, device_id, platform, surface, usage_date).
+
+### Compatibility implications
+
+- Existing clients that sync without platform/surface keep working
+  (stored as `UNKNOWN`).
+- Same-day summaries for different platforms/surfaces are now SEPARATE rows
+  (e.g. day 1 YouTube Shorts + day 1 Reels = 2 rows); the summary endpoint
+  aggregates them into one global Shorts total (the global-budget concept).
+- Settings / Study / Monitoring tables and endpoints are untouched.
+
+### Verification
+
+`scripts/verify_shorts.py` extended and re-run (67 checks): platform/surface
+persisted, UNKNOWN default for omitted values, per-key idempotency (same
+platform re-sync overwrites; different platform same day = separate row),
+unique constraint present in MySQL, invalid platform → 422, plus the full
+Phase 10 flow and Settings/Study/Monitoring regression.
+
+## Phase 11B — Cross-Platform Shorts Detection Integration
+
+Phase 11B connects the **Android** monitoring pipeline to the cross-platform
+Shorts architecture (backend unchanged in this phase). Android remains the
+real-time authority; detection is NOT moved to Python/FastAPI.
+
+### Flow
+
+```
+MonitoringEventHub
+  -> ShortPlatformRegistry (package -> adapter)
+  -> ShortPlatformAdapter.detect()
+  -> ShortDetectionResult
+  -> ShortUsageAggregator (3–5 second rule)
+  -> ShortsBudgetTracker (ONE global budget across platforms)
+  -> ShortsLocalStore (local usage/event records -> future sync layer)
+```
+
+### Files (Android, `app/src/main/java/com/shortscap/app/`)
+
+| File | Change |
+| --- | --- |
+| `monitoring/MonitoringEventHub.kt` | Listener + dispatch now carry the window **class name** (privacy-minimal metadata, same family as the package name — never content) |
+| `accessibility/ShortsCapAccessibilityService.kt` | Passes `event.className` alongside the package; subscribes `ShortsMonitoringPipeline.start()` on service connect (still package/class metadata only — no window content) |
+| `shorts/ShortsMonitoringPipeline.kt` | **New** — the passive orchestrator: tracks the foreground context, detects via the registry, aggregates, updates the global budget, writes local records |
+| `shorts/ShortsLocalStore.kt` | **New** — local usage/event records (platform/surface/detection method/confidence/timestamp/duration preserved) + in-memory impl + sync seam |
+| `shorts/ShortsMonitoringPipelineTest.kt` | **New** — 10 unit tests (see below) |
+
+### Detection vs counting (kept separate)
+
+- **Detector** (`ShortPlatformRegistry` + adapters): identifies platform /
+surface, returns confidence + detection method.
+- **Aggregator** (`ShortUsageAggregator`): applies the 3–5 second rule,
+decides whether an item counts, updates count/duration, generates the local
+usage record + event.
+- Platform adapters contain NO counting logic; `MonitoringService` does not
+own Shorts counting.
+
+### 3–5 second rule (preserved, unchanged thresholds)
+
+- Context left before ~2 seconds (`SHORT_SWIPE_RULE_MILLIS`) → NOT counted.
+- Engagement reaching the 3–5 second threshold
+  (`SHORT_MIN_ENGAGEMENT_MILLIS`) → counted as one Short with its full
+duration.
+- The pipeline evaluates each foreground context exactly once (on
+transition), so duplicate window events never double-count.
+
+### Global Shorts budget
+
+Shorts from every platform accumulate into ONE budget — switching from
+YouTube Shorts to Instagram Reels to TikTok never resets it
+(verified by unit test: 4s YouTube + 4s Instagram = 8s global, per-platform
+breakdown `{YOUTUBE: 4000, INSTAGRAM: 4000}`).
+
+### Local vs backend (sync boundary)
+
+Detector → Aggregator → **`ShortsLocalStore`** → future sync layer. The
+detector NEVER talks to FastAPI directly; a controlled later integration
+step drains the local store to the Phase 10 `shorts_usage` / `shorts_events`
+APIs (which now accept `platform` / `surface` per Phase 11A).
+
+### Supported platforms & honest limitations
+
+- **Platforms architected:** YouTube, Instagram, TikTok, Snapchat, Facebook,
+  Moj, X, LinkedIn (+ UNKNOWN). **Surfaces:** YouTube Shorts, Instagram
+  Reels, Facebook Reels, TikTok short feed, Snapchat Spotlight, X short
+  video, LinkedIn short video, Moj short video (+ UNKNOWN).
+- **Honest detection status:** with the current signal set, only the YouTube
+  Shorts surface is positively detected (via its window class). All other
+  platforms report UNKNOWN/low confidence and are NEVER counted — no
+  fabricated detections.
+- **Counting granularity:** each continuous foreground session on a
+  short-form surface counts as ONE Short (window-state events cannot see
+  individual swipes), so duration-based usage stays accurate while per-short
+  counts are session-level. Documented, not hidden.
+
+### Testing
+
+- `./gradlew :app:compileDebugKotlin` — compiles clean.
+- `./gradlew :app:testDebugUnitTest` — **10/10 PASS**
+  (`ShortsMonitoringPipelineTest`): known platform + short surface counted;
+  known platform + non-short content not counted; unknown platform not
+  counted; unknown surface not counted; swipe before threshold not counted;
+  engagement beyond threshold counted once; platform switching keeps the
+  global budget; global budget accumulates across platforms; duplicate
+  events not double-counted; insufficient confidence not counted.
+- Backend regression re-run: Settings / Study / Monitoring / Shorts verify
+  scripts + `/health/db` + `/docs` all PASS (backend untouched in 11B).
+
+### Not part of this phase
+
+Actual backend synchronization from Android, ranking/score, reports,
+AWS, Cognito, and UI changes (none made).
+
+## Cross-Platform Short-Form Content Architecture
+
+**Status: architecture locked and documented. A full universal Shorts
+detector is NOT implemented** — this section describes the abstraction that
+future platform-specific detection plugs into, and the honest detection
+level each platform currently supports.
+
+Short-form content must NOT be treated as a YouTube-only / single-app
+feature. The architecture distinguishes **platform** from **content surface**
+and keeps detection separate from counting, so ShortsCap is
+platform-independent and future platforms can be added safely.
+
+### Platform vs surface
+
+- **Platform** — the app hosting the content (`ShortPlatform`: YOUTUBE,
+  INSTAGRAM, TIKTOK, SNAPCHAT, FACEBOOK, MOJ, X, LINKEDIN, UNKNOWN).
+  Identified by package name (centralized — never scattered through
+  monitoring code).
+- **Surface** — the specific short-form place inside a platform
+  (`ShortSurface`: YOUTUBE_SHORTS, INSTAGRAM_REELS, FACEBOOK_REELS,
+  TIKTOK_SHORT_FEED, SNAPCHAT_SPOTLIGHT, X_SHORT_VIDEO,
+  LINKEDIN_SHORT_VIDEO, MOJ_SHORT_VIDEO, UNKNOWN).
+
+A platform may contain short-form, long-form, live, chat, stories and other
+screens — so **"app is running" never means "a Short is being watched"**.
+Correct classification needs platform detection + surface detection +
+interaction/time signals.
+
+### Android-side abstraction (`app/src/main/java/com/shortscap/app/shorts/`)
+
+| File | Responsibility |
+| --- | --- |
+| `ShortPlatform.kt` | Typed platform enum + centralized package→platform mapping |
+| `ShortSurface.kt` | Typed content-surface enum (per-platform short-form places) |
+| `ShortDetectionResult.kt` | Detection outcome: platform, surface, `isShortForm`, confidence, `DetectionMethod` (PLATFORM_ADAPTER / GENERIC_UI_SIGNAL / INTERACTION_SIGNAL / UNKNOWN), timestamp, metadata |
+| `ShortDetectionSignals.kt` | What the existing architecture can actually provide (package name today; optional activity class, foreground duration, interaction count, visible descriptors for future detectors) |
+| `ShortPlatformAdapter.kt` | Interface: `supports(package)` + `detect(signals) → ShortDetectionResult` — answers “is this my platform? / which surface? / how confident?” |
+| `YouTubeShortsAdapter.kt` | YouTube — surface detected via the Shorts player activity class (high confidence); otherwise UNKNOWN |
+| `InstagramReelsAdapter.kt` / `FacebookReelsAdapter.kt` / `SnapchatSpotlightAdapter.kt` / `XVideoAdapter.kt` / `LinkedInVideoAdapter.kt` | Platforms where Reels/Spotlight/video is one surface among many — platform identified, surface UNKNOWN (conservative, nothing counted yet) |
+| `TikTokAdapter.kt` / `MojAdapter.kt` | Predominantly short-form apps — platform identified, surface UNKNOWN / medium confidence (LIVE & other surfaces exist) |
+| `GenericShortVideoAdapter.kt` | Conservative fallback for unknown/future apps — returns UNKNOWN, never fabricates a detection |
+| `ShortPlatformRegistry.kt` | Central registry: package → adapter map, generic fallback, `detect(signals)` entry point |
+| `ShortUsageAggregator.kt` | Separates DETECTION from COUNTING; preserves the 3–5 second rule; only counts explicitly short-form, high-confidence results |
+| `ShortsBudgetTracker.kt` | ONE global Shorts budget across ALL platforms + per-platform breakdown for future reports |
+
+### Detection vs counting
+
+`ShortContentDetector` (adapters/registry) determines WHAT is being viewed;
+`ShortUsageAggregator` determines WHAT counts. Flow:
+
+```
+content appears -> detector -> ShortDetectionResult -> aggregator ->
+count / duration -> warning / limit state -> event -> backend sync
+```
+
+Detection rules can change without rewriting usage accounting, and the
+detector never owns the global counter.
+
+### Existing 3–5 second rule (preserved)
+
+- Swipe/change within ~2 seconds (`SHORT_SWIPE_RULE_MILLIS`) → NOT counted.
+- Meaningful engagement reaching the 3–5 second threshold
+  (`SHORT_MIN_ENGAGEMENT_MILLIS` … `SHORT_MAX_ENGAGEMENT_WINDOW_MILLIS`) →
+  eligible to count as one Short; longer engagement is still one Short with
+  its full duration retained.
+- Thresholds are documented constants (configurable later through settings
+  without touching call sites). No duplicate timing system was created.
+
+### Global Shorts budget
+
+Shorts from every platform contribute to ONE combined budget (e.g. YouTube
+Shorts 10 min + Instagram Reels 8 min + TikTok 5 min + Spotlight 4 min =
+27 min global Shorts time). No per-platform independent limits unless a
+future product requirement explicitly adds them. Platform/surface data is
+retained after counting so future reports can break usage down per platform.
+
+### Current detection capability (honest)
+
+- **Fully reliable today:** nothing is claimed as 100% accurate.
+- **Surface-positive only for YouTube Shorts** (activity-class signal).
+- **All other platforms:** platform identity is known (package-based), the
+  surface is UNKNOWN and nothing is counted — until future interaction/UI
+  signal sources raise confidence.
+- The accessibility service remains privacy-minimal: it observes only
+  `TYPE_WINDOW_STATE_CHANGED` (foreground package), never window content,
+  and performs no synthetic interaction.
+
+### Backend as persistence / synchronization layer
+
+Android remains the real-time authority (detection, counting, enforcement,
+notifications, local buffering). The backend (Phase 10 Shorts Data Layer)
+receives synchronized summaries and events, validates, persists and serves
+history/summaries. **No real-time server detection** — no Python screen
+monitoring, no server-side accessibility, no WebSockets, no timers, no
+polling.
+
+### Database review — platform/surface support
+
+Inspected `shorts_usage` / `shorts_events` during the architecture lock:
+
+| Item | State at lock time | State after Phase 11A |
+| --- | --- | --- |
+| `shorts_events.metadata_json` | JSON column — carries `platform` / `surface` / `detectionMethod` / `confidence` today (no schema change needed) | unchanged |
+| `shorts_usage` columns | no `platform` / `surface` columns | **`platform` + `surface` added (VARCHAR(50) NOT NULL)** via migration `657ba9f4d4f8` |
+| Idempotency key | user + device + usage_date | **user + device + platform + surface + usage_date** (unique constraint) |
+
+See [Phase 11A — Shorts Usage Database Schema Update](#phase-11a--shorts-usage-database-schema-update).
+
+### Future platform extensibility
+
+Adding a future platform (e.g. `ExampleFutureVideoApp`) requires only:
+1) a new `ShortPlatform` value, 2) a new `ShortSurface` value if needed,
+3) a new adapter, 4) one registry entry. The aggregator, backend sync,
+reporting and ranking keep working unchanged.
+
+### Existing implementation mapping (STEP 1 review)
+
+| Current file | Current responsibility | New cross-platform responsibility |
+| --- | --- | --- |
+| `monitoring/MonitoringService.kt` | Foreground service keeping monitoring alive | Unchanged — no detection logic added |
+| `monitoring/MonitoringEventHub.kt` | Funnel for foreground-app events (doc note added) | Future Shorts detector subscribes here; hub stays a dumb funnel |
+| `accessibility/ShortsCapAccessibilityService.kt` | Package-only window-state observation + Brain overlay | Unchanged — future detector consumes the same events via the hub |
+| `monitoring/BrainOverlayManager.kt` (`SupportedShortVideoPackages`) | Overlay show/hide package set | Unchanged; registry centralizes recognition going forward |
+| `activity/ActivityRepository.kt` / `ActivityModels.kt` | Seeded usage reports | Unchanged; future Shorts reports consume aggregator/budget data |
+| `model/Models.kt` (`ShortVideoPlatform`) | Settings UI platform catalog (with `enabled`) | Unchanged; the new typed enums are the detection-side model |
+
 ## Database Migration
 
 - **Alembic is configured** (`alembic.ini` + `migrations/`) and connected to
@@ -743,6 +1058,12 @@ and any new Shorts features.
   *"create approved schema tables"* — generated from the 24 approved models.
 - **Migration applied:** `alembic upgrade head` — `alembic current` shows
   `70d943e5af25 (head)`.
+- **Phase 11A migration created:** revision **`657ba9f4d4f8`** —
+  *"add platform and surface to shorts_usage"* — adds `platform` / `surface`
+  (VARCHAR(50) NOT NULL, `UNKNOWN` marker default) and the unique constraint
+  `uq_shorts_usage_user_device_platform_surface_date`; scoped to
+  `shorts_usage` only. Applied and verified (`alembic current` =
+  `657ba9f4d4f8 (head)`).
 - **Actual MySQL tables created** in `shortscap_db` (MySQL 8.0.43): the 24
   approved tables (`users`, `user_profiles`, `auth_identities`,
   `otp_verifications`, `devices`, `user_settings`, `permission_states`,
@@ -760,7 +1081,8 @@ and any new Shorts features.
 
 ## Planned / next (NOT implemented yet)
 
-Android → backend sync (settings, study, monitoring, shorts), OTP / Google /
+Android → backend sync (settings, study, monitoring, shorts — including
+draining the Phase 11B local Shorts store to the shorts APIs), OTP / Google /
 JWT / Cognito auth endpoints (replaces the temporary `X-Dev-User-Id`), the
 real-time device-monitoring / shorts / web-blocking engines and the study
 schedule/reminder engine, reports, leaderboard scoring, analytics, AWS

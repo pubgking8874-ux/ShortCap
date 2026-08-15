@@ -40,6 +40,11 @@ class ShortsCapAccessibilityService :
     override fun onServiceConnected() {
         super.onServiceConnected()
         MonitoringEventHub.subscribe(this)
+        // Cross-platform Shorts detection (Phase 11B) subscribes through the
+        // same hub and classifies foreground windows via the platform
+        // registry — the service itself stays a dumb, privacy-minimal
+        // observer (package + window class metadata only).
+        com.shortscap.app.shorts.ShortsMonitoringPipeline.start()
     }
 
     /**
@@ -48,7 +53,7 @@ class ShortsCapAccessibilityService :
      * (including ShortsCap itself and any other app). Runs on the service's
      * main thread, so WindowManager calls are safe.
      */
-    override fun onForegroundAppChanged(packageName: String) {
+    override fun onForegroundAppChanged(packageName: String, activityClassName: String?) {
         if (packageName in SupportedShortVideoPackages) {
             BrainOverlayManager.show(this)
         } else {
@@ -59,12 +64,17 @@ class ShortsCapAccessibilityService :
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         when (event.eventType) {
-            // The active window changed → the user is now in a different app.
-            // The package name alone identifies the foreground app without
-            // needing any window content.
+            // The active window changed → the user is now in a different
+            // surface/app. Only package + window-class METADATA is read (no
+            // window content), keeping the service privacy-minimal; the
+            // class name lets the Shorts detector separate surfaces inside
+            // the same app (e.g. YouTube Shorts vs YouTube Home).
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 event.packageName?.let { pkg ->
-                    MonitoringEventHub.dispatchForegroundAppChanged(pkg.toString())
+                    MonitoringEventHub.dispatchForegroundAppChanged(
+                        pkg.toString(),
+                        event.className?.toString(),
+                    )
                 }
             }
         }

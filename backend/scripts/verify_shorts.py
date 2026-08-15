@@ -195,6 +195,15 @@ def main() -> None:
         and day1_row.get("duration_seconds") == 3000,
         day1_row,
     )
+    # Payloads that omit platform/surface store the explicit UNKNOWN marker
+    # (never a fabricated value) — Phase 11A backward-compatible default.
+    record(
+        "omitted platform/surface default to UNKNOWN marker",
+        day1_row is not None
+        and day1_row.get("platform") == "UNKNOWN"
+        and day1_row.get("surface") == "UNKNOWN",
+        day1_row,
+    )
 
     # Repeat the exact same sync -> still one row, same values (idempotent).
     status, synced = request(
@@ -216,20 +225,79 @@ def main() -> None:
     )
 
     # ------------------------------------------------------------------
+    # 1b. Phase 11A — platform / surface (cross-platform identity)
+    # ------------------------------------------------------------------
+    # A platform-specific summary for the SAME day is a SEPARATE row
+    # (logical key now includes platform + surface).
+    status, synced = request(
+        "POST", "/shorts/usage/sync",
+        {
+            "device_id": dev_device_id,
+            "usage_date": day1,
+            "shorts_count": 50,
+            "duration_seconds": 1000,
+            "warning_triggered": False,
+            "limit_reached": False,
+            "platform": "YOUTUBE",
+            "surface": "YOUTUBE_SHORTS",
+        },
+    )
+    expect_status("POST platform-specific sync -> 200", status, 200, synced)
+    record(
+        "platform/surface persisted on the record",
+        status == 200
+        and synced[0].get("platform") == "YOUTUBE"
+        and synced[0].get("surface") == "YOUTUBE_SHORTS",
+        synced,
+    )
+
+    # Duplicate platform-specific sync -> overwrite, still ONE row for that key.
+    status, synced = request(
+        "POST", "/shorts/usage/sync",
+        {
+            "device_id": dev_device_id,
+            "usage_date": day1,
+            "shorts_count": 50,
+            "duration_seconds": 1000,
+            "platform": "YOUTUBE",
+            "surface": "YOUTUBE_SHORTS",
+        },
+    )
+    expect_status("repeat platform-specific sync -> 200", status, 200, synced)
+    record(
+        "platform duplicate sync idempotent",
+        status == 200 and synced[0].get("shorts_count") == 50,
+        synced,
+    )
+
+    # Invalid platform / surface values are rejected by the schema.
+    status, _ = request(
+        "POST", "/shorts/usage/sync",
+        {
+            "device_id": dev_device_id,
+            "usage_date": day1,
+            "platform": "NOT_A_PLATFORM",
+            "surface": "YOUTUBE_SHORTS",
+        },
+    )
+    expect_status("invalid platform value -> 422", status, 422)
+
+    # ------------------------------------------------------------------
     # 2. Shorts usage history
     # ------------------------------------------------------------------
     status, usage = request("GET", "/shorts/usage")
     expect_status("GET /shorts/usage -> 200", status, 200, usage)
+    # 3 rows now: day2 UNKNOWN + day1 YOUTUBE + day1 UNKNOWN (Phase 11A key).
     record(
-        "usage history contains both days",
-        status == 200 and isinstance(usage, list) and len(usage) == 2,
+        "usage history contains all three keys",
+        status == 200 and isinstance(usage, list) and len(usage) == 3,
         usage,
     )
 
     status, filtered = request("GET", f"/shorts/usage?device_id={dev_device_id}")
     record(
-        "device-filtered usage -> 2 rows",
-        status == 200 and isinstance(filtered, list) and len(filtered) == 2,
+        "device-filtered usage -> 3 rows",
+        status == 200 and isinstance(filtered, list) and len(filtered) == 3,
         filtered,
     )
 
@@ -327,17 +395,20 @@ def main() -> None:
     # ------------------------------------------------------------------
     status, summary = request("GET", "/shorts/summary")
     expect_status("GET /shorts/summary -> 200", status, 200, summary)
+    # Totals now span the UNKNOWN rows (day1 150/3000, day2 80/1600) plus the
+    # platform-specific row (day1 YOUTUBE/YOUTUBE_SHORTS 50/1000):
+    #   count = 280, duration = 5600, days = 2, avg = 140 / 2800.
     summary_ok = (
         status == 200
         and isinstance(summary, dict)
-        and summary.get("total_shorts_count") == 230          # 150 + 80
-        and summary.get("total_duration_seconds") == 4600     # 3000 + 1600
-        and summary.get("average_daily_shorts") == 115        # 230 / 2 days
-        and summary.get("average_daily_duration") == 2300     # 4600 / 2 days
-        and summary.get("warning_count") == 1                 # day1 only
-        and summary.get("limit_reached_count") == 1           # day2 only
+        and summary.get("total_shorts_count") == 280          # 150 + 80 + 50
+        and summary.get("total_duration_seconds") == 5600     # 3000 + 1600 + 1000
+        and summary.get("average_daily_shorts") == 140        # 280 / 2 days
+        and summary.get("average_daily_duration") == 2800     # 5600 / 2 days
+        and summary.get("warning_count") == 1                 # day1 UNKNOWN only
+        and summary.get("limit_reached_count") == 1           # day2 UNKNOWN only
     )
-    record("summary values correct", summary_ok, summary)
+    record("summary values correct (global budget across platforms)", summary_ok, summary)
 
     # ------------------------------------------------------------------
     # 5. Invalid tests
@@ -430,10 +501,33 @@ def main() -> None:
         usage_rows = db.query(ShortsUsage).filter(ShortsUsage.user_id == DEV_USER_ID).all()
         event_rows = db.query(ShortsEvent).filter(ShortsEvent.user_id == DEV_USER_ID).all()
 
-        record("shorts_usage rows persisted (2, no dupes)", len(usage_rows) == 2, f"count={len(usage_rows)}")
+        # Phase 11A: 3 rows — day1 UNKNOWN, day2 UNKNOWN, day1 YOUTUBE.
+        record("shorts_usage rows persisted (3, no dupes)", len(usage_rows) == 3, f"count={len(usage_rows)}")
         record("shorts_events rows persisted (5)", len(event_rows) == 5, f"count={len(event_rows)}")
 
-        day1_row = next((r for r in usage_rows if r.usage_date.isoformat() == day1), None)
+        # Phase 11A: the unique constraint must exist on the 5-column key.
+        constraint = db.execute(
+            text(
+                "SELECT constraint_name FROM information_schema.TABLE_CONSTRAINTS "
+                "WHERE table_schema = DATABASE() AND table_name = 'shorts_usage' "
+                "AND constraint_type = 'UNIQUE' "
+                "AND constraint_name = 'uq_shorts_usage_user_device_platform_surface_date'"
+            )
+        ).first()
+        record(
+            "idempotency unique constraint exists (user+device+platform+surface+date)",
+            constraint is not None,
+            str(constraint),
+        )
+
+        day1_row = next(
+            (
+                r
+                for r in usage_rows
+                if r.usage_date.isoformat() == day1 and r.platform == "UNKNOWN"
+            ),
+            None,
+        )
         record(
             "usage FK (device) + ownership (user) correct",
             day1_row is not None
@@ -444,15 +538,48 @@ def main() -> None:
         )
         record(
             "duplicate sync produced no duplicate row",
-            len([r for r in usage_rows if r.usage_date.isoformat() == day1]) == 1,
-            f"day1 rows={len([r for r in usage_rows if r.usage_date.isoformat() == day1])}",
+            len([r for r in usage_rows if r.usage_date.isoformat() == day1]) == 2,
+            f"day1 rows={len([r for r in usage_rows if r.usage_date.isoformat() == day1])} (UNKNOWN + YOUTUBE)",
         )
         record(
-            "day1 values overwritten by re-sync (150/3000)",
+            "day1 UNKNOWN values overwritten by re-sync (150/3000)",
             day1_row is not None
             and day1_row.shorts_count == 150
-            and day1_row.duration_seconds == 3000,
+            and day1_row.duration_seconds == 3000
+            and day1_row.platform == "UNKNOWN"
+            and day1_row.surface == "UNKNOWN",
             str(day1_row),
+        )
+        youtube_row = next(
+            (
+                r
+                for r in usage_rows
+                if r.usage_date.isoformat() == day1
+                and r.platform == "YOUTUBE"
+                and r.surface == "YOUTUBE_SHORTS"
+            ),
+            None,
+        )
+        record(
+            "platform-specific row persisted separately (same day, different key)",
+            youtube_row is not None
+            and youtube_row.shorts_count == 50
+            and youtube_row.duration_seconds == 1000,
+            str(youtube_row),
+        )
+        record(
+            "exactly one row per (day, platform, surface) key",
+            len(
+                [
+                    r
+                    for r in usage_rows
+                    if r.usage_date.isoformat() == day1
+                    and r.platform == "YOUTUBE"
+                    and r.surface == "YOUTUBE_SHORTS"
+                ]
+            )
+            == 1,
+            "youtube key rows should be 1",
         )
 
         day2_row = next((r for r in usage_rows if r.usage_date.isoformat() == day2), None)

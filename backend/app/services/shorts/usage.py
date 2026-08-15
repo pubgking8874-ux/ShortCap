@@ -51,15 +51,21 @@ class ShortsUsageService:
         """Idempotently persist a batch of daily Shorts summaries for the user.
 
         Each record is validated (device ownership) and upserted per
-        (user, device, usage_date). Returns the resulting rows in submission
-        order.
+        (user, device, platform, surface, usage_date). `platform` / `surface`
+        are optional in the payload; when omitted they are stored as the
+        explicit `UNKNOWN` marker (never a fabricated value). Returns the
+        resulting rows in submission order.
         """
         synced: list[ShortsUsage] = []
         for record in records:
             self._validate_device_owner(user_id, record.get("device_id"))
+            platform = record.get("platform") or "UNKNOWN"
+            surface = record.get("surface") or "UNKNOWN"
             usage = self.repository.upsert_daily_usage(
                 user_id=user_id,
                 device_id=record.get("device_id"),
+                platform=platform,
+                surface=surface,
                 usage_date=record["usage_date"],
                 shorts_count=record.get("shorts_count", 0),
                 duration_seconds=record.get("duration_seconds", 0),
