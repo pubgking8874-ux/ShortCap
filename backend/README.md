@@ -23,9 +23,13 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > monthly reports over existing historical data with previous-period
 > comparison) + Phase 14A (Your Score specification & validation) +
 > Phase 14B (Your Score engine — read-only `GET /score/daily|weekly|monthly`
-> implementing the approved spec exactly; Rank/leaderboard NOT included).
-> Auth, OAuth, engines, and the remaining routers are implemented in later
-> phases, one at a time.
+> implementing the approved spec exactly) + Phase 15A (Rank / leaderboard
+> specification & validation — ranking method, eligibility, tie-breaker,
+> rank change designed and simulated) + Phase 15B (Rank / Leaderboard engine
+> — read-only `GET /rank/weekly|monthly` implementing the approved spec
+> exactly, consuming the Score Engine as the only score source; the board
+> stays DYNAMIC, `leaderboard_scores` is not written). Auth, OAuth, and the
+> remaining routers are implemented in later phases, one at a time.
 
 ## Reserved technology stack
 
@@ -246,6 +250,28 @@ constraint. One Alembic migration: **`657ba9f4d4f8`** (applied, verified).
     (≥ 300 s sessions, volume cap, day-based consistency), no score
     storage, no leaderboard/rank.
   - See the [Phase 14B — Your Score Engine](#phase-14b--your-score-engine)
+    section below for the full detail.
+- **Phase 15A — Rank / leaderboard specification (spec + validation only):**
+  - The full leaderboard design (competition ranking, deterministic
+    tie-breaker, eligibility incl. opt-in + score status, rank change,
+    winner = rank 1, dynamic-vs-snapshot, API contract) lives in
+    `docs/rank_leaderboard_spec.md` and is validated by
+    `scripts/rank_spec_simulation.py` (cases A–H + determinism +
+    fairness). **The Rank engine is now implemented in Phase 15B.** No
+    schema change, no Android change.
+  - See the [Phase 15A — Rank / Leaderboard Specification](#phase-15a--rank--leaderboard-specification)
+    section below for the full detail.
+- **Phase 15B — Rank / Leaderboard engine (implemented):**
+  - Production read-only leaderboard engine implementing the approved Phase
+    15A spec exactly: `GET /rank/weekly|monthly` with competition ranking,
+    deterministic tie-break ordering, opt-in + score-status eligibility,
+    winner / top three from the same ranked pass, rank change vs the
+    previous equivalent period, pagination with global ranks, and
+    privacy-safe entries (rank / display_name / score / user_id only). The
+    board is DYNAMIC — scores come from the Score Engine (batch scoring,
+    no N+1), `leaderboard_scores` is not written, no caching, no rank
+    storage.
+  - See the [Phase 15B — Rank / Leaderboard Engine](#phase-15b--rank--leaderboard-engine)
     section below for the full detail.
 
 ## Connection status
@@ -1478,9 +1504,202 @@ remain flagged.)
 
 ### Not part of this phase
 
-Rank, leaderboard, weekly/monthly winners, other users' scores, score
-snapshot storage, caching, AWS, Cognito, Android changes, schema changes
-(none made — Alembic still `657ba9f4d4f8 (head)`).
+Weekly/monthly winners, other users' scores, score snapshot storage,
+caching, AWS, Cognito, Android changes, schema changes (none made — Alembic
+still `657ba9f4d4f8 (head)`). (Rank / leaderboard is now specified in Phase
+15A — see below.)
+
+## Phase 15A — Rank / Leaderboard Specification
+
+**Status: SPECIFICATION AND VALIDATION ONLY. The production Rank engine is
+NOT implemented and NOT deployed.** This phase designed, simulated and
+documented the leaderboard architecture; nothing modifies production code,
+the database, the approved score formula, or Android.
+
+| Deliverable | File | What it contains |
+| --- | --- | --- |
+| Specification | `docs/rank_leaderboard_spec.md` | Full formal spec: source of truth, periods, eligibility matrix, competition ranking, deterministic tie-breaker, rank change, winner/top-3, display fields & privacy, dynamic-vs-snapshot, performance, proposed API contract, validation results |
+| Validation | `scripts/rank_spec_simulation.py` | Pure-Python ranking + eligibility implementation validating cases A–H, determinism and fairness |
+
+### Design decisions (final for this phase)
+
+- **Source of truth:** the approved Your Score engine (Phase 14B) is the
+  ONLY source of scores — `ScoreService.score(user, period)` → rank. No
+  scoring formula is ever duplicated.
+- **Eligibility:** a user is on the board only when opted in
+  (`leaderboard_settings.is_opted_in = true` AND `is_enabled = true`; the
+  default is NOT opted in, so nobody appears accidentally) AND their period
+  score status is `sufficient_data` or `partial_data`. `insufficient_data`
+  users are excluded (never ranked at 0); opted-out users are invisible.
+- **Ranking method:** **competition ranking** — scores `[100, 100, 99]` →
+  ranks `1, 1, 3` (ties share a rank, next rank skips). Winner = rank #1;
+  Top 3 come from the SAME ranking pass (no separate podium algorithm).
+- **Deterministic tie-breaker (ordering):** `(-score, -study points,
+  -consistency points, user_id asc)` — ties share a rank, but podium and
+  pagination order are fully deterministic (never DB-retrieval-random).
+- **Rank change:** `previous_period_rank − current_period_rank` (positive =
+  improved); `null` when the previous equivalent period has no data or the
+  user was not eligible then (never an invented value).
+- **Periods:** weekly = ISO week, monthly = calendar month — identical to
+  the Score Engine and Reports (naive-UTC).
+- **Dynamic vs snapshot:** first implementation is DYNAMIC (scores computed
+  on demand via the Score Engine; `leaderboard_scores` is NOT written).
+  Snapshotting + caching are deferred until a measured performance
+  requirement justifies them.
+- **Privacy:** entries expose only `rank`, `display_name` (fallback
+  `"User {id}"` when empty), `score` and an opaque `user_id` — never email,
+  phone, name, gender or profile fields.
+- **API contract:** `GET /rank/weekly` and `GET /rank/monthly` (shared
+  handler, path-based periods like the Reports API) returning period,
+  `your_rank` / `your_score` / `your_score_status` / `rank_change`,
+  `total_participants`, `winner`, `top_three`, paginated `entries`. Maps
+  directly to the future Android Rank screen (Your Rank / Score / Change,
+  Top-3 podium, full board, This Week / This Month).
+
+### Validation results (simulation)
+
+All cases PASS: A (10 users unique scores → ranks 1..10), B (ties 100,100,99
+→ competition ranks 1,1,3 with deterministic study-points tie-break), C
+(current user ranked 15th is identifiable outside page 1), D (opted-out user
+excluded, gets no invented rank), E (`insufficient_data` user excluded,
+`partial_data` eligible), F (rank 8 → 3 ⇒ `rank_change +5`), G (rank 4 → 6
+⇒ `rank_change −2`), H (previous period empty ⇒ `rank_change null`).
+Determinism: every case produces byte-identical output on repeat runs.
+Fairness: higher score always ranks at-or-above lower score.
+
+### Database impact
+
+**No schema change required.** `leaderboard_settings` already carries
+opt-in / enable / display_name; `leaderboard_scores` (no `rank` column;
+rank is derived from score ordering) is untouched and not written in this
+phase.
+
+### Implementation status (explicit)
+
+**The Rank engine is now IMPLEMENTED in Phase 15B** (see below) exactly per
+this specification: read-only `RankService` + `GET /rank/weekly|monthly`,
+consuming the Score Engine as the only score source. Score snapshotting into
+`leaderboard_scores` and caching remain deferred until a measured
+performance requirement justifies them.
+
+### Verification
+
+- `scripts/rank_spec_simulation.py` — run with
+  `.venv\Scripts\python -m scripts.rank_spec_simulation`; validates cases
+  A–H plus determinism and fairness, exits non-zero on any failure.
+  Read-only, never touches MySQL, NOT the production engine.
+
+### Not part of this phase
+
+Leaderboard responses, score snapshots, caching, Android changes, AWS,
+Cognito, schema changes. (The Rank engine itself is Phase 15B — below.)
+
+## Phase 15B — Rank / Leaderboard Engine
+
+Phase 15B implements the **production Rank / Leaderboard engine** exactly
+per the approved Phase 15A specification (`docs/rank_leaderboard_spec.md`).
+The Score Engine (Phase 14B) remains the **ONLY source of score values** —
+this layer never computes or copies score formulas; it only ranks scores.
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Router | `app/routers/rank.py` | `GET /rank/weekly` + `GET /rank/monthly` (shared handler); reads the temporary dev identity from the `X-Dev-User-Id` header (shared `app/routers/deps.py`) |
+| Service | `app/services/rank.py` | `RankService`: eligibility resolution, competition ranking, deterministic tie-break ordering, winner / top three from the same pass, current-user rank, rank change vs previous period, pagination, privacy-safe views |
+| Repository | `app/repositories/rank.py` | Read-only: `eligible_user_ids()` (opt-in + enabled) and `display_names()` — no writes |
+| Batch scoring | `app/services/scoring/batch.py` | `batch_scores()` — one grouped-SQL pass per period for ALL users, reusing the EXACT same `assemble_score` helpers as `GET /score/*` (no N+1, no formula drift) |
+| Schemas | `app/schemas/rank.py` | `RankEntry` (rank / display_name / score / user_id), `RankPagination`, `RankResponse` per the Phase 15A contract |
+| Wiring | `app/main.py` | `include_router(rank_router)` under the existing `SQLAlchemyError` handler |
+
+### API
+
+- `GET /rank/weekly?date=YYYY-MM-DD&page=1&page_size=20` — this ISO week's
+  board (Monday–Sunday, naive UTC — identical period interpretation to the
+  Score Engine and Reports).
+- `GET /rank/monthly?date=YYYY-MM-DD&page=1&page_size=20` — this calendar
+  month's board, same contract.
+- Response: `period`, `your_rank`, `your_score`, `your_score_status`,
+  `rank_change`, `total_participants`, `winner`, `top_three` (first three
+  rows of the same ranked list), paginated `entries` with global ranks, and
+  `pagination` (`page` / `page_size` / `total_pages`).
+
+### Behavior (approved Phase 15A rules)
+
+- **Eligibility:** a user appears only when `leaderboard_settings` has
+  `is_opted_in = true` AND `is_enabled = true` AND their period score status
+  is `sufficient_data` / `partial_data`. Opted-out, disabled and
+  `insufficient_data` users are excluded (never ranked at 0, never given an
+  invented rank).
+- **Ranking method:** competition ranking — `[100, 100, 99]` → ranks
+  `1, 1, 3`; the rank value comes from score alone.
+- **Tie-breaker (ordering):** `(-score, -study points, -consistency points,
+  user_id asc)` — ties share a rank but podium/pagination order is fully
+  deterministic.
+- **Winner:** rank #1 of the period (null when no eligible users); **Top
+  three:** the first three rows of the SAME ranked pass — never a separate
+  algorithm.
+- **Rank change:** `previous_period_rank − current_period_rank` (positive =
+  improved); `null` when the previous equivalent period has no board data or
+  the user was not eligible then — never an invented value.
+- **Current user:** `your_rank` / `your_score` are present even when the
+  user is far outside the visible page (rank is computed across ALL eligible
+  users); when not eligible they are `null` and `your_score_status` explains
+  why (`not_opted_in` / `insufficient_data`).
+- **Privacy:** entries expose only `rank`, `display_name` (fallback
+  `"User {id}"` when empty), `score` and an opaque `user_id` — never email,
+  phone or private profile fields. The current user's detailed component
+  breakdown stays in the Score API.
+
+### Dynamic board (no storage, no caching)
+
+The board is computed on demand: batch scores for every eligible user of the
+period, then ranked. **`leaderboard_scores` is NOT written** and no caching
+is added — snapshotting is deferred until a measured performance requirement
+justifies it (the existing table remains available for that future layer and
+has deliberately no `rank` column; rank is always derived from ordering).
+
+### Score Engine remains the source of truth
+
+`batch_scores()` runs grouped SQL once per period (study / shorts / app /
+web / active-day aggregations per user in a handful of queries — no N+1)
+and feeds each user's data through the same module-level `assemble_score`
+logic behind `GET /score/*`. A leaderboard score is byte-identical to the
+single-user score API for the same user and period; nothing is duplicated.
+
+### MySQL persistence & database impact
+
+No schema change, no new tables, no Alembic migration (still
+`657ba9f4d4f8 (head)`). `leaderboard_settings` was already sufficient
+(opt-in / enable / display_name); `leaderboard_scores` is untouched. The
+script verifies direct MySQL state (rows seeded, cleaned up afterwards).
+
+### Verification
+
+- `scripts/verify_rank.py` — end-to-end (47 checks): cases A (unique
+  scores), B (ties → 1,1,3 + deterministic order), C (top three), D
+  (current user outside page 1), E (opted-out excluded), F (disabled
+  excluded), G (insufficient-data excluded), H (rank increase), I (rank
+  decrease), J (no previous-period data → `null`), K (weekly), L (monthly),
+  M (pagination with global ranks), N (deterministic repeat), O (winner),
+  plus privacy/public-field checks, display-name fallback, not-opted-in and
+  insufficient-data current users, and full regression of Settings / Study /
+  Monitoring / Shorts / Web / Reports / Score. Every rank is compared
+  against an INDEPENDENT implementation of the Phase 15A logic written in
+  the script (RankService is not imported). Start the server first:
+
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m uvicorn app.main:app --reload
+  .venv\Scripts\python -m scripts.verify_rank
+  ```
+
+- Manual testing is also available through Swagger at
+  <http://127.0.0.1:8000/docs> (send the `X-Dev-User-Id` header, e.g. `1`).
+
+### Not part of this phase
+
+Score snapshots / `leaderboard_scores` writes, caching, weekly/monthly
+winner announcement logic, Android Rank-screen integration (a later sync
+phase), AWS, Cognito, schema changes.
 
 ## Cross-Platform Short-Form Content Architecture
 

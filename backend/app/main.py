@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import settings
 from app.database import check_database_connection
 from app.routers.monitoring import router as monitoring_router
+from app.routers.rank import router as rank_router
 from app.routers.reports import router as reports_router
 from app.routers.score import router as score_router
 from app.routers.settings import router as settings_router
@@ -37,6 +38,11 @@ app.include_router(reports_router)
 # Phase 14B — Your Score engine (read-only daily/weekly/monthly score
 # calculation per the approved Phase 14A specification).
 app.include_router(score_router)
+
+# Phase 15B — Rank / Leaderboard engine (weekly/monthly dynamic board per
+# the approved Phase 15A specification; the Score Engine is the only source
+# of score values; `leaderboard_scores` is not written).
+app.include_router(rank_router)
 
 
 @app.exception_handler(SQLAlchemyError)

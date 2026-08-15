@@ -166,72 +166,227 @@ class ScoringQueries:
         """Distinct calendar days in the range with ANY recorded activity
         (study session ended, app usage, shorts usage, website event or
         monitoring event). Days count once regardless of row count."""
-        start_dt, end_dt = _dt_range(start, end)
-        dates: set[date] = set()
+        return self.active_days_by_user([user_id], start, end).get(user_id, 0)
 
-        for row, in (
-            self.db.query(func.date(StudySession.ended_at))
+    # ------------------------------------------------------------------
+    # Grouped by-user variants (used by the batch scoring layer so the
+    # leaderboard never runs one query per user — no N+1, Phase 15B).
+    # ------------------------------------------------------------------
+
+    def study_aggregates_by_user(
+        self, user_ids: list[int], start: date, end: date
+    ) -> dict[int, dict]:
+        """Meaningful study aggregates per user (terminal + >= 300 s), for
+        sessions ENDED in the range."""
+        start_dt, end_dt = _dt_range(start, end)
+        rows = (
+            self.db.query(
+                StudySession.user_id,
+                func.coalesce(
+                    func.sum(case((StudySession.status == "completed", 1), else_=0)), 0
+                ),
+                func.count(StudySession.id),
+                func.coalesce(func.sum(StudySession.actual_duration_seconds), 0),
+            )
             .filter(
-                StudySession.user_id == user_id,
+                StudySession.user_id.in_(user_ids),
+                StudySession.status.in_(_TERMINAL),
+                StudySession.actual_duration_seconds >= MIN_MEANINGFUL_SESSION_SEC,
                 StudySession.ended_at >= start_dt,
                 StudySession.ended_at <= end_dt,
             )
-            .distinct()
+            .group_by(StudySession.user_id)
             .all()
-        ):
-            if row is not None:
-                dates.add(row)
+        )
+        return {
+            uid: {"completed": int(c or 0), "total": int(t or 0), "total_seconds": int(s or 0)}
+            for uid, c, t, s in rows
+        }
 
-        for row, in (
-            self.db.query(AppUsage.usage_date)
-            .filter(
-                AppUsage.user_id == user_id,
-                AppUsage.usage_date >= start,
-                AppUsage.usage_date <= end,
+    def shorts_days_by_user(
+        self, user_ids: list[int], start: date, end: date
+    ) -> dict[int, list[dict]]:
+        """Per-day Shorts usage per user, aggregated by usage_date."""
+        rows = (
+            self.db.query(
+                ShortsUsage.user_id,
+                ShortsUsage.usage_date,
+                func.coalesce(func.sum(ShortsUsage.duration_seconds), 0),
+                func.coalesce(
+                    func.max(case((ShortsUsage.warning_triggered.is_(True), 1), else_=0)), 0
+                ),
+                func.coalesce(
+                    func.max(case((ShortsUsage.limit_reached.is_(True), 1), else_=0)), 0
+                ),
             )
-            .distinct()
-            .all()
-        ):
-            if row is not None:
-                dates.add(row)
-
-        for row, in (
-            self.db.query(ShortsUsage.usage_date)
             .filter(
-                ShortsUsage.user_id == user_id,
+                ShortsUsage.user_id.in_(user_ids),
                 ShortsUsage.usage_date >= start,
                 ShortsUsage.usage_date <= end,
             )
-            .distinct()
+            .group_by(ShortsUsage.user_id, ShortsUsage.usage_date)
             .all()
-        ):
-            if row is not None:
-                dates.add(row)
-
-        for row, in (
-            self.db.query(func.date(WebsiteEvent.occurred_at))
-            .filter(
-                WebsiteEvent.user_id == user_id,
-                WebsiteEvent.occurred_at >= start_dt,
-                WebsiteEvent.occurred_at <= end_dt,
+        )
+        result: dict[int, list[dict]] = {}
+        for uid, _, seconds, warning, limit in rows:
+            result.setdefault(uid, []).append(
+                {
+                    "minutes": round((seconds or 0) / 60, 4),
+                    "warning_triggered": bool(warning),
+                    "limit_reached": bool(limit),
+                }
             )
-            .distinct()
-            .all()
-        ):
-            if row is not None:
-                dates.add(row)
+        return result
 
-        for row, in (
-            self.db.query(func.date(MonitoringEvent.occurred_at))
+    def app_days_by_user(
+        self, user_ids: list[int], start: date, end: date
+    ) -> dict[int, list[dict]]:
+        """Per-day total phone usage in minutes per user (by usage_date)."""
+        rows = (
+            self.db.query(
+                AppUsage.user_id,
+                AppUsage.usage_date,
+                func.coalesce(func.sum(AppUsage.duration_seconds), 0),
+            )
             .filter(
-                MonitoringEvent.user_id == user_id,
+                AppUsage.user_id.in_(user_ids),
+                AppUsage.usage_date >= start,
+                AppUsage.usage_date <= end,
+            )
+            .group_by(AppUsage.user_id, AppUsage.usage_date)
+            .all()
+        )
+        result: dict[int, list[dict]] = {}
+        for uid, _, seconds in rows:
+            result.setdefault(uid, []).append(
+                {"minutes": round((seconds or 0) / 60, 4)}
+            )
+        return result
+
+    def enforcement_events_by_user(
+        self, user_ids: list[int], start: date, end: date
+    ) -> dict[int, int]:
+        """Count of LIMIT_REACHED / APP_RESTRICTED monitoring events per user."""
+        start_dt, end_dt = _dt_range(start, end)
+        rows = (
+            self.db.query(
+                MonitoringEvent.user_id,
+                func.count(MonitoringEvent.id),
+            )
+            .filter(
+                MonitoringEvent.user_id.in_(user_ids),
+                MonitoringEvent.event_type.in_(["LIMIT_REACHED", "APP_RESTRICTED"]),
                 MonitoringEvent.occurred_at >= start_dt,
                 MonitoringEvent.occurred_at <= end_dt,
             )
-            .distinct()
+            .group_by(MonitoringEvent.user_id)
             .all()
-        ):
-            if row is not None:
-                dates.add(row)
+        )
+        return {uid: int(n or 0) for uid, n in rows}
 
-        return len(dates)
+    def blocked_active_by_user(self, user_ids: list[int]) -> dict[int, int]:
+        """Number of currently-active blocked websites per user."""
+        rows = (
+            self.db.query(
+                BlockedWebsite.user_id,
+                func.count(BlockedWebsite.id),
+            )
+            .filter(
+                BlockedWebsite.user_id.in_(user_ids),
+                BlockedWebsite.is_blocked.is_(True),
+            )
+            .group_by(BlockedWebsite.user_id)
+            .all()
+        )
+        return {uid: int(n or 0) for uid, n in rows}
+
+    def web_events_by_user(
+        self, user_ids: list[int], start: date, end: date
+    ) -> dict[int, list[dict]]:
+        """Website events per user in the range (type + domain)."""
+        start_dt, end_dt = _dt_range(start, end)
+        rows = (
+            self.db.query(WebsiteEvent.event_type, WebsiteEvent.domain, WebsiteEvent.user_id)
+            .filter(
+                WebsiteEvent.user_id.in_(user_ids),
+                WebsiteEvent.occurred_at >= start_dt,
+                WebsiteEvent.occurred_at <= end_dt,
+            )
+            .all()
+        )
+        result: dict[int, list[dict]] = {}
+        for event_type, domain, uid in rows:
+            result.setdefault(uid, []).append({"type": event_type, "domain": domain})
+        return result
+
+    def shorts_limits_by_user(
+        self, user_ids: list[int]
+    ) -> dict[int, int | None]:
+        """Configured daily Shorts limit (minutes) per user; None when unset."""
+        rows = (
+            self.db.query(ShortsSettings.user_id, ShortsSettings.daily_limit_minutes)
+            .filter(ShortsSettings.user_id.in_(user_ids))
+            .all()
+        )
+        return {uid: limit for uid, limit in rows}
+
+    def active_days_by_user(
+        self, user_ids: list[int], start: date, end: date
+    ) -> dict[int, int]:
+        """Distinct calendar days with ANY recorded activity per user. Days
+        count once per user regardless of row count."""
+        start_dt, end_dt = _dt_range(start, end)
+        per_user: dict[int, set[date]] = {}
+
+        queries = [
+            (
+                self.db.query(StudySession.user_id, func.date(StudySession.ended_at))
+                .filter(
+                    StudySession.user_id.in_(user_ids),
+                    StudySession.ended_at >= start_dt,
+                    StudySession.ended_at <= end_dt,
+                )
+                .distinct()
+            ),
+            (
+                self.db.query(AppUsage.user_id, AppUsage.usage_date)
+                .filter(
+                    AppUsage.user_id.in_(user_ids),
+                    AppUsage.usage_date >= start,
+                    AppUsage.usage_date <= end,
+                )
+                .distinct()
+            ),
+            (
+                self.db.query(ShortsUsage.user_id, ShortsUsage.usage_date)
+                .filter(
+                    ShortsUsage.user_id.in_(user_ids),
+                    ShortsUsage.usage_date >= start,
+                    ShortsUsage.usage_date <= end,
+                )
+                .distinct()
+            ),
+            (
+                self.db.query(WebsiteEvent.user_id, func.date(WebsiteEvent.occurred_at))
+                .filter(
+                    WebsiteEvent.user_id.in_(user_ids),
+                    WebsiteEvent.occurred_at >= start_dt,
+                    WebsiteEvent.occurred_at <= end_dt,
+                )
+                .distinct()
+            ),
+            (
+                self.db.query(MonitoringEvent.user_id, func.date(MonitoringEvent.occurred_at))
+                .filter(
+                    MonitoringEvent.user_id.in_(user_ids),
+                    MonitoringEvent.occurred_at >= start_dt,
+                    MonitoringEvent.occurred_at <= end_dt,
+                )
+                .distinct()
+            ),
+        ]
+        for query in queries:
+            for uid, day in query.all():
+                if uid is not None and day is not None:
+                    per_user.setdefault(uid, set()).add(day)
+        return {uid: len(days) for uid, days in per_user.items()}
