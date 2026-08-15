@@ -17,8 +17,10 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > new idempotency key, Alembic migration `657ba9f4d4f8`) + Phase 11B
 > (Android: cross-platform Shorts detection integrated with the existing
 > monitoring pipeline — registry → adapters → aggregator → global budget →
-> local store). Auth, OAuth, engines, and the remaining routers are
-> implemented in later phases, one at a time.
+> local store) + Phase 12 (web data layer: blocked-website CRUD with domain
+> normalization, website events, web summary on the existing approved
+> tables). Auth, OAuth, engines, and the remaining routers are implemented in
+> later phases, one at a time.
 
 ## Reserved technology stack
 
@@ -201,6 +203,15 @@ constraint. One Alembic migration: **`657ba9f4d4f8`** (applied, verified).
     `ShortsLocalStore` (local usage/event records pending a future sync
     layer). No backend changes in this phase.
   - See the [Phase 11B — Cross-Platform Shorts Detection Integration](#phase-11b--cross-platform-shorts-detection-integration)
+    section below for the full detail.
+- **Phase 12 — web data layer (blocked websites / events / summary):**
+  - Full vertical slice for the existing web tables (`blocked_websites`,
+    `website_events`): blocked-website CRUD with centralized domain
+    normalization + duplicate prevention, a blocked-domain check endpoint,
+    website event submission and history with filters + pagination, and a
+    basic read-only summary. No new tables, no schema changes, no new
+    migration.
+  - See the [Phase 12 — Web Data Layer](#phase-12--web-data-layer)
     section below for the full detail.
 
 ## Connection status
@@ -920,6 +931,157 @@ APIs (which now accept `platform` / `surface` per Phase 11A).
 
 Actual backend synchronization from Android, ranking/score, reports,
 AWS, Cognito, and UI changes (none made).
+
+## Phase 12 — Web Data Layer
+
+Phase 12 implements the backend **web data layer** — blocked-website
+configuration with centralized domain normalization, synchronized website
+events, website history and a basic summary — using the **existing approved
+tables** (`blocked_websites`, `website_events`). No new tables were created,
+no schema was changed, and no Alembic migration was added (the approved
+schema already supports everything this phase needs).
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Router | `app/routers/web.py` | `/websites/blocked` CRUD + `/check`, `/web/events`, `/web/summary`; reads the temporary dev identity from the `X-Dev-User-Id` header (shared `app/routers/deps.py`) |
+| Schemas | `app/schemas/web.py` | `BlockedWebsiteCreate/Update/Response`, `BlockedCheckResponse`, `WebsiteEventCreate/Response`, `WebSummary` |
+| Services | `app/services/web/{blocked_website,event,errors}.py` | Domain normalization + validation, duplicate prevention (409), ownership checks, timestamp normalization (naive UTC), summary aggregation |
+| Repositories | `app/repositories/web/{blocked_website,event}.py` | DB operations only (create / lookup / list / update / delete / filtered list / counts) |
+| Utility | `app/utils/domain.py` | Single reusable domain normalizer/validator (mirrors the Android app's `web/DomainValidator.kt` rules) |
+| Wiring | `app/main.py` | `include_router(blocked_websites_router)` + `include_router(web_events_router)` under the existing `SQLAlchemyError` handler |
+
+### Domain normalization & validation
+
+A single reusable utility, `app/utils/domain.py`, normalizes every
+user-supplied URL/domain to one canonical bare domain:
+
+- `https://youtube.com/`, `http://www.youtube.com`, `WWW.YouTube.com` and
+  `youtube.com` **all normalize to `youtube.com`** (scheme stripped, case
+  lowercased, leading `www.` removed, path/query/fragment removed, trailing
+  dot/slash stripped).
+- Malformed input is rejected with **422**: empty / whitespace-only strings,
+  bare labels (`localhost`), pure IPv4 addresses and syntactically invalid
+  domains. No DNS/network checks are performed — pure syntax validation that
+  never depends on internet availability.
+- The rules mirror the Android app's existing domain logic
+  (`web/DomainValidator.kt` + `normalizeWebDomain`), so the backend accepts
+  exactly what the app accepts.
+
+### Blocked websites (CRUD)
+
+- `POST /websites/blocked` — block a domain for the current user
+  (`domain` required; optional `verification_status` — `pending` /
+  `verified` / `failed`, informational only — and `is_blocked`, default
+  `true`). The domain is normalized before storage; `normalized_domain` is
+  the canonical form and the raw input is preserved in `domain`.
+- `GET /websites/blocked` — list the user's blocked websites (oldest first).
+- `GET /websites/blocked/{website_id}` — one row (404 when absent).
+- `PUT /websites/blocked/{website_id}` — partial update (`is_blocked`,
+  `verification_status`, `domain`). A supplied domain is re-normalized;
+  changing it to a domain the user already has blocked returns **409**.
+- `DELETE /websites/blocked/{website_id}` — remove one row (404 when absent).
+- `GET /websites/blocked/check?domain=...` — answers whether the current
+  user has the (normalized) domain blocked: `is_present` + `is_blocked`.
+  Case/prefix-insensitive (same normalization).
+- **Duplicate prevention:** `youtube.com`, `www.youtube.com` and
+  `https://youtube.com/` are the SAME logical domain for a user — a second
+  creation attempt returns **409** instead of inserting a duplicate row. The
+  schema's unique constraint `uq_blocked_websites_user_domain` (user_id +
+  normalized_domain) is the backstop.
+
+### Website events
+
+- `POST /web/events` — persist one event (`event_type`, optional `device_id`,
+  `blocked_website_id`, `domain`, `occurred_at`). Supported event types are
+  restricted to those actually useful to the app and are limited to:
+  `BLOCK_ATTEMPT` (access to a blocked domain was attempted), `BLOCKED`
+  (blocking happened) and `UNBLOCKED` (a domain was unblocked) — no invented
+taxonomy. The `domain` is normalized before storage and, when supplied,
+`device_id` / `blocked_website_id` must belong to the current user.
+- `GET /web/events` — the user's event history (newest first) with filters:
+  `event_type`, `device_id`, `domain` (normalized), `start_date` /
+  `end_date` (on `occurred_at`), plus `page` / `page_size` pagination. This
+  is the website history endpoint — no separate duplicate route was added.
+- **Timestamps:** `occurred_at` defaults to the server's current UTC time;
+  aware datetimes are normalized to the backend's naive-UTC convention
+  before storage (`app/utils/datetime.py`) — no silent timezone
+  reinterpretation.
+
+### Web summary
+
+- `GET /web/summary` — read-only summary via DB aggregation:
+  `total_block_attempts`, `total_blocked_events`, `total_unblock_events`
+  and `unique_blocked_domains` (distinct domains the user currently has
+  blocked). Deliberately minimal — weekly / monthly reports, Your Score,
+  Rank and leaderboard are later phases.
+
+### Device ownership & user isolation
+
+Events that reference a device must reference one that exists AND belongs to
+the current user — an unknown device or another user's device returns **404**
+(never exposing other users' records). The same applies to
+`blocked_website_id` references. All GET/PUT/DELETE operations return only
+the current user's data; a user cannot request another user's websites,
+events or summaries.
+
+### Repository / service / router architecture
+
+Same pattern as Settings, Study, Monitoring and Shorts: Router → Pydantic
+Schema → Service → Repository → SQLAlchemy Model → MySQL. Repositories
+contain database operations only; services own domain normalization,
+validation, duplicate prevention, ownership checks and timestamp
+normalization; routers contain no database queries; no raw SQL lives in
+services; normalization is centralized in `app/utils/domain.py`.
+
+### Android remains responsible for real-time web blocking
+
+The backend is a configuration / history API only. There is **no**
+server-side browser monitoring, no server-side AccessibilityService, no
+browser control, no blocking loop and no WebSocket-based real-time blocking.
+Android detects web/domain activity, enforces blocking in real time, shows
+the blocked-page UI and handles local restrictions; it syncs events to this
+layer (`Android Web/Blocking Engine → local event → sync boundary →
+POST /web/events → backend persistence`). If Android is offline, the backend
+is simply not contacted; offline buffering is Android-side and out of scope
+here.
+
+### MySQL persistence
+
+Verified end to end: every CRUD/event action creates/updates the correct row
+in `blocked_websites` / `website_events` with correct foreign keys,
+ownership, normalized domains, block status, event types and timestamps;
+normalized duplicates are prevented; events match the submitted actions. See
+`scripts/verify_web.py`.
+
+### Current development identity
+
+The same temporary `X-Dev-User-Id` header (shared `app/routers/deps.py`) —
+**development only, NOT a production authentication mechanism**. Cognito is
+planned for a later phase and will replace only the identity/authentication
+boundary. AWS deployment is planned even later.
+
+### Verification
+
+- `scripts/verify_web.py` — full Web flow (blocked-website CRUD → duplicate
+  prevention → domain normalization → website events → filters → summary),
+  invalid-input cases, device/website ownership, user isolation, direct
+  MySQL row checks, and a regression pass over the existing Settings,
+  Study, Monitoring and Shorts endpoints. Start the server first:
+
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m uvicorn app.main:app --reload
+  .venv\Scripts\python -m scripts.verify_web
+  ```
+
+- Manual testing is also available through Swagger at
+  <http://127.0.0.1:8000/docs> (send the `X-Dev-User-Id` header, e.g. `1`).
+
+### Not part of this phase
+
+Android connectivity / real-time blocking engine, offline buffering,
+weekly/monthly reports, Your Score / Rank / leaderboard, scoring formulas,
+and any new Web features.
 
 ## Cross-Platform Short-Form Content Architecture
 

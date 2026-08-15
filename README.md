@@ -1769,8 +1769,9 @@ backend work.
 > **Phase 11A (shorts usage schema update — `platform` / `surface` columns,
 > new idempotency key, Alembic migration `657ba9f4d4f8`)** +
 > **Phase 11B (Android: cross-platform Shorts detection integrated with the
-> monitoring pipeline)**. Auth, OAuth, engines, and the remaining routers are
-> implemented in later phases.
+> monitoring pipeline)** + **Phase 12 (web data layer — blocked-website CRUD
+> with domain normalization / website events / web summary)**. Auth, OAuth,
+> engines, and the remaining routers are implemented in later phases.
 
 ## Reserved technology stack
 
@@ -2071,6 +2072,46 @@ platforms), never as a single-app feature.
   AWS, Cognito, UI changes.
 - See `backend/README.md` → *Phase 11B — Cross-Platform Shorts Detection
   Integration* for full detail.
+
+### Phase 12 — Web data layer *(Aug 15, 2026)*
+
+- **Blocked-website CRUD** on the existing `blocked_websites` table:
+  `POST /websites/blocked`, `GET /websites/blocked`,
+  `GET /websites/blocked/{id}`, `PUT /websites/blocked/{id}`,
+  `DELETE /websites/blocked/{id}` + `GET /websites/blocked/check?domain=`.
+- **Centralized domain normalization/validation** in `backend/app/utils/domain.py`
+  (single reusable utility): `https://youtube.com/`, `www.YouTube.com` and
+  `youtube.com` all normalize to `youtube.com` (scheme / `www.` / case /
+  path/query/fragment stripped); malformed domains, bare labels and IP
+  addresses are rejected with 422. Mirrors the Android app's own
+  `web/DomainValidator.kt` rules.
+- **Duplicate prevention:** a second attempt to block the same normalized
+  domain for the same user returns **409** (schema unique constraint
+  `uq_blocked_websites_user_domain` is the backstop).
+- **Website events** on the existing `website_events` table: `POST /web/events`
+  + `GET /web/events` (filters: `event_type`, `device_id`, `domain`,
+  `start_date`/`end_date`, `page`/`page_size`) — this doubles as the website
+  history endpoint. Event types limited to `BLOCK_ATTEMPT` / `BLOCKED` /
+  `UNBLOCKED` (no invented taxonomy); domains normalized before storage;
+  aware timestamps normalized to the backend's naive-UTC convention.
+- **Web summary:** `GET /web/summary` — `total_block_attempts`,
+  `total_blocked_events`, `total_unblock_events`, `unique_blocked_domains`.
+  Deliberately minimal; weekly/monthly reports, Your Score, Rank and
+  leaderboard are later phases.
+- **Ownership & isolation:** events may reference only devices / blocked
+  websites owned by the current user (404 otherwise); every GET/PUT/DELETE
+  returns only the current development user's data (same temporary
+  `X-Dev-User-Id` header via `app/routers/deps.py`).
+- **Backend is configuration/history only:** no server-side browser
+  monitoring, no accessibility service, no blocking loop, no WebSockets.
+  Android remains the real-time enforcement authority and syncs events here.
+- **No schema change, no migration** — the approved `blocked_websites` /
+  `website_events` tables already supported everything.
+- **Verification:** `scripts/verify_web.py` — 72/72 checks PASS (CRUD,
+  normalization, duplicates, events, filters, summary, invalid inputs,
+  ownership isolation, direct MySQL row checks, plus Settings / Study /
+  Monitoring / Shorts regression).
+- See `backend/README.md` → *Phase 12 — Web Data Layer* for full detail.
 
 ## Database connection status
 
