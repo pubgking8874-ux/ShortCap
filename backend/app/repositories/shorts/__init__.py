@@ -1,1 +1,9 @@
-"""shorts repository — ShortsCap backend package (architecture placeholder)."""
+"""Shorts repositories — ShortsCap backend package."""
+
+from app.repositories.shorts.event import ShortsEventRepository
+from app.repositories.shorts.usage import ShortsUsageRepository
+
+__all__ = [
+    "ShortsUsageRepository",
+    "ShortsEventRepository",
+]

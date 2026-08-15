@@ -11,8 +11,10 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > permissions) + Phase 8 (study data layer: study schedule / session / break
 > / event APIs on the existing approved tables) + Phase 9 (monitoring data
 > layer: app usage sync / monitoring events / summary on the existing
-> approved tables). Auth, OAuth, engines, and the remaining routers are
-> implemented in later phases, one at a time.
+> approved tables) + Phase 10 (shorts data layer: shorts usage sync /
+> shorts events / shorts summary on the existing approved tables). Auth,
+> OAuth, engines, and the remaining routers are implemented in later
+> phases, one at a time.
 
 ## Reserved technology stack
 
@@ -169,6 +171,15 @@ backend/
     history, and a basic read-only summary. No new tables, no schema
     changes, no new migration.
   - See the [Phase 9 — Monitoring Data Layer](#phase-9--monitoring-data-layer)
+    section below for the full detail.
+- **Phase 10 — shorts data layer (usage / events / summary):**
+  - Full vertical slice for the existing shorts tables (`shorts_usage`,
+    `shorts_events`): idempotent daily shorts-usage sync, usage history with
+    filters + pagination, shorts event submission and history, and a basic
+    read-only summary. Shorts settings were already covered by the Settings
+    layer (Phase 7) and are reused, not duplicated. No new tables, no
+    schema changes, no new migration.
+  - See the [Phase 10 — Shorts Data Layer](#phase-10--shorts-data-layer)
     section below for the full detail.
 
 ## Connection status
@@ -590,6 +601,137 @@ Android connectivity, the real-time device-monitoring engine, restriction /
 notification enforcement, offline buffering, weekly/monthly reports,
 Your Score / leaderboard / ranking, and any new monitoring features.
 
+## Phase 10 — Shorts Data Layer
+
+Phase 10 implements the backend **shorts data layer** — daily Shorts usage
+summaries, Shorts events and a basic summary — using the **existing approved
+tables** (`shorts_usage`, `shorts_events`; `shorts_settings` was already
+handled by the Settings layer in Phase 7 and is reused, not recreated). No
+new tables were created, no schema was changed, and no Alembic migration was
+added.
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Router | `app/routers/shorts.py` | All `/shorts/*` endpoints; reads the temporary dev identity from the `X-Dev-User-Id` header (shared `app/routers/deps.py`) |
+| Schemas | `app/schemas/shorts.py` | Input/output models: `ShortsUsageRecord` / `ShortsUsageResponse`, `ShortsEventCreate` / `ShortsEventResponse`, `ShortsSummary` |
+| Services | `app/services/shorts/{usage,event,errors}.py` | Device ownership, timestamp normalization (naive UTC), idempotent sync coordination, summary aggregation |
+| Repositories | `app/repositories/shorts/{usage,event}.py` | DB operations only (create / lookup / upsert / filtered list / aggregate) |
+| Wiring | `app/main.py` | `include_router(shorts_router)` under the existing `SQLAlchemyError` handler |
+
+### Shorts usage synchronization
+
+- `POST /shorts/usage/sync` — accepts **one or a batch** of aggregated daily
+Shorts usage summaries (`device_id`, `usage_date`, `shorts_count`,
+`duration_seconds`, `warning_triggered`, `limit_reached`) and persists them
+to `shorts_usage` for the current user. The user identity always comes from
+the development header — a client-supplied `user_id` is never trusted.
+- **Idempotent duplicate handling:** the schema has no unique constraint on
+(user, device, usage_date), so the repository performs a careful
+lookup-then-upsert (the same strategy as Monitoring) — re-syncing the same
+day's summary **overwrites** its values (last sync wins) instead of inserting
+duplicate rows. No schema change was needed.
+- **Validation:** `shorts_count` / `duration_seconds` ≥ 0; `usage_date` must
+be a valid date → invalid input returns **422**.
+- **Warning / limit state:** `warning_triggered` and `limit_reached` are
+persisted **exactly as supplied**. The data layer does NOT decide whether a
+user reached their limit — the Android enforcement system remains
+authoritative for real-time limit state; a future server-side
+scoring/analytics layer may use these fields.
+
+### Shorts usage history
+
+- `GET /shorts/usage` — the current user's Shorts usage history (newest date
+first) with filters: `device_id`, `date_from` / `date_to` (on `usage_date`),
+plus simple `page` / `page_size` pagination (default 50, max 100). Only the
+caller's own rows are returned.
+
+### Shorts events
+
+- `POST /shorts/events` — persist one event (`device_id`, `event_type`,
+optional `occurred_at` / `duration_seconds` / `metadata_json`). Supported
+event types map 1:1 to actual Android Shorts behaviors and are limited to:
+  `SHORT_STARTED` (a Short started), `SHORT_COUNTED` (the 3–5 second counting
+  logic counted a Short), `SHORT_ENDED` (a Short ended),
+  `WARNING_TRIGGERED` (the app's `SHORTS_LIMIT_WARNING` behavior),
+  `LIMIT_REACHED` (the app's `SHORTS_LIMIT_REACHED` behavior) — no invented
+taxonomy.
+- `GET /shorts/events` — the current user's events (newest first) with
+filters: `event_type`, `device_id`, `start_date` / `end_date` (on
+`occurred_at`), plus `page` / `page_size` pagination.
+- **Timestamps:** `occurred_at` defaults to the server's current UTC time;
+aware datetimes are normalized to the backend's naive-UTC convention before
+storage (`app/utils/datetime.py`) — no silent timezone reinterpretation.
+
+### Shorts summary
+
+- `GET /shorts/summary` — read-only summary via DB aggregation:
+  `total_shorts_count`, `total_duration_seconds`, `average_daily_shorts`,
+  `average_daily_duration` (totals ÷ distinct usage days), `warning_count`
+  and `limit_reached_count`. Deliberately minimal — weekly / monthly
+  reports, Your Score, Rank and leaderboard are later phases.
+
+### Device ownership & user isolation
+
+Shorts data must reference a device that exists AND belongs to the current
+user — an unknown device or another user's device returns **404** (never
+exposing other users' records). All GET operations return only the current
+user's data; a user cannot request another user's usage, events or summaries.
+
+### Repository / service / router architecture
+
+Same pattern as Settings, Study and Monitoring: Router → Pydantic Schema →
+Service → Repository → SQLAlchemy Model → MySQL. Repositories contain
+database operations only; services own device ownership, validation,
+timestamp normalization and sync coordination; routers contain no database
+queries; no raw SQL lives in services.
+
+### Android remains responsible for real-time Shorts detection
+
+The backend is a data / synchronization API only. There is **no** real-time
+Shorts detection, no server-side counting loop, no device control and no
+timers. Android identifies Shorts activity, detects start/end, applies the
+3–5 second counting logic, enforces limits, triggers warning/reached events
+and buffers locally when offline; the backend validates, stores and serves
+the synchronized history for later Reports and Your Score/Rank.
+
+### MySQL persistence
+
+Verified end to end: every sync/event action creates the correct row in
+`shorts_usage` / `shorts_events` with correct foreign keys, ownership, dates,
+durations, counts, warning/limit states and (for usage) idempotent overwrite
+behavior; events match the submitted actions. See `scripts/verify_shorts.py`.
+
+### Current development identity
+
+The same temporary `X-Dev-User-Id` header (shared `app/routers/deps.py`) —
+**development only, NOT a production authentication mechanism**. Cognito is
+planned for a later phase and will replace only the identity/authentication
+boundary. AWS deployment is planned even later.
+
+### Verification
+
+- `scripts/verify_shorts.py` — full Shorts flow (usage sync → history →
+  events → summary), duplicate-sync behavior, invalid-input cases, device
+  ownership, user isolation, direct MySQL row checks, and a regression pass
+  over the existing Settings, Study and Monitoring endpoints. Start the
+  server first:
+
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m uvicorn app.main:app --reload
+  .venv\Scripts\python -m scripts.verify_shorts
+  ```
+
+- Manual testing is also available through Swagger at
+  <http://127.0.0.1:8000/docs> (send the `X-Dev-User-Id` header, e.g. `1`).
+
+### Not part of this phase
+
+Android connectivity, the real-time Shorts detection/enforcement engine,
+warning/reached notification & sound delivery, offline buffering,
+weekly/monthly reports, Your Score / Rank / leaderboard, scoring formulas,
+and any new Shorts features.
+
 ## Database Migration
 
 - **Alembic is configured** (`alembic.ini` + `migrations/`) and connected to
@@ -618,11 +760,11 @@ Your Score / leaderboard / ranking, and any new monitoring features.
 
 ## Planned / next (NOT implemented yet)
 
-Android → backend sync (settings, study, monitoring), OTP / Google / JWT /
-Cognito auth endpoints (replaces the temporary `X-Dev-User-Id`), the
+Android → backend sync (settings, study, monitoring, shorts), OTP / Google /
+JWT / Cognito auth endpoints (replaces the temporary `X-Dev-User-Id`), the
 real-time device-monitoring / shorts / web-blocking engines and the study
-schedule/reminder engine, reports, leaderboard scoring, analytics, and
-notification backends — each one at a time.
+schedule/reminder engine, reports, leaderboard scoring, analytics, AWS
+deployment, and notification backends — each one at a time.
 
 ## Notes
 

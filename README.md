@@ -1763,9 +1763,10 @@ backend work.
 > Phase 5 (Alembic migration applied — the 24 MySQL tables now exist) +
 > Phase 6 (settings data layer) + Phase 7 (settings extended to monitoring /
 > shorts / notifications / leaderboard / permissions) + Phase 8 (study data
-> layer — schedules / sessions / breaks / events) + **Phase 9 (monitoring data
-> layer — app usage sync / monitoring events / summary)**. Auth, OAuth, engines,
-> and the remaining routers are implemented in later phases.
+> layer — schedules / sessions / breaks / events) + Phase 9 (monitoring data
+> layer — app usage sync / monitoring events / summary) + **Phase 10 (shorts
+> data layer — shorts usage sync / shorts events / shorts summary)**. Auth,
+> OAuth, engines, and the remaining routers are implemented in later phases.
 
 ## Reserved technology stack
 
@@ -1921,6 +1922,41 @@ backend work.
   Rank/Your Score are planned later too.
 - See `backend/README.md` → *Phase 9 — Monitoring Data Layer* for full detail.
 
+### Phase 10 — shorts data layer *(Aug 15, 2026)*
+
+- **Shorts usage synchronization** — `POST /shorts/usage/sync` accepts one or
+a batch of aggregated daily Shorts summaries (device / date / count /
+ duration / warning / limit flags) and persists them to `shorts_usage` for
+ the current user. **Idempotent:** re-syncing the same day overwrites its
+ values (user + device + usage_date lookup) — no uncontrolled duplicates.
+- **Shorts history** — `GET /shorts/usage` with filters (`device_id`,
+  `date_from` / `date_to`) and `page` / `page_size` pagination; only the
+  current user's rows are returned.
+- **Shorts events** — `POST /shorts/events` (event types map 1:1 to real
+  Android Shorts behaviors: `SHORT_STARTED`, `SHORT_COUNTED`, `SHORT_ENDED`,
+  `WARNING_TRIGGERED`, `LIMIT_REACHED`) and `GET /shorts/events` with
+  `event_type` / `device_id` / `start_date` / `end_date` filters; aware
+  timestamps normalized to naive UTC.
+- **Shorts summary** — `GET /shorts/summary` (total count / duration,
+  per-day averages, warning / limit counts) via DB aggregation.
+- **Warning / limit state** — persisted exactly as supplied; Android remains
+  authoritative for real-time limit enforcement; a future scoring/analytics
+  layer may use these fields.
+- **Device ownership & user isolation** — data must reference a device owned
+  by the current user (unknown / other user's device → 404); GET operations
+  return only the current user's data.
+- **Android remains responsible for real-time Shorts detection** — the
+  backend only stores synchronized historical data; no detection loop, no
+  device control, no timers.
+- **Architecture** — same Router → Schema → Service → Repository → SQLAlchemy
+  → MySQL pattern; `shorts_settings` reused from Phase 7; no new tables, no
+  schema changes, no migration.
+- **MySQL persistence** — verified end to end (see
+  `backend/scripts/verify_shorts.py`); existing Settings / Study / Monitoring
+  endpoints still pass.
+- **Scoring / ranking / Cognito / AWS** — all planned later, none implemented.
+- See `backend/README.md` → *Phase 10 — Shorts Data Layer* for full detail.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service
@@ -1943,7 +1979,7 @@ or call `GET /health/db` — expected success: `{"status": "connected", "databas
 OTP / Google / JWT / Cognito auth endpoints (replaces the temporary
 `X-Dev-User-Id`), device-monitoring / study / shorts / web-blocking
 enforcement engines, Android → backend sync, analytics, reports, leaderboard
-scoring, and the notifications backend — each one at a time.
+scoring, AWS deployment, and the notifications backend — each one at a time.
 
 ---
 

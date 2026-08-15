@@ -6,6 +6,7 @@ from app.config import settings
 from app.database import check_database_connection
 from app.routers.monitoring import router as monitoring_router
 from app.routers.settings import router as settings_router
+from app.routers.shorts import router as shorts_router
 from app.routers.study import router as study_router
 
 app = FastAPI(title="ShortsCap Backend")
@@ -18,6 +19,9 @@ app.include_router(study_router)
 
 # Phase 9 — monitoring data layer (app usage sync / events / summary).
 app.include_router(monitoring_router)
+
+# Phase 10 — shorts data layer (usage sync / events / summary).
+app.include_router(shorts_router)
 
 
 @app.exception_handler(SQLAlchemyError)
