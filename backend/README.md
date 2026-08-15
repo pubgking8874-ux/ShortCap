@@ -8,8 +8,9 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > exist) + Phase 6 (settings data layer: repository + service + schemas +
 > GET/PUT `/settings` API with a temporary dev identity) + Phase 7 (settings
 > backend extended to monitoring / shorts / notifications / leaderboard /
-> permissions). Auth, OAuth, engines, and the remaining routers are
-> implemented in later phases, one at a time.
+> permissions) + Phase 8 (study data layer: study schedule / session / break
+> / event APIs on the existing approved tables). Auth, OAuth, engines, and
+> the remaining routers are implemented in later phases, one at a time.
 
 ## Reserved technology stack
 
@@ -150,6 +151,14 @@ backend/
     Settings Repository → SQLAlchemy → MySQL. No new tables, no schema
     changes, no new migration (the approved 24-table schema is reused).
   - See the [Phase 6 — Settings Data Layer](#phase-6--settings-data-layer)
+    section below for the full detail.
+- **Phase 8 — study data layer (schedules / sessions / breaks / events):**
+  - Full vertical slice for the four existing study tables
+    (`study_schedules`, `study_sessions`, `break_sessions`, `study_events`):
+    study schedule CRUD, session start/end/cancel, break start/end, session
+    history and study event history. No new tables, no schema changes, no
+    new migration.
+  - See the [Phase 8 — Study Data Layer](#phase-8--study-data-layer)
     section below for the full detail.
 
 ## Connection status
@@ -319,6 +328,138 @@ and will replace it without touching the endpoints.
 Monitoring / Shorts detection & enforcement engines, notification delivery,
 leaderboard ranking, AWS, Cognito, and Android connectivity.
 
+## Phase 8 — Study Data Layer
+
+Phase 8 implements the backend **study data layer** — study schedules, study
+sessions, break sessions and study events — using the **existing approved
+tables** (`study_schedules`, `study_sessions`, `break_sessions`,
+`study_events`). No new tables were created, no schema was changed, and no
+Alembic migration was added.
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Router | `app/routers/study.py` | All `/study/*` endpoints; reads the temporary dev identity from the `X-Dev-User-Id` header (shared `app/routers/deps.py`) |
+| Schemas | `app/schemas/study.py` | Input/output models: `StudyScheduleCreate/Update/Response`, `StudySessionStart/End/Response`, `BreakSessionResponse`, `StudyEventResponse` |
+| Services | `app/services/study/{schedule,session,break_session,event,errors}.py` | Ownership checks, state transitions, server-side duration calculation, event creation |
+| Repositories | `app/repositories/study/{schedule,session,break_session,event}.py` | DB operations only (`create` / `get` / `list` / `update` / `delete`, filters) |
+| Wiring | `app/main.py` | `include_router(study_router)` under the existing `SQLAlchemyError` handler |
+
+### Study Schedule API
+
+- `POST /study/schedules` — create a schedule (`title` required; positive
+  `duration_minutes`; non-negative `reminder_minutes`; `days_of_week` accepts
+  weekday names like `"Mon"` / `"Monday"`, stored comma-separated and
+  returned as a list).
+- `GET /study/schedules` — list the current user's schedules.
+- `GET /study/schedules/{schedule_id}` — one schedule (404 for other users').
+- `PUT /study/schedules/{schedule_id}` — partial update (only supplied
+  fields change).
+- `DELETE /study/schedules/{schedule_id}` — delete (204).
+
+### Study Session API
+
+- `POST /study/sessions/start` — start a session: `started_at = server now`,
+  `planned_duration_seconds` (optional, positive), `status = active`, plus a
+  `STUDY_STARTED` event. Optional `schedule_id` / `device_id` must belong to
+  the user. **The backend does not run a real-time timer** — it only persists
+  state and history; Android remains responsible for real-time timing and UI.
+- `POST /study/sessions/{session_id}/end` — end an ACTIVE session:
+  `ended_at = server now`, `actual_duration_seconds = ended_at - started_at`
+  (server timestamps, never the client duration), `status = completed`,
+  `STUDY_ENDED` event. `{"cancelled": true}` explicitly represents
+  cancellation (`status = cancelled`, `STUDY_CANCELLED` event).
+- `POST /study/sessions/{session_id}/cancel` — cancel an ACTIVE session
+  (`status = cancelled`, `STUDY_CANCELLED`).
+- `GET /study/sessions` — session history (newest first) with optional
+  filters: `status`, `schedule_id`, `date_from` / `date_to` (on `started_at`).
+- `GET /study/sessions/{session_id}` — one session (404 for other users').
+
+### Break Session API
+
+- `POST /study/sessions/{session_id}/breaks/start` — start a break inside an
+  ACTIVE session (`started_at = server now`, `status = active`,
+  `BREAK_STARTED` event). Rejects breaks on non-active sessions and
+  overlapping active breaks for the same session.
+- `POST /study/breaks/{break_id}/end` — end an ACTIVE break
+  (`ended_at = server now`, `duration_seconds` from server timestamps,
+  `status = completed`, `BREAK_ENDED` event). Already-completed breaks cannot
+  be ended twice.
+
+### Study Event history
+
+- `GET /study/events` — the current user's study events (newest first) with
+  optional filters: `event_type` (one of `STUDY_STARTED`, `STUDY_ENDED`,
+  `STUDY_CANCELLED`, `BREAK_STARTED`, `BREAK_ENDED` — `STUDY_REMINDER` is
+  reserved for the future reminder engine), `session_id`, `date_from` /
+  `date_to`. Only events for actual backend actions are created; `metadata_json`
+  holds small non-sensitive values (e.g. `actual_duration_seconds`), never
+  secrets.
+
+### State rules & validation
+
+- Safe transitions only: `active → completed` / `active → cancelled`;
+  breaks only while the session is `active`; no ending a completed session or
+  break twice; no overlapping active breaks.
+- Validation errors → **422** (schema layer); missing / cross-user records →
+  **404**; invalid state transitions → **400**; database errors → **500** with
+  a generic message (never internals).
+- Timestamps: timezone-consistent **UTC** (naive) everywhere, matching the
+  `func.now()` server defaults — see `app/utils/datetime.py` (`utcnow()`).
+
+### Repository / service / router architecture
+
+Same pattern as the Settings layer: Router → Pydantic Schema → Service →
+Repository → SQLAlchemy Model → MySQL. Repositories contain database
+operations only; services own ownership validation, state transitions,
+duration calculation and event creation; routers contain no database queries;
+no raw SQL lives in services.
+
+### MySQL persistence
+
+Verified end to end: every action creates the correct row in
+`study_schedules`, `study_sessions`, `break_sessions` and `study_events`
+with correct foreign keys, server timestamps and durations, and each action
+produces the matching event row. See `scripts/verify_study.py`.
+
+### Current development identity
+
+The same temporary `X-Dev-User-Id` header as the settings API, now shared via
+`app/routers/deps.py` — the **single Cognito replacement point** for the whole
+backend. Development only; NOT a production security mechanism.
+
+### Real-time timers remain Android-side
+
+The backend is a persistence layer only — no background timers run inside
+FastAPI. Android keeps its existing countdown / break-reminder / UI logic;
+the backend stores the study state and history those sessions produce.
+
+### Cognito
+
+Not implemented (planned for a later phase) — see the development identity
+note above.
+
+### Verification
+
+- `scripts/verify_study.py` — exercises the full study flow (schedule →
+  session → break → end → history → events) plus the invalid-state cases
+  against a running server and a live MySQL database, and reports
+  PASS/FAIL per item. Start the server first:
+
+  ```powershell
+  cd backend
+  .venv\Scripts\python -m uvicorn app.main:app --reload
+  .venv\Scripts\python -m scripts.verify_study
+  ```
+
+- Manual testing is also available through Swagger at
+  <http://127.0.0.1:8000/docs> (send the `X-Dev-User-Id` header, e.g. `1`).
+
+### Not part of this phase
+
+Android connectivity (the Android `StudyRepository` calls these APIs in a
+later phase), the study schedule engine, break-reminder delivery, real-time
+timers, and any new study features.
+
 ## Database Migration
 
 - **Alembic is configured** (`alembic.ini` + `migrations/`) and connected to
@@ -347,10 +488,11 @@ leaderboard ranking, AWS, Cognito, and Android connectivity.
 
 ## Planned / next (NOT implemented yet)
 
-Android → backend settings sync, OTP / Google / JWT / Cognito auth endpoints
-(replaces the temporary `X-Dev-User-Id`), monitoring / study / shorts /
-web-blocking engines, leaderboard scoring, sync endpoints, analytics, and
-notification backends — each one at a time.
+Android → backend sync (settings, study sessions/history), OTP / Google /
+JWT / Cognito auth endpoints (replaces the temporary `X-Dev-User-Id`),
+monitoring / shorts / web-blocking engines and the study schedule/reminder
+engine, leaderboard scoring, sync endpoints, analytics, and notification
+backends — each one at a time.
 
 ## Notes
 

@@ -5,11 +5,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import settings
 from app.database import check_database_connection
 from app.routers.settings import router as settings_router
+from app.routers.study import router as study_router
 
 app = FastAPI(title="ShortsCap Backend")
 
 # Phase 6 — settings data layer (GET /settings, PUT /settings).
 app.include_router(settings_router)
+
+# Phase 8 — study data layer (schedules / sessions / breaks / events).
+app.include_router(study_router)
 
 
 @app.exception_handler(SQLAlchemyError)

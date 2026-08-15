@@ -5,16 +5,17 @@ PUT /settings  -> partial update (only supplied values are changed)
 
 TEMPORARY DEVELOPMENT IDENTITY (NOT PRODUCTION AUTH):
 AWS Cognito is implemented in a later phase. Until then the API reads the
-development user ID from the `X-Dev-User-Id` header. This is DEVELOPMENT
-ONLY — it is not a security mechanism, grants no privileges, and must be
-removed when real authentication lands.
+development user ID from the `X-Dev-User-Id` header (see
+`app/routers/deps.py` — the single Cognito replacement point). This is
+DEVELOPMENT ONLY — it is not a security mechanism, grants no privileges,
+and must be removed when real authentication lands.
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.user import User
+from app.routers.deps import ensure_dev_user, get_dev_user_id
 from app.schemas.settings import (
     LeaderboardSettingResponse,
     LeaderboardSettingUpdate,
@@ -40,57 +41,7 @@ from app.services.settings import (
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-# TEMPORARY DEVELOPMENT ONLY — see module docstring.
-DEV_USER_ID_HEADER = "X-Dev-User-Id"
-
-
-def _ensure_dev_user(db: Session, user_id: int) -> None:
-    """TEMPORARY DEVELOPMENT ONLY — ensure a minimal `users` row exists so
-    the settings row's foreign key (user_settings.user_id -> users.id) can
-    be satisfied while there is no real authentication yet.
-
-    Delete this together with the X-Dev-User-Id header when Cognito is
-    integrated — production users will already exist before any settings
-    call.
-    """
-    exists = db.query(User.id).filter(User.id == user_id).first() is not None
-    if not exists:
-        db.add(User(id=user_id))  # all user columns except id are nullable
-        db.commit()
-
-
-def get_dev_user_id(
-    x_dev_user_id: str | None = Header(default=None, alias=DEV_USER_ID_HEADER),
-) -> int:
-    """Resolve the temporary development user ID from the request header.
-
-    Raises 400 for a missing / malformed ID. This is a clearly marked
-    development-only seam: swap this dependency for real auth (Cognito)
-    later without touching the endpoints.
-    """
-    if x_dev_user_id is None or not x_dev_user_id.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Missing {DEV_USER_ID_HEADER} header. This is a TEMPORARY "
-                "development-only user identity — real authentication "
-                "(Cognito) replaces it in a later phase."
-            ),
-        )
-    try:
-        user_id = int(x_dev_user_id.strip())
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{DEV_USER_ID_HEADER} must be an integer (temporary dev identity).",
-        )
-    if user_id <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{DEV_USER_ID_HEADER} must be a positive integer (temporary dev identity).",
-        )
-    return user_id
-
+# TEMPORARY DEVELOPMENT ONLY — see app/routers/deps.py.
 
 @router.get("", response_model=UserSettingsResponse, summary="Get current settings")
 def get_settings(
@@ -98,7 +49,7 @@ def get_settings(
     db: Session = Depends(get_db),
 ) -> UserSettingsResponse:
     """Return the user's current settings; create app defaults if none exist."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     service = UserSettingsService(db)
     settings = service.get_settings(user_id)
     return UserSettingsResponse.model_validate(settings)
@@ -112,7 +63,7 @@ def update_settings(
 ) -> UserSettingsResponse:
     """Partial update: only the supplied fields change, unspecified fields
     are preserved. Invalid values are rejected with 422 by the schema."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     service = UserSettingsService(db)
     settings = service.update_settings(user_id, payload.model_dump(exclude_unset=True))
     return UserSettingsResponse.model_validate(settings)
@@ -129,7 +80,7 @@ def get_monitoring_settings(
     db: Session = Depends(get_db),
 ) -> MonitoringSettingsResponse:
     """Return the user's monitoring settings (creates defaults on first use)."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     settings = MonitoringSettingsService(db).get_settings(user_id)
     return MonitoringSettingsResponse.model_validate(settings)
 
@@ -141,7 +92,7 @@ def update_monitoring_settings(
     db: Session = Depends(get_db),
 ) -> MonitoringSettingsResponse:
     """Partial update of monitoring settings; unspecified fields preserved."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     settings = MonitoringSettingsService(db).update_settings(
         user_id, payload.model_dump(exclude_unset=True)
     )
@@ -159,7 +110,7 @@ def get_shorts_settings(
     db: Session = Depends(get_db),
 ) -> ShortsSettingsResponse:
     """Return the user's Shorts settings (creates defaults on first use)."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     settings = ShortsSettingsService(db).get_settings(user_id)
     return ShortsSettingsResponse.model_validate(settings)
 
@@ -171,7 +122,7 @@ def update_shorts_settings(
     db: Session = Depends(get_db),
 ) -> ShortsSettingsResponse:
     """Partial update of Shorts settings; unspecified fields preserved."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     settings = ShortsSettingsService(db).update_settings(
         user_id, payload.model_dump(exclude_unset=True)
     )
@@ -189,7 +140,7 @@ def get_notification_preferences(
     db: Session = Depends(get_db),
 ) -> NotificationPreferenceResponse:
     """Return the user's notification preferences (defaults on first use)."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     prefs = NotificationPreferenceService(db).get_preferences(user_id)
     return NotificationPreferenceResponse.model_validate(prefs)
 
@@ -201,7 +152,7 @@ def update_notification_preferences(
     db: Session = Depends(get_db),
 ) -> NotificationPreferenceResponse:
     """Partial update of notification preferences; unspecified fields preserved."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     prefs = NotificationPreferenceService(db).update_preferences(
         user_id, payload.model_dump(exclude_unset=True)
     )
@@ -219,7 +170,7 @@ def get_leaderboard_settings(
     db: Session = Depends(get_db),
 ) -> LeaderboardSettingResponse:
     """Return the user's leaderboard participation settings (defaults on first use)."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     setting = LeaderboardSettingsService(db).get_settings(user_id)
     return LeaderboardSettingResponse.model_validate(setting)
 
@@ -231,7 +182,7 @@ def update_leaderboard_settings(
     db: Session = Depends(get_db),
 ) -> LeaderboardSettingResponse:
     """Partial update of leaderboard participation settings; no ranking logic."""
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     setting = LeaderboardSettingsService(db).update_settings(
         user_id, payload.model_dump(exclude_unset=True)
     )
@@ -264,7 +215,7 @@ def update_permission_states(
     This is a sync mirror only — the Android system remains the real source
     of truth for permission state.
     """
-    _ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
     states = PermissionStateService(db).update_states(
         user_id, [item.model_dump(exclude_unset=True) for item in payload]
     )

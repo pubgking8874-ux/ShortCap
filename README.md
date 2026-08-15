@@ -1759,8 +1759,11 @@ Located in the `backend/` directory; the Android app is **not** touched by the
 backend work.
 
 > **Status:** Phase 2 (running FastAPI server) + Phase 3 (database foundation) +
-> environment configuration. Data models beyond `User`, auth, OAuth, routers,
-> engines, and migrations are implemented in later phases.
+> environment configuration + Phase 4/5 (24 approved SQLAlchemy models + Alembic
+> migration applied) + Phase 6/7 (settings data layer incl. monitoring / shorts /
+> notifications / leaderboard / permissions) + **Phase 8 (study data layer —
+> study schedules / sessions / breaks / events APIs)**. Auth, OAuth, engines,
+> and the remaining routers are implemented in later phases.
 
 ## Reserved technology stack
 
@@ -1815,6 +1818,34 @@ backend work.
 - `backend/requirements.txt` — includes `fastapi`, `uvicorn`,
   `pydantic-settings`, `SQLAlchemy`, `PyMySQL` (python-dotenv ships with
   pydantic-settings).
+
+### Phase 8 — study data layer *(Aug 15, 2026)*
+
+- **Study Schedule API** — `POST/GET /study/schedules`,
+  `GET/PUT/DELETE /study/schedules/{id}` on the existing `study_schedules`
+  table (title / subject / start_time / duration_minutes / days_of_week /
+  reminder_minutes / is_enabled; per-user ownership enforced).
+- **Study Session API** — `POST /study/sessions/start`,
+  `POST /study/sessions/{id}/end`, `POST /study/sessions/{id}/cancel`,
+  `GET /study/sessions` (+ filters), `GET /study/sessions/{id}` on
+  `study_sessions`. Server-side timestamps; durations computed as
+  `ended_at - started_at`; state transitions `active → completed/cancelled`.
+- **Break Session API** — `POST /study/sessions/{id}/breaks/start`,
+  `POST /study/breaks/{break_id}/end` on `break_sessions` (no overlapping
+  active breaks; no breaks on completed sessions).
+- **Study Event history** — `GET /study/events` on `study_events` with
+  `STUDY_STARTED / STUDY_ENDED / STUDY_CANCELLED / BREAK_STARTED /
+  BREAK_ENDED` events created for actual backend actions only.
+- **Architecture** — same Router → Schema → Service → Repository →
+  SQLAlchemy → MySQL pattern as the settings layer; no new tables, no schema
+  changes, no new migration.
+- **MySQL persistence** — verified end to end (see
+  `backend/scripts/verify_study.py`).
+- **Development identity** — same temporary `X-Dev-User-Id` header (now
+  shared via `backend/app/routers/deps.py`); Cognito is planned later.
+- **Real-time timers remain Android-side** — the backend only persists study
+  state/history; it is not a real-time timer.
+- See `backend/README.md` → *Phase 8 — Study Data Layer* for full detail.
 
 ## Database connection status
 
