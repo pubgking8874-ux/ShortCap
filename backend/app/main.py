@@ -1,10 +1,24 @@
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.database import check_database_connection
+from app.routers.settings import router as settings_router
 
 app = FastAPI(title="ShortsCap Backend")
+
+# Phase 6 — settings data layer (GET /settings, PUT /settings).
+app.include_router(settings_router)
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    """Never leak database internals (passwords, URLs, stack traces)."""
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Database error. Please try again later."},
+    )
 
 
 @app.get("/")

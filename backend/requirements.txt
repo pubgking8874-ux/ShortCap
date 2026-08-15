@@ -1,9 +1,11 @@
-# ShortsCap backend — Phase 3 environment (database foundation).
+# ShortsCap backend — Phase 5 environment (database foundation + migrations).
 # Only the packages actually installed and required for this phase are listed.
-# Future phases add auth, Google OAuth, Alembic migrations, engines, etc. one at a time.
+# Future phases add auth, Google OAuth, engines, etc. one at a time.
 
 fastapi
 uvicorn
 pydantic-settings
 SQLAlchemy
 PyMySQL
+alembic
+tzdata

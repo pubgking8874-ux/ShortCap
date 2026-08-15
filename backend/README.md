@@ -3,10 +3,13 @@
 Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 
 > **Status:** Phase 2 (running FastAPI server) + Phase 3 (database foundation +
-> environment configuration): `.env` in place, SQLAlchemy connection layer,
-> database health endpoint, and the first `User` model are implemented. Auth,
-> OAuth, engines, routers, and migrations are implemented in later phases, one
-> at a time.
+> environment configuration) + Phase 4 (approved SQLAlchemy model suite — 24
+> models) + Phase 5 (Alembic migration applied — the 24 MySQL tables now
+> exist) + Phase 6 (settings data layer: repository + service + schemas +
+> GET/PUT `/settings` API with a temporary dev identity) + Phase 7 (settings
+> backend extended to monitoring / shorts / notifications / leaderboard /
+> permissions). Auth, OAuth, engines, and the remaining routers are
+> implemented in later phases, one at a time.
 
 ## Reserved technology stack
 
@@ -14,7 +17,7 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 - **FastAPI** — API framework
 - **SQLAlchemy 2.x** — ORM
 - **pydantic-settings / python-dotenv** — env-driven configuration
-- **Alembic** — database migrations (configured later)
+- **Alembic** — database migrations (Phase 5: configured, initial migration applied)
 - **MySQL** — database (local dev MySQL 8.0.43; AWS RDS for production)
 - **PyMySQL** — MySQL driver
 
@@ -26,6 +29,10 @@ cd backend
 Copy-Item .env.example .env   # or edit the existing .env
 # Set DB_PASSWORD in .env to the local MySQL root password (never committed)
 .venv\Scripts\python -m uvicorn app.main:app --reload
+
+# Database migrations (Phase 5):
+.venv\Scripts\python -m alembic upgrade head   # apply pending migrations
+.venv\Scripts\python -m alembic current        # show applied revision
 ```
 
 Open <http://127.0.0.1:8000/> and <http://127.0.0.1:8000/docs>.
@@ -54,7 +61,7 @@ until local MySQL / AWS RDS credentials are set in `.env`.
 
 - `backend/.env` — local environment (git-ignored). Holds the database config:
   `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER=root`, `DB_NAME=shortscap_db`,
-  and `DB_PASSWORD` (currently blank — fill it manually).
+  and `DB_PASSWORD` (already configured in the working copy — never committed).
 - `backend/.env.example` — committed template; never contains real secrets.
 - Root and backend `.gitignore` both ignore `.env` / `.env.*`.
 
@@ -66,18 +73,21 @@ backend/
 │   ├── main.py              # entry point + /health/db endpoint (running FastAPI app)
 │   ├── config.py            # pydantic-settings, env-driven (Phase 3)
 │   ├── database.py          # SQLAlchemy engine/session/Base/get_db (Phase 3)
-│   ├── models/              # SQLAlchemy models (user.py implemented; rest placeholders)
-│   ├── schemas/             # Pydantic schemas (placeholders)
-│   ├── routers/             # API routes (placeholders)
-│   ├── services/            # business services (placeholders)
+│   ├── models/              # SQLAlchemy models — 24 approved models (Phase 4)
+│   ├── schemas/             # Pydantic schemas (settings domain implemented; rest placeholders)
+│   ├── routers/             # API routes (settings router implemented; rest placeholders)
+│   ├── services/            # business services (settings domain implemented; rest placeholders)
 │   ├── engines/             # server-side processing engines (placeholders)
-│   ├── repositories/        # database access layer (placeholders)
+│   ├── repositories/        # database access layer (settings domain implemented; rest placeholders)
 │   ├── auth/                # OTP / Google / JWT / passwords (placeholders)
 │   ├── middleware/          # security + logging middleware (placeholders)
 │   └── utils/               # datetime / validation / response helpers
 ├── scripts/
 │   └── check_db.py          # real MySQL connectivity check (Phase 3)
-├── migrations/              # Alembic (configured later)
+├── migrations/              # Alembic environment (Phase 5)
+│   ├── env.py               # wired to app.database.Base.metadata + settings URL
+│   ├── script.py.mako       # migration script template
+│   └── versions/            # revision scripts (70d943e5af25 — initial schema)
 ├── tests/                   # pytest package layout (empty)
 ├── requirements.txt
 ├── .env                     # local env (git-ignored, not committed)
@@ -99,28 +109,248 @@ backend/
     performs a real query without exposing the password/URL.
   - `app/main.py` — adds `GET /health/db` (200 `connected` or 503
     `not_connected`; never leaks credentials).
-  - `app/models/user.py` — first model `User` (table `users`): `id`, `name`,
-    `email` (unique), `phone` (unique/optional, for mobile OTP login), `gender`,
-    `date_of_birth`, `created_at`, `updated_at`. *(No tables are created.)*
+  - `app/models/user.py` — first model `User` (table `users`). *(No tables are
+    created.)*
   - `scripts/check_db.py` — connectivity check (honest `success` /
     `not_configured` result).
   - `.env` — created with local DB config (password blank, for manual entry).
   - `requirements.txt` — `fastapi`, `uvicorn`, `pydantic-settings`,
     `SQLAlchemy`, `PyMySQL` (python-dotenv ships with pydantic-settings).
+- **Phase 4 — approved database models (SQLAlchemy):**
+  - All **24 approved models** are implemented as SQLAlchemy 2.x models in
+    `app/models/` and registered on the single shared `Base` metadata via
+    `app/models/__init__.py`. Relationships, foreign keys, unique
+    constraints and indexes are defined per the approved schema (see
+    [Database Models](#database-models) below).
+  - The `users` model was updated to the approved schema (email/phone both
+    optional but unique, `profile_image_url`, `status` with default
+    `"active"`).
+  - **Verified:** all 24 models import cleanly, mappers configure without
+    errors, the FastAPI app still starts, `/docs` returns 200 and
+    `/health/db` returns `connected`.
+  - **No tables were created, altered, or dropped in Phase 4** — Alembic
+    migration and table creation happened in Phase 5 (below).
+- **Phase 5 — Alembic migration & actual MySQL tables:**
+  - Alembic **1.19.1** installed and configured: `migrations/env.py` uses the
+    SAME declarative `Base` as the app (`target_metadata = Base.metadata`,
+    all 24 models imported) and the SAME env-driven database URL from
+    `app.config.settings` — nothing hardcoded, no secrets printed.
+  - Initial migration **`70d943e5af25` — "create approved schema tables"**
+    generated via `alembic revision --autogenerate`, reviewed (only CREATE
+    TABLE/INDEX for the 24 approved tables, no destructive ops), then
+    applied with `alembic upgrade head`.
+  - **MySQL `shortscap_db` now contains the 24 approved tables** (plus
+    Alembic's own `alembic_version` tracking table). Verified with
+    `SHOW TABLES`, `DESCRIBE` of the key tables, foreign-key and index
+    checks, `alembic current` (`70d943e5af25 (head)`) and `alembic history`.
+  - FastAPI restart verified: `GET /`, `/health/db` (connected) and `/docs`
+    all still work. `alembic` added to `requirements.txt`.
+- **Phase 6 — settings data layer (GET/PUT /settings):**
+  - First vertical slice: Android Settings → FastAPI API → Settings Service →
+    Settings Repository → SQLAlchemy → MySQL. No new tables, no schema
+    changes, no new migration (the approved 24-table schema is reused).
+  - See the [Phase 6 — Settings Data Layer](#phase-6--settings-data-layer)
+    section below for the full detail.
 
 ## Connection status
 
 - Local MySQL 8.0.43 installed, `MySQL80` service running, database
-  `shortscap_db` created. The backend `.env` targets it, but `DB_PASSWORD` is
-  **blank pending manual entry**, so the current real status is
-  `not_configured`.
+  `shortscap_db` created, and the backend `.env` is configured —
+  `GET /health/db` returns `connected` (HTTP 200) and
+  `scripts/check_db.py` reports `success`.
 - **AWS RDS production: NOT CONFIGURED** (no RDS instance provisioned).
+
+## Database Models
+
+- **ORM:** SQLAlchemy 2.x (declarative models, one shared `Base` in
+  `app/database.py`).
+- **Database:** MySQL 8.0.43 (local dev); `shortscap_db` is the current
+  development database.
+- The approved initial schema contains **24 models**.
+- Models were created in **Phase 4** (model definitions only); the actual
+  MySQL tables were created in **Phase 5** via Alembic — see
+  [Database Migration](#database-migration).
+
+### Models (24)
+
+| Model | Table |
+| --- | --- |
+| `User` | `users` |
+| `UserProfile` | `user_profiles` |
+| `AuthIdentity` | `auth_identities` |
+| `OtpVerification` | `otp_verifications` |
+| `Device` | `devices` |
+| `UserSettings` | `user_settings` |
+| `PermissionState` | `permission_states` |
+| `StudySchedule` | `study_schedules` |
+| `StudySession` | `study_sessions` |
+| `BreakSession` | `break_sessions` |
+| `StudyEvent` | `study_events` |
+| `MonitoringSettings` | `monitoring_settings` |
+| `AppUsage` | `app_usage` |
+| `MonitoringEvent` | `monitoring_events` |
+| `ShortsSettings` | `shorts_settings` |
+| `ShortsUsage` | `shorts_usage` |
+| `ShortsEvent` | `shorts_events` |
+| `BlockedWebsite` | `blocked_websites` |
+| `WebsiteEvent` | `website_events` |
+| `NotificationPreference` | `notification_preferences` |
+| `NotificationEvent` | `notification_events` |
+| `Feedback` | `feedback` |
+| `LeaderboardSetting` | `leaderboard_settings` |
+| `LeaderboardScore` | `leaderboard_scores` |
+
+Key constraints (per approved schema): `users.email` and `users.phone` are
+optional-but-unique; `devices.device_uuid` is unique; the one-to-one rows
+(`user_profiles`, `user_settings`, `monitoring_settings`, `shorts_settings`,
+`notification_preferences`, `leaderboard_settings`) have a unique `user_id`;
+`blocked_websites.normalized_domain` is indexed and unique per user. OTP rows
+store only `otp_hash` — never plain OTP values. `leaderboard_scores` has no
+`rank` column (rank is derived later from score ordering).
+
+## Phase 6 — Settings Data Layer
+
+First vertical slice of the backend: the **`user_settings`** domain end to end.
+
+| Layer | File | What it does |
+| --- | --- | --- |
+| Router | `app/routers/settings.py` | `GET /settings` + `PUT /settings` (partial update). Reads the temporary dev identity from the `X-Dev-User-Id` header |
+| Service | `app/services/settings/user_settings.py` | Business logic: default creation on first use, partial-update semantics, `get_settings` / `update_settings` / `ensure_settings` |
+| Repository | `app/repositories/settings/user_settings.py` | DB ops only: `get_by_user_id`, `create_default`, `update`, `upsert` — one row per user (unique `user_id`) |
+| Schemas | `app/schemas/settings.py` | `UserSettingsResponse` (full payload) + `UserSettingsUpdate` (all-optional partial update) |
+| Wiring | `app/main.py` | `include_router(settings_router)` + a generic `SQLAlchemyError` handler (never leaks internals) |
+
+### API
+
+- `GET /settings` — returns the user's current settings; creates the app's
+  safe defaults the first time (`theme: dark`, `language: en`,
+  `notifications_enabled: true`, `sound_enabled: true`).
+- `PUT /settings` — partial update: **only the supplied values change**,
+  unspecified values are preserved. Returns the updated settings.
+- Validation (mirrors the app, no invented values): `theme` ∈
+  `dark | light | system` (Android `ThemeMode`), `language` ∈
+  `en | hi | ur | zh | es` (Android `AppLanguage` BCP-47 codes),
+  `timezone` = valid IANA name (requires `tzdata` on Windows).
+- Errors: missing/invalid dev user ID → `400`; invalid setting value → `422`;
+  database errors → `500` with a generic message (no passwords, URLs, or
+  stack traces exposed).
+
+### TEMPORARY DEVELOPMENT USER IDENTITY (NOT PRODUCTION AUTH)
+
+AWS Cognito is planned for a later phase. Until then the settings API
+identifies the user via the **`X-Dev-User-Id`** request header
+(e.g. `X-Dev-User-Id: 1`). A minimal `users` row is auto-created for the dev
+ID so the settings row's foreign key is satisfied.
+
+This is **development only** and is **NOT a production security mechanism** —
+it grants no privileges and must be removed when real authentication lands.
+It is isolated in `app/routers/settings.py` (`get_dev_user_id` +
+`_ensure_dev_user`) so Cognito integration replaces it without touching the
+endpoints.
+
+### MySQL persistence
+
+Verified end to end: `GET` → default row created; `PUT` → row updated;
+`GET` again → saved values returned; `SELECT * FROM user_settings` shows the
+persisted row (e.g. user 1: `light / hi / Asia/Kolkata / on / on`). This is
+the basis for future device synchronization.
+
+### Current status
+
+- Repository / Service / Schemas / Router: implemented and verified.
+- Android is **NOT connected yet** — client synchronization is the next step
+  after backend verification.
+- Monitoring, Study, Shorts, Rank, AWS and Cognito are **not** part of this
+  phase.
+
+## Phase 7 — Settings Backend
+
+The Phase 6 pattern (Router → Service → Repository → SQLAlchemy → MySQL) is
+now applied to the remaining settings domains. Every domain follows the same
+architecture; no new tables and no schema changes were made.
+
+| Domain | Endpoints | Files (services / repositories) |
+| --- | --- | --- |
+| Monitoring settings | `GET` / `PUT /settings/monitoring` | `services/settings/monitoring.py`, `repositories/settings/monitoring.py` |
+| Shorts settings | `GET` / `PUT /settings/shorts` | `services/settings/shorts.py`, `repositories/settings/shorts.py` |
+| Notification preferences | `GET` / `PUT /settings/notifications` | `services/settings/notification.py`, `repositories/settings/notification.py` |
+| Leaderboard settings | `GET` / `PUT /settings/leaderboard` | `services/settings/leaderboard.py`, `repositories/settings/leaderboard.py` |
+| Permission states | `GET` / `PUT /settings/permissions` | `services/settings/permission.py`, `repositories/settings/permission.py` |
+
+All schemas live in `app/schemas/settings.py`; all routes in
+`app/routers/settings.py` (same router, same temporary dev identity).
+
+### Behavior & validation
+
+- **GET** returns the user's current settings; the first call creates the
+  model-default row (`monitoring` on / on / strict off; `shorts` enabled /
+  limits unset; notifications on / on / on; leaderboard enabled / not opted
+  in). Permissions GET returns an empty list until something is synced — no
+  defaults are invented.
+- **PUT** is a partial update: only supplied values change, unspecified
+  values are preserved.
+- Validation mirrors the Android app: booleans are real booleans; Shorts
+  numeric limits are non-negative; `display_name` ≤ 100 chars; permission
+  keys are the app's real `PermissionId` values (`USAGE_ACCESS`,
+  `ACCESSIBILITY`, `OVERLAY`, `NOTIFICATIONS`, `BATTERY_OPTIMIZATION`,
+  `STORAGE_MEDIA`, `SYSTEM_AUDIO_ACCESS`); invalid input → `422`.
+- **Permission states are a sync mirror only** — the Android system remains
+  the real source of truth; this stores the last-known synchronized state.
+- **Leaderboard settings are participation/display preferences only** — no
+  score / rank / winner calculation.
+
+### MySQL persistence
+
+Verified per domain for dev user 3 (`SELECT …`):
+`monitoring_settings` strict=on, monitoring=off; `shorts_settings` limits
+45 / 30; `notification_preferences` study=off; `leaderboard_settings`
+opted-in as "Rahul"; `permission_states` USAGE_ACCESS=enabled,
+ACCESSIBILITY=disabled. `GET` after `PUT` returns exactly these values.
+
+### Temporary development identity
+
+The same `X-Dev-User-Id` header as Phase 6 (isolated in
+`app/routers/settings.py`) — **temporary development only, NOT a production
+authentication mechanism**. Cognito integration is planned for a later phase
+and will replace it without touching the endpoints.
+
+### Not part of this phase
+
+Monitoring / Shorts detection & enforcement engines, notification delivery,
+leaderboard ranking, AWS, Cognito, and Android connectivity.
+
+## Database Migration
+
+- **Alembic is configured** (`alembic.ini` + `migrations/`) and connected to
+  the app's single SQLAlchemy `Base` metadata (`target_metadata =
+  Base.metadata`). The database URL comes from the environment
+  (`app.config.settings`) — it is not hardcoded and passwords are never
+  written here.
+- **Initial migration created:** revision **`70d943e5af25`** —
+  *"create approved schema tables"* — generated from the 24 approved models.
+- **Migration applied:** `alembic upgrade head` — `alembic current` shows
+  `70d943e5af25 (head)`.
+- **Actual MySQL tables created** in `shortscap_db` (MySQL 8.0.43): the 24
+  approved tables (`users`, `user_profiles`, `auth_identities`,
+  `otp_verifications`, `devices`, `user_settings`, `permission_states`,
+  `study_schedules`, `study_sessions`, `break_sessions`, `study_events`,
+  `monitoring_settings`, `app_usage`, `monitoring_events`, `shorts_settings`,
+  `shorts_usage`, `shorts_events`, `blocked_websites`, `website_events`,
+  `notification_preferences`, `notification_events`, `feedback`,
+  `leaderboard_settings`, `leaderboard_scores`), plus Alembic's own
+  `alembic_version` tracking table. Verified via `SHOW TABLES`, `DESCRIBE`,
+  foreign-key and index checks.
+- **Source of truth:** the SQLAlchemy models are the source schema; Alembic
+  manages schema changes. Future database changes MUST go through Alembic
+  migrations (`alembic revision --autogenerate` + `alembic upgrade head`) —
+  avoid manual schema changes.
 
 ## Planned / next (NOT implemented yet)
 
-Data models/tables beyond `users`, migrations, OTP / Google / JWT auth
-endpoints, monitoring / study / shorts / web-blocking engines, sync endpoints,
-analytics, and notification backends — each one at a time.
+Android → backend settings sync, OTP / Google / JWT / Cognito auth endpoints
+(replaces the temporary `X-Dev-User-Id`), monitoring / study / shorts /
+web-blocking engines, leaderboard scoring, sync endpoints, analytics, and
+notification backends — each one at a time.
 
 ## Notes
 
