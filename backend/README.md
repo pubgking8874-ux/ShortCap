@@ -28,7 +28,12 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > rank change designed and simulated) + Phase 15B (Rank / Leaderboard engine
 > — read-only `GET /rank/weekly|monthly` implementing the approved spec
 > exactly, consuming the Score Engine as the only score source; the board
-> stays DYNAMIC, `leaderboard_scores` is not written). Auth, OAuth, and the
+> stays DYNAMIC, `leaderboard_scores` is not written) + Phase 16 (Android ↔
+> backend synchronization: network layer, offline-first sync queue with
+> retry/dedupe, settings/study/monitoring/shorts/web syncers, read-only
+> Reports/Score/Rank clients, temporary dev identity; Android remains the
+> real-time authority — study timer, monitoring, Shorts detection, web
+> blocking). Auth, OAuth, and the
 > remaining routers are implemented in later phases, one at a time.
 
 ## Reserved technology stack
@@ -272,6 +277,29 @@ constraint. One Alembic migration: **`657ba9f4d4f8`** (applied, verified).
     no N+1), `leaderboard_scores` is not written, no caching, no rank
     storage.
   - See the [Phase 15B — Rank / Leaderboard Engine](#phase-15b--rank--leaderboard-engine)
+    section below for the full detail.
+- **Phase 16 — Android ↔ Backend Synchronization (implemented):**
+  - Android network layer (`BackendConfig` base URL with emulator host
+    `10.0.2.2` + centralized dev identity header, `BackendApi` /
+    `HttpBackendApi` single HTTP client, 1:1 DTOs, `ApiResult`
+    success/error handling) and an offline-first sync core (`SyncModels` /
+    `SyncQueue` / `SyncManager` with PENDING → SYNCING → SYNCED/FAILED
+    states, bounded retry + backoff for transient errors, dedupe keys).
+  - Domain syncers for settings, study, monitoring, shorts (platform +
+    surface retained) and web events, wired into the existing repository
+    seams (`SettingsRepository`, `StudyRepository`, `ShortsMonitoringPipeline`,
+    `WebRepository`) with graceful fallback when the backend is unreachable;
+    read-only clients for Reports / Your Score / Rank.
+  - Conflict policy: local user change is authoritative immediately;
+    backend response confirms persistence; server values used on refresh
+    sync. Android remains the real-time authority (study timer, monitoring,
+    Shorts detection, web blocking); backend remains authoritative for
+    persisted history, Reports, Score and Rank.
+  - Verification: `backend/scripts/verify_sync_contracts.py` (86 checks) +
+    Android `SyncManagerTest` (10 tests) — `:app:compileDebugKotlin` clean,
+    `:app:testDebugUnitTest` 20/20. No backend schema change (Alembic still
+    `657ba9f4d4f8 (head)`).
+  - See the [Phase 16 — Android ↔ Backend Synchronization](#phase-16--android--backend-synchronization)
     section below for the full detail.
 
 ## Connection status
@@ -1700,6 +1728,122 @@ script verifies direct MySQL state (rows seeded, cleaned up afterwards).
 Score snapshots / `leaderboard_scores` writes, caching, weekly/monthly
 winner announcement logic, Android Rank-screen integration (a later sync
 phase), AWS, Cognito, schema changes.
+
+## Phase 16 — Android ↔ Backend Synchronization
+
+Phase 16 adds the **Android ↔ backend synchronization layer**: the Android
+app now pushes its local data to the already-built FastAPI APIs and reads
+server-authoritative Reports / Your Score / Rank. Android remains the
+**real-time authority** for the study timer, monitoring, Shorts detection
+and web blocking; the backend remains authoritative for persisted
+historical data, Reports, Your Score and Rank. No existing Android engine
+was replaced and no backend endpoint was changed.
+
+### Android network layer
+
+| Layer | Files | What it does |
+| --- | --- | --- |
+| Config | `app/src/main/java/com/shortscap/app/network/BackendConfig.kt` | Base URL config: emulator host `http://10.0.2.2:8000/` (NOT `127.0.0.1`), overridable via a build config / env-style constant for local device vs future staging/production; centralized timeouts and the temporary dev identity header (`X-Dev-User-Id`) |
+| API | `app/src/main/java/com/shortscap/app/network/BackendApi.kt` + `HttpBackendApi.kt` | Single HTTP client (project convention — `HttpURLConnection`, no Retrofit/OkHttp was present, nothing new added): JSON in/out, 2xx/4xx/5xx handling, every backend endpoint the app uses |
+| DTOs | `app/src/main/java/com/shortscap/app/network/Dtos.kt` | Request/response models matching the backend schemas 1:1 (settings, study, monitoring, shorts, web, reports, score, rank) |
+| Results | `app/src/main/java/com/shortscap/app/network/ApiResult.kt` | `Success` / `HttpError` / `NetworkError` sealed result — loading/error/empty states map cleanly onto it |
+
+### Sync core (offline-first, reusable)
+
+- `app/src/main/java/com/shortscap/app/sync/SyncModels.kt` — `SyncRecord` with
+  states `PENDING → SYNCING → SYNCED / FAILED` and an opaque dedupe `key`.
+- `app/src/main/java/com/shortscap/app/sync/SyncQueue.kt` — minimal in-memory
+  FIFO queue + index by dedupe key (a record already queued/synced for the
+  same key is not enqueued twice).
+- `app/src/main/java/com/shortscap/app/sync/SyncManager.kt` — orchestrates
+  draining via an injectable `SyncDispatcher`: bounded retry with backoff for
+  transient failures (timeout / network / 5xx), **no** retry for 400/401/403/
+  404/422, marks `SYNCED` only on success, never drops records on failure.
+- `app/src/main/java/com/shortscap/app/sync/SyncJson.kt` — tiny pure-Kotlin
+  JSON builder (keeps the syncers JVM-testable without Android runtime deps).
+- `app/src/main/java/com/shortscap/app/sync/Syncers.kt` — one small syncer per
+  domain (settings, study schedule/session/break/event, monitoring
+  usage/events, shorts usage/events incl. platform + surface, web events) and
+  a `RoutingDispatcher` mapping each record kind to its backend call.
+- `app/src/main/java/com/shortscap/app/sync/ReadClients.kt` — read-only
+  clients for Reports, Score and Rank with a small in-memory cache
+  (clearly separated: cached local copy vs server-authoritative data).
+- `app/src/main/java/com/shortscap/app/sync/SyncCoordinator.kt` — ties the
+  queue, dispatcher and read clients together (enqueue, drain, fetch/refresh).
+
+### Repository seams (graceful fallback)
+
+- `SettingsRepository` — after a local save, enqueues the corresponding
+  `PUT /settings/*` record; on refresh, pulls `GET /settings` (and
+  `/monitoring` `/shorts` `/notifications` `/leaderboard` `/permissions`)
+  and applies server values to local state. Conflict policy: **local user
+  change is authoritative immediately; a successful backend response
+  confirms persistence; server values are used on initial/refresh sync and
+  never silently overwrite a fresh local change.**
+- `StudyRepository` — schedule create/update/delete, session start/end,
+  break start/end and study events are enqueued as sync records. The study
+  TIMER stays fully local (Phase 8 behavior unchanged).
+- `ShortsMonitoringPipeline` — the Phase 11B local Shorts records (platform
+  + surface + duration + count retained) drain through the sync layer on
+  `POST /shorts/usage/sync` / `POST /shorts/events`.
+- `WebRepository` — web events (BLOCK_ATTEMPT / BLOCKED / UNBLOCKED) enqueue
+  on `POST /web/events`; blocked-website configuration can be pulled via
+  `GET /websites/blocked`. Blocking itself stays fully local.
+- Every seam degrades gracefully: if the backend is unreachable the app
+  continues to work exactly as before (records stay queued, nothing is
+  discarded).
+
+### API mapping (what syncs where)
+
+| Android data | Backend API | Direction |
+| --- | --- | --- |
+| Settings | `GET/PUT /settings`, `GET/PUT /settings/{monitoring,shorts,notifications,leaderboard,permissions}` | both |
+| Study schedules / sessions / breaks / events | `/study/schedules`, `/study/sessions/...`, `/study/breaks/...`, `/study/events` | push + pull |
+| App usage / monitoring events | `POST /monitoring/app-usage/sync`, `GET /monitoring/app-usage`, `POST/GET /monitoring/events` | push + pull |
+| Shorts usage / events (platform + surface) | `POST /shorts/usage/sync`, `GET /shorts/usage`, `POST/GET /shorts/events` | push + pull |
+| Web events / blocked sites | `POST /web/events`, `GET /websites/blocked` | push + pull |
+| Reports | `GET /reports/daily|weekly|monthly` | pull (read-only) |
+| Your Score | `GET /score/daily|weekly|monthly` | pull (read-only) |
+| Rank / Leaderboard | `GET /rank/weekly|monthly` | pull (read-only) |
+
+### Offline-first + retry + dedupe
+
+Local capture → local queue → when the network is available → upload →
+success → mark `SYNCED`. A temporarily unavailable backend never causes
+local data loss. Retries are bounded with backoff and only for transient
+errors; client errors are surfaced immediately. Duplicate uploads are
+prevented two ways: the Android dedupe key per logical record AND the
+backend's existing idempotent sync endpoints (same usage summary synced
+twice → one row).
+
+### Development identity (temporary)
+
+For local development only, the API client sends the backend's temporary
+`X-Dev-User-Id` header (centralized in `BackendConfig` — no fake login, no
+JWT, no OTP). Cognito will later replace this identity boundary; the header
+lives in one place so the swap is a single-file change.
+
+### Verification
+
+- `backend/scripts/verify_sync_contracts.py` — end-to-end (86 checks) over
+  EVERY contract the Android client uses: settings fetch/update/refresh,
+  study schedule/session/break/event sync, monitoring usage + event sync +
+  duplicate handling, shorts usage + event sync with platform/surface
+  retained, web events, reports/score/rank retrieval for daily/weekly/
+  monthly, user isolation, and full regression of all previous layers.
+- Android unit tests: `app/src/test/java/com/shortscap/app/sync/SyncManagerTest.kt`
+  — 10 tests (queue states, dedupe, bounded retry with backoff, no-retry on
+  4xx, offline capture → drain on restore, success-only `SYNCED` marking,
+  dispatcher routing); run with `./gradlew :app:testDebugUnitTest`.
+- Build: `./gradlew :app:compileDebugKotlin` — compiles cleanly.
+
+### Not part of this phase
+
+Cognito / real authentication, AWS deployment, the security-hardening phase,
+Room/DataStore-based durable sync queue (the queue is in-memory for this
+phase; the sync layer is designed so a durable queue can replace it without
+changing the syncers), Android UI redesigns, backend schema changes (none —
+Alembic still `657ba9f4d4f8 (head)`).
 
 ## Cross-Platform Short-Form Content Architecture
 

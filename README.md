@@ -1780,7 +1780,12 @@ backend work.
 > **Phase 15B (Rank / Leaderboard engine — read-only
 > `GET /rank/weekly|monthly` implementing the approved spec, consuming the
 > Score Engine as the only score source; dynamic board, `leaderboard_scores`
-> not written)**. Auth, OAuth, and the remaining routers are implemented in
+> not written)** + **Phase 16 (Android ↔ backend synchronization — network
+> layer, offline-first sync queue with retry/dedupe, settings / study /
+> monitoring / shorts / web syncers, read-only Reports / Score / Rank
+> clients, temporary dev identity; Android remains the real-time authority
+> for the study timer, monitoring, Shorts detection and web blocking)**.
+> Auth, OAuth, and the remaining routers are implemented in
 > later phases.
 
 ## Reserved technology stack
@@ -2307,6 +2312,47 @@ platforms), never as a single-app feature.
   the Phase 15A logic written in the script (RankService is not imported).
 - See `backend/README.md` → *Phase 15B — Rank / Leaderboard Engine* for
   full detail.
+
+### Phase 16 — Android ↔ Backend Synchronization *(Aug 15, 2026)*
+
+- **Android network layer:** `BackendConfig` (emulator host
+  `http://10.0.2.2:8000/` — NOT `127.0.0.1` — overridable for staging /
+  production; centralized timeouts + temporary dev identity header
+  `X-Dev-User-Id`), single `HttpBackendApi` HTTP client (project
+  `HttpURLConnection` convention — no Retrofit/OkHttp was present), 1:1
+  DTOs with the backend schemas, and `ApiResult` success/error handling.
+- **Offline-first sync core:** `SyncModels` (`PENDING → SYNCING → SYNCED /
+  FAILED`), `SyncQueue` (in-memory FIFO + dedupe key), `SyncManager`
+  (bounded retry with backoff for transient failures only — never 4xx;
+  marks `SYNCED` only on success; never drops local data when offline).
+- **Domain syncers:** settings, study (schedule/session/break/event),
+  monitoring (usage + events), shorts (usage + events, platform + surface
+  retained) and web events — wired into the existing repository seams
+  (`SettingsRepository`, `StudyRepository`, `ShortsMonitoringPipeline`,
+  `WebRepository`) with graceful fallback when the backend is unreachable.
+- **Read-only clients:** Reports (`GET /reports/daily|weekly|monthly`),
+  Your Score (`GET /score/daily|weekly|monthly`) and Rank
+  (`GET /rank/weekly|monthly`) with a small cache — server data stays
+  authoritative, no Kotlin re-implementation of the Score/Rank engines.
+- **Conflict policy:** local user change is authoritative immediately;
+  a successful backend response confirms persistence; server values are
+  used on initial/refresh sync and never silently overwrite a fresh local
+  change. Duplicate uploads are prevented by the Android dedupe key AND the
+  backend's existing idempotent sync endpoints.
+- **Responsibility split:** Android remains the real-time authority (study
+  timer, monitoring, Shorts detection, web blocking); the backend remains
+  authoritative for persisted historical data, Reports, Your Score and
+  Rank.
+- **Temporary identity:** local dev only — the centralized `X-Dev-User-Id`
+  header; no fake login / JWT / OTP; Cognito replaces this boundary later.
+- **No backend schema change** (Alembic still `657ba9f4d4f8 (head)`), no
+  AWS/Cognito, no security-hardening work.
+- **Verification:** `backend/scripts/verify_sync_contracts.py` (86 checks
+  over every contract the Android client uses + full regression); Android
+  `SyncManagerTest` (10 new tests); `:app:compileDebugKotlin` clean,
+  `:app:testDebugUnitTest` 20/20.
+- See `backend/README.md` → *Phase 16 — Android ↔ Backend Synchronization*
+  for full detail.
 
 ## Database connection status
 

@@ -1,22 +1,63 @@
 package com.shortscap.app.screens.settings
 
 import com.shortscap.app.model.MonitoringSettings
+import com.shortscap.app.network.ApiResult
+import com.shortscap.app.network.MonitoringSettingsDto
+import com.shortscap.app.sync.SettingsSyncer
+import com.shortscap.app.sync.SyncCoordinator
 
 /**
  * SettingsRepository — backend seam for all Settings data, mirroring the
- * ProfileRepository pattern. Today the ViewModel holds local state and the UI
- * never calls these directly; each function below documents the future API it
- * will call. Swapping the data source (Python/Firebase/AWS backend, or a
- * local Room database) requires **no UI changes**.
+ * ProfileRepository pattern. Since Phase 16, the seam is wired to the real
+ * backend through [SyncCoordinator]:
+ *
+ *  - reads fetch from the backend (server-authoritative during initial
+ *    sync / refresh) and FALL BACK to the local model when the backend is
+ *    unreachable — the UI never breaks offline;
+ *  - writes enqueue a sync record immediately (local change is
+ *    authoritative; the successful backend response confirms persistence —
+ *    conflict policy, Phase 16 §7).
+ *
+ * The UI keeps consuming the same [MonitoringSettings] shape — no screen
+ * changes required.
  */
 object SettingsRepository {
 
-    /** GET Monitoring Settings — load the full [MonitoringSettings] model. */
-    suspend fun getMonitoringSettings(): MonitoringSettings = MonitoringSettings()
+    /**
+     * GET Monitoring Settings — server value when available, local fallback
+     * otherwise. Device monitoring / monitoring / strict mode map 1:1 to the
+     * backend `monitoring_settings` fields; the app's screen-time limit and
+     * per-platform toggles stay local (the backend schema does not carry
+     * them — no invented fields).
+     */
+    suspend fun getMonitoringSettings(): MonitoringSettings {
+        return when (val result = SyncCoordinator.api.getMonitoringSettings()) {
+            is ApiResult.Success -> {
+                val dto: MonitoringSettingsDto = result.data
+                MonitoringSettings(
+                    enabled = dto.monitoringEnabled ?: true,
+                    appBlockingEnabled = dto.deviceMonitoringEnabled ?: true,
+                    strictModeEnabled = dto.strictModeEnabled ?: false,
+                )
+            }
+            else -> MonitoringSettings() // offline / error -> local fallback
+        }
+    }
 
-    /** UPDATE Monitoring Settings — persist the whole model (cloud sync). */
+    /**
+     * UPDATE Monitoring Settings — persist the whole model (cloud sync).
+     * Enqueues the sync record; the queue retries until the backend confirms.
+     */
     suspend fun updateMonitoringSettings(settings: MonitoringSettings) {
-        // TODO: POST /settings/monitoring — Firebase / AWS backend or Room.
+        SyncCoordinator.enqueue(
+            SettingsSyncer.monitoringSettings(
+                mapOf(
+                    "deviceMonitoringEnabled" to settings.appBlockingEnabled,
+                    "monitoringEnabled" to settings.enabled,
+                    "strictModeEnabled" to settings.strictModeEnabled,
+                )
+            )
+        )
     }
 
     /** GET Blocked Apps — identifiers of the apps the user has blocked. */

@@ -186,6 +186,43 @@ object WebRepository {
         return d.removePrefix("www.").substringBefore(".").replaceFirstChar { it.uppercase() }
     }
 
+    // ---- Phase 16 backend sync hooks -------------------------------------
+    // The Android web/blocking engine remains the real-time authority; the
+    // backend persists history. These hooks enqueue website events through
+    // the shared sync layer (POST /web/events). The UI keeps consuming the
+    // seed/local rule list — no screen changes.
+
+    /**
+     * Enqueues one website event for the backend (BLOCK_ATTEMPT / BLOCKED /
+     * UNBLOCKED). [deviceId] must reference the user's device in the
+     * backend; [occurredAtIso] is optional (server stamps UTC now).
+     */
+    fun enqueueWebEvent(
+        deviceId: Int,
+        domain: String,
+        eventType: String,
+        occurredAtIso: String? = null,
+    ): Boolean = com.shortscap.app.sync.SyncCoordinator.enqueueWebEvent(
+        com.shortscap.app.network.WebEventDto(
+            deviceId = deviceId,
+            domain = domain,
+            eventType = eventType,
+            occurredAt = occurredAtIso,
+        )
+    )
+
+    /**
+     * Fetches the user's blocked-domain configuration from the backend
+     * (GET /websites/blocked). Returns raw backend rows (id, domain,
+     * normalized_domain, is_blocked, ...) or an empty list when the backend
+     * is unreachable — never throws.
+     */
+    suspend fun fetchBlockedWebsitesFromBackend(): List<Map<String, Any?>> =
+        when (val result = com.shortscap.app.sync.SyncCoordinator.api.listBlockedWebsites()) {
+            is com.shortscap.app.network.ApiResult.Success -> result.data
+            else -> emptyList()
+        }
+
     // ---- Future backend / tracking seams (documented only — not implemented) ----
     // Once a real data source connects (backend API, database, or a
     // browser/VPN/accessibility-based tracking mechanism), swap the seeds

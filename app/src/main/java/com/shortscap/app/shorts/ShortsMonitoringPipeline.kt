@@ -132,4 +132,14 @@ class ShortsMonitoringPipeline(
 
     /** Local records pending sync (read-only view). */
     fun localStore(): ShortsLocalStore = store
+
+    /**
+     * Phase 16 — drains the local Shorts store into the backend sync queue
+     * (POST /shorts/usage/sync + /shorts/events) and returns the number of
+     * records enqueued. Called by the app when the network is available; the
+     * local records stay until a sync is confirmed (offline-first — nothing
+     * is discarded). [deviceId] must reference the user's backend device.
+     */
+    fun drainToSync(deviceId: Int): Int =
+        com.shortscap.app.sync.SyncCoordinator.drainShortsLocalStore(store, deviceId)
 }
