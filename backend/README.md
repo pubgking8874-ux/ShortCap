@@ -1882,8 +1882,9 @@ layer ONLY — it is not a new detection engine and not a new counting engine.
 ```
 MonitoringEventHub
   -> existing detection pipeline (registry + adapters)
-  -> ShortFormSurfaceState  (new listener seam on ShortsMonitoringPipeline)
-  -> ShortsHudController
+  -> ShortFormSurfaceState  (listener seam on ShortsMonitoringPipeline)
+  -> ShortsHudTriggerEngine   (dedicated show/hide + live-data engine)
+  -> ShortsHudController      (overlay lifecycle only)
   -> floating overlay (ShortsHudOverlayManager)
 ```
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -113,10 +114,15 @@ fun ShortsHudContent(
                     scaleY = entryScale
                 },
         ) {
+            val secondary = secondaryCaption(
+                platformLabel = uiState.platformLabel,
+                remaining = uiState.remaining,
+                cycleState = uiState.cycleState,
+            )
             when (appearance) {
-                ShortsHudAppearance.SHORTSCAP -> ShortsCapChip(count, limit, colors.Accent)
-                ShortsHudAppearance.BRAIN -> BrainChip(count = count, limit = limit)
-                ShortsHudAppearance.LIVE_COUNTER -> LiveCounterChip(count, limit, colors.Accent)
+                ShortsHudAppearance.SHORTSCAP -> ShortsCapChip(count, limit, secondary, colors.Accent)
+                ShortsHudAppearance.BRAIN -> BrainChip(count = count, limit = limit, secondary = secondary)
+                ShortsHudAppearance.LIVE_COUNTER -> LiveCounterChip(count, limit, secondary, colors.Accent)
             }
         }
     }
@@ -139,11 +145,23 @@ class ShortsHudUiState(
 
     var limit by mutableStateOf(initialLimit)
         internal set
+
+    /** Remaining Shorts in the current cycle (never negative). */
+    var remaining by mutableStateOf(0)
+        internal set
+
+    /** Friendly 24-hour cycle-state label (ACTIVE / WARNING / LIMIT REACHED / …). */
+    var cycleState by mutableStateOf("")
+        internal set
+
+    /** Friendly current-platform label (null when the platform is unknown). */
+    var platformLabel by mutableStateOf<String?>(null)
+        internal set
 }
 
-/** Branded chip: [logo] 4 / 200 — primary accent, compact. */
+/** Branded chip: [logo] 4 / 200 + live secondary line — primary accent, compact. */
 @Composable
-private fun ShortsCapChip(count: Int, limit: Int, accent: Color) {
+private fun ShortsCapChip(count: Int, limit: Int, secondary: String?, accent: Color) {
     val colors = LocalScColors.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(
@@ -151,40 +169,61 @@ private fun ShortsCapChip(count: Int, limit: Int, accent: Color) {
             contentDescription = "ShortsCap",
             modifier = Modifier.size(22.dp),
         )
-        // Tiny scale/fade on the count itself when it changes.
-        key(count) {
-            val countScale by animateFloatAsState(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 180),
-                label = "countBump",
-            )
-            Text(
-                text = "  $count / $limit",
-                color = colors.TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.scale(countScale),
-            )
+        Column {
+            // Tiny scale/fade on the count itself when it changes.
+            key(count) {
+                val countScale by animateFloatAsState(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 180),
+                    label = "countBump",
+                )
+                Text(
+                    text = "  $count / $limit",
+                    color = colors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.scale(countScale),
+                )
+            }
+            if (!secondary.isNullOrBlank()) {
+                Text(
+                    text = "  $secondary",
+                    color = colors.TextSecondary,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
 
-/** Minimal live counter chip: "04 / 200". */
+/** Minimal live counter chip: "04 / 200" (+ tiny secondary line when set). */
 @Composable
-private fun LiveCounterChip(count: Int, limit: Int, accent: Color) {
-    key(count) {
-        val countScale by animateFloatAsState(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 180),
-            label = "liveCountBump",
-        )
-        Text(
-            text = "${count.toString().padStart(2, '0')} / $limit",
-            color = accent,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.scale(countScale),
-        )
+private fun LiveCounterChip(count: Int, limit: Int, secondary: String?, accent: Color) {
+    val colors = LocalScColors.current
+    Column(horizontalAlignment = Alignment.End) {
+        key(count) {
+            val countScale by animateFloatAsState(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 180),
+                label = "liveCountBump",
+            )
+            Text(
+                text = "${count.toString().padStart(2, '0')} / $limit",
+                color = accent,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.scale(countScale),
+            )
+        }
+        if (!secondary.isNullOrBlank()) {
+            Text(
+                text = secondary,
+                color = colors.TextSecondary,
+                fontSize = 9.sp,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -199,7 +238,7 @@ private fun LiveCounterChip(count: Int, limit: Int, accent: Color) {
  * normal recomposition never restarts the video.
  */
 @Composable
-private fun BrainChip(count: Int, limit: Int) {
+private fun BrainChip(count: Int, limit: Int, secondary: String?) {
     val colors = LocalScColors.current
     val ratio = if (limit > 0) count.toFloat() / limit else 0f
     val brainState = BrainState.forRatio(ratio)
@@ -217,19 +256,29 @@ private fun BrainChip(count: Int, limit: Int) {
                 .clip(RoundedCornerShape(12.dp))
                 .semantics { contentDescription = "Brain $brainState" },
         )
-        key(count) {
-            val countScale by animateFloatAsState(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 180),
-                label = "brainCountBump",
-            )
-            Text(
-                text = "  $count / $limit",
-                color = colors.TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.scale(countScale),
-            )
+        Column {
+            key(count) {
+                val countScale by animateFloatAsState(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 180),
+                    label = "brainCountBump",
+                )
+                Text(
+                    text = "  $count / $limit",
+                    color = colors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.scale(countScale),
+                )
+            }
+            if (!secondary.isNullOrBlank()) {
+                Text(
+                    text = "  $secondary",
+                    color = colors.TextSecondary,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
         }
     }
 
@@ -238,4 +287,18 @@ private fun BrainChip(count: Int, limit: Int) {
     DisposableEffect(Unit) {
         onDispose { brainView?.release() }
     }
+}
+
+/**
+ * The HUD's live secondary line: "<platform> · <remaining> left" with the
+ * cycle state appended when it is noteworthy (never the default ACTIVE). All
+ * values come from the existing detection/control sources — presentation only.
+ */
+private fun secondaryCaption(platformLabel: String?, remaining: Int, cycleState: String): String? {
+    val parts = listOfNotNull(
+        platformLabel,
+        "$remaining left",
+        cycleState.takeIf { it.isNotEmpty() && it != "ACTIVE" },
+    )
+    return parts.joinToString(" · ").takeIf { it.isNotBlank() }
 }

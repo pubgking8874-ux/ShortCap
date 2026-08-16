@@ -3216,6 +3216,36 @@ remain independent. Detection adapters stay conservative — real-device
 ShareChat surface detection and backend platform-literal support remain
 later-phase items. No backend, database, auth or other engine changes.
 
+### Shorts HUD — dedicated ShortsHudTriggerEngine + live data *(Aug 16, 2026)*
+
+The Shorts HUD visibility trigger is now a dedicated engine boundary
+(`hud/ShortsHudTriggerEngine.kt`) instead of logic inside the controller:
+
+- **Consumes detection, never duplicates it:** the engine listens to the
+  EXISTING pipeline's `ShortFormSurfaceState` broadcast (non-null only when
+  `isShortForm == true` and confidence >= the detector threshold) — no
+  registry/adapters/package rules in the HUD code.
+- **Hidden by default — strict visibility rule:** the HUD becomes visible
+  ONLY when ALL hold: positive short-form surface + monitoring switched on +
+  Accessibility service actually active in the OS + HUD enabled in Settings.
+  Granting Accessibility (or any other permission), opening ShortsCap /
+  Settings / the launcher / normal screens, or merely having a supported app
+  open NEVER shows the HUD; exiting the Shorts surface hides it immediately.
+  Future platforms inherit the behavior automatically through the same
+  detection interface.
+- **Live HUD data (no second counter):** the overlay now carries watched
+  today, limit, remaining Shorts, the 24-hour cycle state and the current
+  platform — all derived from the authoritative `ShortsControlEngine` +
+  the detection result. Chips show a compact secondary line
+  (e.g. `YouTube Shorts · 73 left · LIMIT REACHED`).
+- **Modes preserved:** Brain (video, draggable, position persisted) / Counter
+  / ShortsCap unchanged; persistence remains HUD-preferences only (mode,
+  Brain position — never counts).
+- Files: `hud/ShortsHudTriggerEngine.kt` (new), `hud/ShortsHudController.kt`
+  (now overlay lifecycle only), `hud/ShortsHudContent.kt` (live state fields
+  + secondary caption). No changes to Shorts Limit / Control / Screen
+  Activity / Discovery / auth / Settings UI.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service
