@@ -56,6 +56,23 @@ interface BackendApi {
     suspend fun syncShortsUsage(records: List<ShortsUsageRecordDto>): ApiResult<List<Map<String, Any?>>>
     suspend fun createShortsEvent(dto: ShortsEventDto): ApiResult<Map<String, Any?>>
 
+    // ---- Shorts Control (24-hour limit cycle + HUD preference) ----------
+
+    /** GET /shorts/control — combined Shorts Control state. */
+    suspend fun getShortsControl(): ApiResult<ShortsControlDto>
+
+    /** GET /shorts/limit-cycle — the current 24-hour cycle (404 -> null). */
+    suspend fun getShortsLimitCycle(): ApiResult<ShortsLimitCycleDto?>
+
+    /** POST /shorts/limit-cycle/activate — start (or return) the 24-hour cycle. */
+    suspend fun activateShortsLimitCycle(limitCount: Int): ApiResult<ShortsLimitCycleDto?>
+
+    /** PUT /shorts/control — threshold-only limit edit (count + timer kept). */
+    suspend fun updateShortsControl(limitCount: Int): ApiResult<ShortsControlDto>
+
+    /** POST /shorts/limit-cycle/disable — disable Shorts control. */
+    suspend fun disableShortsLimitCycle(): ApiResult<ShortsLimitCycleDto?>
+
     // ---- Web ------------------------------------------------------------
 
     suspend fun listBlockedWebsites(): ApiResult<List<Map<String, Any?>>>

@@ -54,6 +54,9 @@ enum class SyncKind {
  * "shorts:2026-08-15:YOUTUBE:YOUTUBE_SHORTS"); [payload] is the JSON body.
  * [attempts] counts send attempts (used for bounded retry/backoff) and
  * [nextRetryAtMillis] gates retries until a future time (0 = retry now).
+ * [lastAttemptAtMillis] records when the record was last claimed for sending
+ * and [lastError] a SHORT sanitized error classification only (never full
+ * payloads, tokens, headers or secrets — P1-2 STEP 19).
  */
 data class SyncRecord(
     val kind: SyncKind,
@@ -63,6 +66,8 @@ data class SyncRecord(
     val attempts: Int = 0,
     val nextRetryAtMillis: Long = 0L,
     val createdAtMillis: Long = System.currentTimeMillis(),
+    val lastAttemptAtMillis: Long = 0L,
+    val lastError: String? = null,
 ) {}
 
 /** Records still awaiting a successful sync (PENDING or FAILED). */

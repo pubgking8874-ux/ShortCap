@@ -55,8 +55,8 @@ import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
 /**
- * Shorts HUD appearance settings — opened from Settings → Appearance →
- * Shorts HUD.
+ * Shorts HUD appearance settings — opened from Settings → Short Control →
+ * Shorts HUD (the single canonical location for every Shorts setting).
  *
  * Lets the user pick exactly ONE of the three Shorts HUD appearance modes:
  *

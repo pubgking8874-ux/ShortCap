@@ -97,6 +97,9 @@ class ShortsSettingsUpdate(BaseModel):
     warning_count: int | None = Field(default=None, ge=0)
     strict_mode_enabled: bool | None = None
     is_enabled: bool | None = None
+    # Shorts HUD appearance (Brain / Counter / ShortsCap) — the persisted
+    # account preference consumed by the Shorts Control API.
+    hud_appearance: str | None = None
 
 
 class ShortsSettingsResponse(BaseModel):
@@ -111,6 +114,7 @@ class ShortsSettingsResponse(BaseModel):
     warning_count: int | None = None
     strict_mode_enabled: bool
     is_enabled: bool
+    hud_appearance: str = "BRAIN"
     created_at: datetime
     updated_at: datetime
 

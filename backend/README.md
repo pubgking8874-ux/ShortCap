@@ -2260,6 +2260,147 @@ report: `docs/preproduction_audit.md`.
 - **Not production-ready:** real-device validation + AWS/Cognito deployment
   remain required.
 
+## Phase 20C — First Controlled Android Device Test
+
+**Status: completed (testing/gap-identification only, August 16, 2026).** No
+backend or Android code changed. Full evidence matrix:
+`docs/device_test_phase_20c.md`.
+
+- **Environment:** physical vivo I2208, Android 14 (API 34), arm64-v8a, debug
+  build; backend not running during the pass (app is UI/demo-seeded).
+- **Results (32 tests):** 21 PASS — install/launch/navigation/settings
+  persistence, permissions (incl. Accessibility + Overlay + FGS),
+  Appearance → Shorts HUD (Brain / Counter / ShortsCap, persisted), HUD
+  absent off-surface, web rule-list UI, P1-2 durable queue schema on-device,
+  Reports/Rank/Score UI, 0 crashes/ANRs. 1 FAIL — Shorts detection on this
+  device's YouTube build (Shorts runs in `InternalMainActivity`; adapter
+  recognizes only `Shell$ShortsActivity`; 0 events recorded). 2 PARTIAL, 3
+  NOT IMPLEMENTED (real app-usage collection, real-time web enforcement,
+  DNS-level enforcement), 3 NOT TESTABLE, 1 BLOCKED (HUD on Shorts).
+- **Backend boundary:** no backend calls were exercised in this pass; the
+  backend verification suite remains green (see Phase 20). The three core
+  Android engines (Shorts detection on current builds, app-usage collection,
+  web enforcement) are the Phase 20D implementation queue.
+- **Not production-ready:** real-device engine validation + AWS/Cognito
+  deployment remain required.
+
+## P1-5 + Short Control — local Shorts Control Engine & canonical Settings section
+
+**Status: completed (August 16, 2026). Android-side only — no backend change.**
+
+- **P1-5 — Local Shorts Core Control Engine:** authoritative local 24-hour
+  `ShortsLimitCycle` (limit, current count, cycle start/expiry, status,
+  warning/limit-reached flags) persisted in Room (DB v2 migration) through the
+  same durable architecture as P1-2. `ShortsControlEngine` validates and
+  counts each detected Short once (3–5 s rule preserved, duplicate-safe,
+  platform-agnostic single counter); limit changes preserve count + timer;
+  expiry is timestamp-derived (no background timer). HUD + Shorts Limit page
+  read the engine — they never own a count. 28 new tests (23 engine + 5 Room).
+- **Settings → Short Control (canonical):** all Shorts settings consolidated
+  into one top-level section — Short Applications (platform toggles), Shorts
+  Limit (24-hour cycle + circular progress), Shorts HUD (Brain / Counter /
+  ShortsCap, moved from Appearance), Shorts Insights (explicit empty state
+  until backend aggregates are wired). Duplicate Shorts controls removed from
+  Monitoring and Appearance; all preferences preserved (no key changes).
+- **Backend boundary:** the engine is local-only — backend linking is a later
+  phase. Backend verification suite remains green (9/9 scripts); no schema,
+  migration, score, rank or web changes.
+
+## Shorts Control Backend — 24-hour limit cycle + HUD preference + insights
+
+**Status: completed (August 16, 2026).** The backend side of the canonical
+Shorts Control architecture — durable configuration, cycle state, usage,
+HUD preference and insights. **The Android app remains the real-time
+enforcement authority** (detection, counting, 3–5 s rule, HUD rendering);
+the backend is a data / synchronization API only.
+
+- **Schema (migration `fd8a365d772d`, applied):**
+  - NEW `shorts_limit_cycles` — the durable 24-hour enforcement window
+    (`limit_count`, `current_count`, `cycle_started_at`, `cycle_expires_at`,
+    `status`, `warning_triggered`, `limit_reached`). Single-active-cycle
+    guard via unique `(user_id, is_active)` with `is_active = True` for the
+    one current window and `NULL` for historical windows — at most one active
+    cycle per user. `device_id` recorded for future multi-device support
+    (not part of the uniqueness).
+  - `shorts_settings.hud_appearance` (VARCHAR(50), default `'BRAIN'`) — the
+    persisted Shorts HUD appearance preference (BRAIN / LIVE_COUNTER /
+    SHORTSCAP); no new appearance table. No unrelated tables changed.
+- **24-hour cycle states:** ACTIVE / LIMIT_REACHED / EXPIRED / DISABLED.
+  Activation sets start = now, expires = start + 24h, count = 0 and persists
+  immediately; an existing active cycle is returned unchanged (never a
+  second one). Expiry is timestamp-driven (no background timer): reads/writes
+  compare against `cycle_expires_at`, mark EXPIRED and free the active slot.
+  LIMIT_REACHED persists until expiry — never reset by restarts or UI
+  changes.
+- **Count synchronization (reconciled, idempotent):** after
+  `POST /shorts/usage/sync` the active cycle's `current_count` is recomputed
+  as the SUM of the user's `shorts_usage` rows inside the window — the
+  backend never trusts a client-supplied cycle count, and the idempotent
+  usage upsert means one logical Short can never double-increment the cycle
+  (retry / restart / offline-sync safe).
+- **Warning / limit:** count-based warning reuses the existing
+  `warning_count` setting (`warning_triggered` fires once per cycle);
+  `warning_minutes` respected as-is. `current_count >= limit_count` →
+  LIMIT_REACHED, persisted. Changing the limit updates ONLY the threshold
+  (count + 24-hour timer preserved), then status re-evaluates.
+- **API endpoints:** `GET/PUT /shorts/control` (combined state:
+  applications catalog, limit_cycle, hud.appearance, insights),
+  `GET /shorts/limit-cycle`, `POST /shorts/limit-cycle/activate`,
+  `POST /shorts/limit-cycle/disable`. `remaining_seconds` / `usage_ratio`
+  are derived at response time (never persisted as decreasing values).
+  Timestamps are naive-UTC ISO-8601 per the backend convention.
+- **Short Applications:** the canonical 8-platform catalog (YouTube,
+  Instagram, TikTok, Snapchat, Facebook, Moj, X, LinkedIn) is exposed as
+  configuration; runtime per-platform toggles remain Android-local until the
+  settings sync phase — no fabricated verification claims.
+- **Shorts Insights:** Yesterday / Today / This Week / This Month aggregated
+  from REAL `shorts_usage` rows through the existing ReportingRepository
+  (count, duration, warning/limit day counts, platform breakdown) — no new
+  report tables, no fabricated platforms.
+- **Ownership / isolation:** every query scoped to the caller's user;
+  `device_id` validated against the current user (cross-user → 404); the
+  development identity (`X-Dev-User-Id`) is unchanged and remains the
+  single Cognito replacement point.
+- **Verification:** new `scripts/verify_short_control.py` — **59/59 checks**
+  (activation, 24h window, single active cycle, count reconcile + duplicate
+  protection, warning, LIMIT_REACHED persistence, limit-change preservation,
+  expiry, disable, user isolation, device ownership, insights vs direct SQL,
+  unique-constraint presence, regressions across settings / study /
+  monitoring / reports / score / rank). All **10** backend verify scripts
+  PASS; alembic head = current = `fd8a365d772d`; `/health/db`, `/docs`,
+  `GET /shorts/control` verified live. Score / Rank / Reports / Web / Study /
+  Monitoring logic unchanged; no AWS / Cognito work.
+
+### Shorts Limit page — final 24-hour limit + lock behavior *(Aug 16, 2026)*
+
+Android-side follow-up to the Shorts Control Backend (no backend changes):
+
+- **FINAL PRODUCT RULE:** Shorts Limit is NOT optional. Saving a limit
+  activates it immediately for a 24-hour cycle and LOCKS it until that cycle
+  expires — no enable/disable toggle, no password. The earlier disable
+  button/strings were removed from the Android UI.
+- **What:** the corrected `Settings → Short Control → Shorts Limit` page
+  renders the authoritative local `ShortsControlEngine` state. First setup
+  shows a `24:00:00` circular 24-hour clock + presets (50/100/150/200/300/
+  500) + Custom, with a confirmation dialog before `Save Limit` activates
+  the cycle. The active page separates TIME progress (circular 24-hour
+  clock, HH:MM:SS countdown from `cycleExpiresAt - now`) from SHORTS USAGE
+  progress (`current / limit` + compact usage bar + remaining + status).
+- **24-hour edit lock:** Edit Limit keeps presets + Custom, but production
+  cannot change the limit during an active cycle (lock message shown). A
+  SAFE DEVELOPMENT-ONLY seam (`BuildConfig.DEBUG`) lets debug builds edit
+  for testing; release builds enforce the lock. Never exposed as UI, never
+  stored as a preference.
+- **Backend usage:** best-effort mirror pushes through the existing single
+  HTTP client to the Shorts Control endpoints created above
+  (`POST /shorts/limit-cycle/activate`, `PUT /shorts/control`,
+  `POST /shorts/limit-cycle/disable`). The durable LOCAL state is never
+  reset by network failure; no new endpoints, no schema changes.
+- **Verification:** Android unit tests **119/119**, compile + release build
+  PASS, lint `NewApi` = 0 (P1-1 stays fixed), P1-2 durable queue intact, all
+  10 backend verify scripts still PASS. Backend / database / schema
+  untouched.
+
 ## Planned / next (NOT implemented yet)
 
 Android → backend sync (settings, study, monitoring, shorts — including

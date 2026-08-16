@@ -2600,6 +2600,281 @@ platforms), never as a single-app feature.
   `HighAppVersionCode` heuristic). No other API-34-only date/time calls exist
   in the sync path. Database, backend, UI and `minSdk` untouched.
 
+### P1-2 — Durable offline sync queue & process-restart recovery *(Aug 16, 2026)*
+
+- **Root cause:** the Android sync queue (`SyncQueue`) and the Shorts local
+  store (`ShortsLocalStore`) were **in-memory** — pending synchronization data
+  (Shorts usage/events and any queued sync items) was lost when the app
+  process was killed or restarted, violating the offline-first sync contract.
+- **Previous behavior:** `LOCAL EVENT → in-memory queue → sync → success`;
+  process death before sync dropped the pending data.
+- **New persistence approach:** a local **Room database** (`ShortsCapDatabase`)
+  with three durable tables — `sync_queue`, `shorts_usage`, `shorts_events`.
+  `RoomSyncQueue` implements the existing `SyncQueue` interface (same
+  contract) and `RoomShortsLocalStore` implements `ShortsLocalStore`; both are
+  installed at app start by the new `ShortsCapApplication` (registered in the
+  manifest). `SyncCoordinator` and `ShortsMonitoringPipeline` accept the
+  durable implementations via their existing constructor seams — no sync
+  architecture redesign.
+- **Persist-before-network invariant:** records are written to the queue
+  before any network attempt; the persistent queue is the source of truth for
+  unsynchronized work.
+- **Restart recovery:** on startup the queue reloads pending records; records
+  stuck in `SYNCING` are returned to retryable state; sync resumes when
+  network is available. `SyncManager` honors the queue's claim result, so the
+  same item is never processed by two workers (single-worker guarantee).
+- **Retry behavior:** unchanged policy — transient failures (network/timeout/
+  5xx) retry with bounded exponential backoff; permanent failures (400/401/
+  403/404/validation) are not retried forever. Queue records store sanitized
+  error text only (never secrets/headers).
+- **Idempotency:** the backend's existing idempotency protections are
+  preserved; a retry after timeout/restart/connection loss cannot create
+  uncontrolled duplicate logical records. No backend API changed.
+- **Affected sync domains:** Shorts usage/events (was the only broken path);
+  Study/Monitoring/Web/Settings sync records already route through the same
+  durable queue abstraction — no per-feature duplicate queues were created.
+- **Device reboot:** no new boot-recovery architecture was added in this P1 fix
+  (out of scope); reported as a remaining limitation until a background
+  scheduling mechanism (e.g. WorkManager) is adopted.
+- **Testing:** new Robolectric tests `RoomSyncQueueTest` +
+  `RoomShortsLocalStoreTest` (native SQLite) cover persistent enqueue, queue
+  reload after recreation, `SYNCING → retryable` recovery, retry/backoff
+  state, successful completion, failure handling, and no-duplicate queue
+  processing (14 new tests; suite **59/59**). `:app:compileDebugKotlin`,
+  `:app:testDebugUnitTest`, `:app:assembleRelease` all pass; lint `NewApi`
+  count remains 0 (**P1-1 stays fixed**). Backend, MySQL, Alembic, AWS and
+  Cognito untouched. On-device schema presence (`sync_queue`,
+  `shorts_usage`, `shorts_events`) confirmed during Phase 20C.
+
+### Phase 20C — First controlled Android device test *(Aug 16, 2026)*
+
+- **First real-device validation** — physical **vivo I2208**, Android 14
+  (API 34), arm64-v8a, debug build. Full evidence matrix:
+  `backend/docs/device_test_phase_20c.md`. No code changed during this phase.
+- **PASS (21):** install, launch, first-launch (Continue as Guest), all 5
+  tabs, no startup crash, force-stop/relaunch; permission states incl.
+  Accessibility grant/revoke + MonitoringService foreground start; Settings
+  incl. **Appearance → Shorts HUD** (exactly Brain / Counter / ShortsCap,
+  mock previews, selection persists across restart); HUD absent outside
+  short-form surfaces; blocked-domain UI add/list; force-stop recovery with
+  the P1-2 Room queue present on-device; Reports/Rank/Score UI; 0 crashes/ANRs.
+- **FAIL (1):** **SH01** — Shorts detection on this device's YouTube build:
+  Shorts runs inside `...watchwhile.InternalMainActivity` but
+  `YouTubeShortsAdapter` only recognizes `Shell$ShortsActivity`, so Shorts
+  content open + swiped produced 0 events/0 usage rows (verified via the
+  on-device Room DB). Adapter-currency gap, not a counting bug.
+- **NOT IMPLEMENTED (3):** real app-usage collection (no `UsageStatsManager`
+  path); real-time web enforcement (blocked domain opened in Chrome
+  unimpeded; `PlaceholderBlockingEngine.isAvailable=false`); DNS-level
+  enforcement (does not exist).
+- **PARTIAL (2):** timed Study device run not fully exercised; offline sync
+  durability seam verified but no queued rows could be generated (SH01 blocks
+  detection). **NOT TESTABLE (3):** cross-platform Shorts, HUD drag with HUD
+  visible, backend round-trip. **BLOCKED (1):** HUD visibility on Shorts
+  (blocked by SH01).
+- **Phase 20D priorities:** update `YouTubeShortsAdapter` window classes;
+  implement real app-usage collection; implement real web enforcement — then
+  re-run this matrix. Not production-ready until real-device engines are
+  validated and AWS/Cognito are deployed.
+
+### P1-5 — Local Shorts Core Control Engine & persistent 24-hour limit *(Aug 16, 2026)*
+
+- **What:** the authoritative local Android state machine for Shorts limits,
+  counting, cycle timing and enforcement state — built on the existing
+  cross-platform detector (which still only DETECTS short-form content; the
+  engine never counts inside an adapter).
+- **`ShortsLimitCycle`** — the persisted 24-hour rolling window: `limitCount`,
+  `currentCount`, `cycleStartedAt`, `cycleExpiresAt`, `status`
+  (ACTIVE / LIMIT_REACHED / EXPIRED / DISABLED), `warningTriggered`,
+  `limitReached`. **At most one active cycle** per user/device — never reset
+  on app open, screen change, detection or rotation.
+- **Persistence:** Room-backed (`ShortsLimitCycleDao` + `shorts_limit_cycle`
+  table, DB v2 with a migration) through the same durable local architecture
+  as P1-2 — count, limit, cycle start/expiry and state survive app restart,
+  process death and force-stop/reopen. Expiry is derived from timestamps (no
+  permanent background timer): on state request an expired cycle is marked
+  EXPIRED and the next cycle initializes per the lifecycle.
+- **Counting:** `ShortsControlEngine` consumes `ShortDetectionResult` from the
+  pipeline and counts each valid Short once (duplicate-callback safe), only
+  after the existing 3–5 second engagement threshold, platform-agnostically,
+  into the ONE global `currentCount`. Changing the limit preserves the count
+  and the 24-hour timer (e.g. 130/200 → 130/250, same cycle). `limitCount <= 0`
+  is handled safely (no division by zero).
+- **State:** `ALLOW / WARNING / LIMIT_REACHED` enforcement state exposed for
+  the future enforcement layer; HUD-facing state (`usageRatio`, remaining,
+  cycle times, visual thresholds 0–40 / 40–75 / 75–99 / 100%+) is derived
+  from the engine — the HUD never owns a count.
+- **Wiring:** engine created in `ShortsCapApplication`;
+  `ShortsMonitoringPipeline` feeds counted updates; `ShortsHudController`
+  reads the authoritative cycle.
+- **Testing:** `ShortsControlEngineTest` (23 cases — activation, expiry =
+  start + 24h, dedupe, warning, limit-reached persistence, limit-change
+  preservation, cross-platform single counter, disable-preserves-history, no
+  second cycle) + `RoomShortsLimitCycleStoreTest` (5 — real SQLite
+  process-death reload). Compile / unit tests / release build pass; P1-1
+  (lint `NewApi` = 0) stays fixed. **Backend, MySQL schema, Alembic, Score,
+  Rank, Web untouched** — the engine is local-only; backend linking and
+  real-device validation are later phases.
+
+### Settings → Short Control — consolidated Shorts settings structure *(Aug 16, 2026)*
+
+- **Canonical structure — the single authoritative location for every Shorts
+  setting:**
+
+  ```
+  Settings → Short Control
+  ├── Short Applications — per-platform Shorts monitoring toggles
+  ├── Shorts Limit       — 24-hour cycle: limit, current count, remaining
+  │                        time, circular progress, limit picker
+  ├── Shorts HUD         — Brain / Counter / ShortsCap appearance
+  └── Shorts Insights    — read-only Yesterday / Today / This Week / This Month
+  ```
+
+- **What moved:** Shorts Control was removed from **Settings → Monitoring**
+  (Monitoring now carries only general monitoring controls) and the Shorts HUD
+  selector was removed from **Settings → Appearance** (it now lives under
+  Short Control → Shorts HUD). The stored HUD appearance preference is
+  untouched — only navigation moved.
+- **Preserved state:** platform toggles, the Shorts limit/cycle (P1-5 engine)
+  and HUD appearance all read the existing single sources of truth
+  (`MonitoringSettings.platforms`, `ShortsControlEngine`,
+  `ShortsHudSettingsStore`) — no preference keys changed, no user choices
+  reset, no duplicate state created.
+- **Shorts Insights** renders the four period rows with an explicit empty
+  state (no fake numbers) until the existing backend/reporting layer provides
+  Shorts aggregates — no second reporting engine was added.
+- **New i18n strings** (Short Control, Short Applications, Shorts Limit,
+  Current Count, 24-Hour Cycle, Remaining Time, Circular Progress, Shorts
+  Insights, Yesterday / Today / This Week / This Month) added to all 5
+  languages; icons wired through the centralized IconKey/IconTheme system.
+- **Verification:** compile, unit tests (87/87) and release build pass; lint
+  `NewApi` = 0 (P1-1 stays fixed), P1-2 durable queue intact; all 9 backend
+  verify scripts PASS. Backend / database / schema untouched — no new Shorts
+  engine implemented.
+
+### Shorts Control Backend — 24-hour limit cycle + HUD preference + insights *(Aug 16, 2026)*
+
+- **What:** the BACKEND side of the canonical Shorts Control architecture —
+  the durable source for Shorts configuration, the 24-hour cycle state,
+  synchronized usage, the HUD preference and read-only insights. The Android
+  app remains the **real-time enforcement authority** (detection, counting,
+  3–5 s rule, HUD rendering); the backend is a data / synchronization API.
+- **`shorts_limit_cycles` (new table, migration `fd8a365d772d`):** the durable
+  24-hour enforcement window — `limit_count`, `current_count`,
+  `cycle_started_at`, `cycle_expires_at`, `status`
+  (ACTIVE / LIMIT_REACHED / EXPIRED / DISABLED), `warning_triggered`,
+  `limit_reached`. Single-active-cycle guard: unique `(user_id, is_active)`
+  where `is_active` is `True` for the one current window and `NULL` for
+  historical windows (MySQL NULL-distinct trick) — at most one active cycle
+  per user, no second cycle ever silently created. `device_id` is stored for
+  future multi-device support but is not part of the uniqueness (the
+  approved single-device development reality keeps the cycle per-user).
+  `shorts_settings` also gained the spec-mandated `hud_appearance` column
+  (BRAIN / LIVE_COUNTER / SHORTSCAP, default BRAIN) — no new appearance table.
+- **24-hour cycle:** activation sets `cycle_started_at = now`,
+  `cycle_expires_at = start + 24h`, count 0; an existing active cycle is
+  returned unchanged. Expiry is timestamp-driven (no background timer): every
+  read/write compares against `cycle_expires_at`, marks EXPIRED and frees the
+  active slot. LIMIT_REACHED persists until expiry — never reset by app
+  restart, leaving Shorts or HUD changes.
+- **Count synchronization (reconciled, idempotent):** the backend never
+  trusts a client-supplied cycle count. After `POST /shorts/usage/sync`, the
+  active cycle's `current_count` is recomputed as the SUM of the user's
+  `shorts_usage` rows inside the window. Because the usage layer upserts per
+  (user, device, platform, surface, day), re-syncs / retries / process restarts
+  can never double-increment the cycle — one logical Short counts once.
+- **Warning / limit:** count-based warning uses the existing `warning_count`
+  setting and fires once per cycle (`warning_triggered`); `warning_minutes`
+  (time-based) is respected as-is. `current_count >= limit_count` →
+  LIMIT_REACHED. Changing the limit (`PUT /shorts/control`) updates ONLY the
+  threshold — count and 24-hour timer are preserved (130/200 → 130/250,
+  same window), then status re-evaluates.
+- **API endpoints** (existing `/shorts` router, dev identity unchanged):
+  `GET/PUT /shorts/control` (combined state — applications catalog, limit
+  cycle, HUD appearance, insights), `GET /shorts/limit-cycle`,
+  `POST /shorts/limit-cycle/activate`, `POST /shorts/limit-cycle/disable`.
+  `remaining_seconds` and `usage_ratio` are derived at response time (never
+  persisted as decreasing values).
+- **Short Applications:** the canonical 8-platform catalog (YouTube,
+  Instagram, TikTok, Snapchat, Facebook, Moj, X, LinkedIn) is exposed in the
+  control response as configuration options; runtime per-platform toggles
+  remain Android-local (`MonitoringSettings.platforms`) until the settings
+  sync phase — the flags never claim real-device verification.
+- **Shorts Insights:** Yesterday / Today / This Week / This Month aggregated
+  from REAL `shorts_usage` rows via the existing ReportingRepository
+  (count, duration, warning/limit day counts, platform breakdown) — no new
+  report tables, no fabricated platforms.
+- **Ownership:** every query is scoped to the caller's user; device_id is
+  validated against the current user (cross-user writes → 404); timestamps
+  follow the backend naive-UTC convention.
+- **Verification:** new `scripts/verify_short_control.py` — **59/59 checks**
+  (activation, 24h window, single active cycle, count reconcile + duplicate
+  protection, warning, LIMIT_REACHED persistence, limit-change preservation,
+  expiry, disable, user isolation, device ownership, insights vs direct SQL,
+  unique-constraint presence, settings/study/monitoring/reports/score/rank
+  regressions). All **10** backend verify scripts PASS; alembic head/current
+  at `fd8a365d772d`; `GET /shorts/control`, `/health/db`, `/docs` verified
+  live. No Score / Rank / Reports / Web / Study / Monitoring logic changed;
+  no AWS / Cognito work.
+
+### Shorts Limit page — final 24-hour limit + lock behavior *(Aug 16, 2026)*
+
+- **FINAL PRODUCT RULE:** Shorts Limit is NOT an optional on/off feature.
+  Once the user saves a limit it becomes ACTIVE immediately, the 24-hour
+  cycle begins, the limit is enforced, and the limit is LOCKED until the
+  cycle expires. There is NO enable/disable toggle and NO password — the
+  disable button/strings from the earlier build were removed.
+- **First setup (no active cycle):** a large circular 24-hour clock showing
+  `24:00:00` (the next cycle that begins on save) over the "Set Shorts
+  Limit" section — preset chips (50 / 100 / 150 / 200 / 300 / 500) + Custom
+  (any valid positive integer up to 10,000; empty / non-numeric / zero /
+  negative / absurdly large values are rejected with explicit messages,
+  never silently converted). Tapping the primary CTA opens a confirmation
+  dialog ("Your Shorts limit will become active immediately and remain
+  locked for the current 24-hour cycle…") and only `Save Limit` creates the
+  cycle: count 0, start = now, expires = start + 24h, persisted immediately.
+- **Active page — TWO DISTINCT progress values (never combined):**
+  - *TIME progress* — the circular 24-hour clock: a smooth ring whose sweep
+    is remaining / 24h (full circle at cycle start, depleting to 0 at
+    expiry) with a live HH:MM:SS countdown in the center (24:00:00 →
+    00:00:00), derived from `cycleExpiresAt - now` (the timestamp is
+    authoritative, nothing persisted per-second; one lightweight 1 s tick
+    while visible, cancelled with the composition).
+  - *SHORTS USAGE progress* — a separate card: `current / limit` (e.g.
+    `127 / 200`), a compact usage bar (count/limit clamped 0..1, never
+    divides by zero), Remaining Shorts (`limit - count`, never negative) and
+    the status (ACTIVE / WARNING / LIMIT REACHED) from the existing Shorts
+    Control state.
+- **Edit Limit — 24-hour lock:** Edit opens presets + Custom, but Save
+  respects the lock: in production the saved limit cannot change while the
+  cycle is active ("Your Shorts limit is locked until the current 24-hour
+  cycle ends.") — no password, no bypass preference. SAFE DEVELOPMENT-ONLY
+  test seam: the lock is gated on `BuildConfig.DEBUG`, so debug builds may
+  edit during an active cycle (developers don't wait 24 hours per test)
+  while release builds enforce the lock. The seam is never exposed as UI and
+  never stored as a preference.
+- **Cycle persistence / expiry:** count, limit, start, expiry, status,
+  warning and limit-reached state all survive navigation, app restart,
+  process recreation and force-stop. The cycle resets ONLY when the 24-hour
+  window expires (then the engine rolls the next window); never because the
+  app closed, the process was killed, the network dropped, or the user left
+  Shorts / the HUD disappeared.
+- **Backend integration:** best-effort mirror pushes through
+  `ShortsControlSyncer` (the existing single HTTP client, no second queue)
+  to `POST /shorts/limit-cycle/activate`, `PUT /shorts/control` and
+  `POST /shorts/limit-cycle/disable`. The durable LOCAL state is never reset
+  by a network failure — an offline / sync-error banner surfaces the status
+  and the next action re-pushes. No new backend endpoints were created.
+- **Verification:** extended `ShortsLimitPageStateTest` (page-state
+  derivation, limit validation, HH:MM:SS countdown + time-progress math,
+  first-save activation, production 24-hour lock enforcement + DEBUG test
+  seam, restart recovery, limit reached, expiry, offline) and
+  `ShortsControlSyncerTest` (backend mapping). Unit tests **119/119**,
+  `compileDebugKotlin` and `assembleRelease` PASS, lint `NewApi` = 0 (P1-1
+  stays fixed), P1-2 durable queue intact, all backend verify scripts (incl.
+  `verify_shorts` 67/67, `verify_short_control` 59/59) PASS. No backend,
+  database or schema changes.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service

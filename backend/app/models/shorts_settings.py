@@ -6,7 +6,7 @@ limits, warning thresholds and strict mode for short-video platforms.
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,6 +31,12 @@ class ShortsSettings(Base):
     warning_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     strict_mode_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Shorts HUD appearance preference (Brain / Counter / ShortsCap) — the
+    # account-level copy synced for the Shorts Control API. The Android app
+    # remains the real-time UI authority; this is the persisted preference.
+    hud_appearance: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="BRAIN", server_default="BRAIN"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()

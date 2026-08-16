@@ -581,9 +581,135 @@ interface AppStrings {
     val monitoringAllowedApps: String
     val monitoringStrictMode: String
     val monitoringStrictModeDesc: String
-    val monitoringShortsSection: String
-    val monitoringShortsControl: String
-    val monitoringShortsControlDesc: String
+
+    // ---- Short Control — canonical Settings section (Settings → Short Control) ----
+    val settingsShortControl: String
+    val shortsApplications: String
+    val shortsApplicationsDesc: String
+
+    // ---- Short Applications — dynamic installed-app discovery (Short Control) ----
+    /** Banner while the 24-hour Shorts cycle is active — toggles are locked. */
+    val shortsApplicationsLockedNotice: String
+    /** Accessibility label of the lock icon on a locked application row. */
+    val shortsApplicationsLocked: String
+    /** Empty state when no supported Shorts app is installed. */
+    val shortsApplicationsEmpty: String
+    /** Empty-state subtitle — install a supported app to see it here. */
+    val shortsApplicationsEmptyDesc: String
+    /** Subtitle shown under an installed app's real label (platform descriptor). */
+    val shortsApplicationsPlatform: String
+
+    // ---- P1-5 Shorts Limit / cycle state (Short Control → Shorts Limit) ----
+    val shortsLimitTitle: String
+    /** Format for "current / limit", e.g. "127 / 200". */
+    val shortsLimitCounterFormat: String
+    val shortsLimitRemaining: String
+    /** Remaining time label, e.g. "08h 42m remaining". */
+    val shortsLimitCycleRemainingFormat: String
+    val shortsLimitState: String
+    val shortsLimitStateActive: String
+    val shortsLimitStateLimitReached: String
+    val shortsLimitStateExpired: String
+    val shortsLimitStateDisabled: String
+    val shortsLimitSet: String
+    /** Accessibility description of the Shorts Limit card. */
+    val shortsLimitCardDesc: String
+    /** "Current Count" — stat label on the Shorts Limit page. */
+    val shortsLimitCurrentCount: String
+    /** "24-Hour Cycle" — section heading on the Shorts Limit page. */
+    val shortsLimitCycle24Hour: String
+    /** "Remaining Time" — stat label on the Shorts Limit page. */
+    val shortsRemainingTime: String
+    /** "Circular Progress" — accessibility description of the limit progress ring. */
+    val shortsCircularProgress: String
+
+    // ---- Shorts Limit page (Short Control → Shorts Limit) — functional page ----
+    /** "Set your Shorts limit" — setup heading. */
+    val shortsLimitSetupTitle: String
+    /** Setup description — one 24-hour cycle. */
+    val shortsLimitSetupDesc: String
+    /** Accessibility label of the custom limit input. */
+    val shortsLimitInputLabel: String
+    /** "Shorts" — unit label next to the limit input. */
+    val shortsLimitUnit: String
+    /** "Activate Limit" — starts the 24-hour cycle. */
+    val shortsLimitActivate: String
+    /** "Set Shorts Limit" — primary CTA + section title (final product wording). */
+    val shortsLimitSetButton: String
+    /** "Custom" — the custom-limit option in the preset selector. */
+    val shortsLimitCustom: String
+    /** "Presets" — heading above the preset chips. */
+    val shortsLimitPresets: String
+    /** Confirmation title when saving a limit for the first time. */
+    val shortsLimitConfirmTitle: String
+    /** Confirmation text — the limit activates immediately and stays locked for 24 hours. */
+    val shortsLimitConfirmDesc: String
+    /** "Save Limit" — confirmation button that creates the active cycle. */
+    val shortsLimitSaveLimit: String
+    /** "Your Shorts limit is locked until the current 24-hour cycle ends." */
+    val shortsLimitLockedMessage: String
+    /** "Shorts Usage" — active-page section heading (count/limit). */
+    val shortsLimitUsageSection: String
+    /** "Your Limit" — active-page section heading (saved limit + edit). */
+    val shortsLimitYourLimit: String
+    /** "Edit Limit" — opens the limit editor on the active page. */
+    val shortsLimitEdit: String
+    /** "Save" — confirms the edited limit. */
+    val shortsLimitSave: String
+    /** "Cycle Started" — 24-hour cycle row label. */
+    val shortsLimitCycleStarted: String
+    /** "Cycle Expires" — 24-hour cycle row label. */
+    val shortsLimitCycleExpires: String
+    /** Duration-only format, e.g. "18h 42m" (no trailing word). */
+    val shortsLimitDurationFormat: String
+    /** "Remaining Shorts" — prominent remaining-count label. */
+    val shortsLimitRemainingShorts: String
+    /** "Warning" — warning state banner title. */
+    val shortsLimitWarning: String
+    /** Warning banner description. */
+    val shortsLimitWarningDesc: String
+    /** Limit-reached banner description. */
+    val shortsLimitReachedDesc: String
+    /** Notice shown when Shorts control is disabled. */
+    val shortsLimitDisabledNotice: String
+    /** Offline banner — durable local state is shown. */
+    val shortsLimitOffline: String
+    /** Sync error banner — durable local state is shown. */
+    val shortsLimitSyncError: String
+    /** Notice shown when the active cycle expired (engine rolls the next). */
+    val shortsLimitExpiredNotice: String
+    /** "Enter a limit first." — empty-input validation. */
+    val shortsLimitRequired: String
+    /** "Enter a whole number." — non-numeric validation. */
+    val shortsLimitInvalidNumber: String
+    /** "Enter a number greater than zero." — non-positive validation. */
+    val shortsLimitPositive: String
+    /** "Keep it under %d." — upper-bound validation. */
+    fun shortsLimitTooLarge(max: Int): String
+    /** Edit-limit dialog description — count and timer stay unchanged. */
+    val shortsLimitEditDesc: String
+    /** "Disable Shorts Control" — action on the active page. */
+    val shortsLimitDisableAction: String
+    /** Disable confirmation title. */
+    val shortsLimitDisableConfirmTitle: String
+    /** Disable confirmation description — history kept. */
+    val shortsLimitDisableConfirmDesc: String
+    /** "Disable" — confirms disabling. */
+    val shortsLimitDisableConfirmAction: String
+    /** Accessibility label of the + stepper. */
+    val shortsLimitStepperIncrement: String
+    /** Accessibility label of the − stepper. */
+    val shortsLimitStepperDecrement: String
+
+    // ---- Shorts Insights (Short Control → Shorts Insights) ----
+    val shortsInsights: String
+    val shortsInsightsDesc: String
+    /** Explicit empty state — backend data not connected yet. */
+    val shortsInsightsEmpty: String
+    val shortsInsightsYesterday: String
+    val shortsInsightsToday: String
+    val shortsInsightsThisWeek: String
+    val shortsInsightsThisMonth: String
 
     // ---- Shorts HUD ----
     val shortsHudTitle: String

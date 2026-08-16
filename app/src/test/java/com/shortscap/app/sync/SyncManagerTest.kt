@@ -12,7 +12,9 @@ import com.shortscap.app.network.RankDto
 import com.shortscap.app.network.RankEntryDto
 import com.shortscap.app.network.ReportDto
 import com.shortscap.app.network.ScoreDto
+import com.shortscap.app.network.ShortsControlDto
 import com.shortscap.app.network.ShortsEventDto
+import com.shortscap.app.network.ShortsLimitCycleDto
 import com.shortscap.app.network.ShortsSettingsDto
 import com.shortscap.app.network.ShortsUsageRecordDto
 import com.shortscap.app.network.StudyScheduleDto
@@ -348,6 +350,16 @@ private class RecordingBackendApi : BackendApi {
     }
     override suspend fun createShortsEvent(dto: ShortsEventDto): ApiResult<Map<String, Any?>> =
         ApiResult.Success(emptyMap())
+    override suspend fun getShortsControl(): ApiResult<ShortsControlDto> =
+        ApiResult.Success(ShortsControlDto())
+    override suspend fun getShortsLimitCycle(): ApiResult<ShortsLimitCycleDto?> =
+        ApiResult.Success(null)
+    override suspend fun activateShortsLimitCycle(limitCount: Int): ApiResult<ShortsLimitCycleDto?> =
+        ApiResult.Success(null)
+    override suspend fun updateShortsControl(limitCount: Int): ApiResult<ShortsControlDto> =
+        ApiResult.Success(ShortsControlDto())
+    override suspend fun disableShortsLimitCycle(): ApiResult<ShortsLimitCycleDto?> =
+        ApiResult.Success(null)
     override suspend fun listBlockedWebsites(): ApiResult<List<Map<String, Any?>>> =
         ApiResult.Success(emptyList())
     override suspend fun createBlockedWebsite(dto: BlockedWebsiteDto): ApiResult<Map<String, Any?>> =

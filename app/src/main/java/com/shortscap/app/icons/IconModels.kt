@@ -88,6 +88,10 @@ enum class IconKey {
     ALLOWED_APPS,
     STRICT_MODE,
     SHORTS_CONTROL,
+    // Short Control sub-pages (Settings → Short Control)
+    SHORTS_APPLICATIONS,
+    SHORTS_LIMIT,
+    SHORTS_INSIGHTS,
     BREAK_REMINDER,
     REMINDER_INTERVAL,
     SCHEDULE,

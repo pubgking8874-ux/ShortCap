@@ -152,6 +152,36 @@ data class WebEventDto(
 )
 
 // ---------------------------------------------------------------------------
+// Shorts Control (24-hour limit cycle + HUD preference)
+// ---------------------------------------------------------------------------
+
+/** The 24-hour limit cycle — GET /shorts/limit-cycle, POST activate/disable.
+ * `remaining_seconds` / `usage_ratio` are backend-derived at response time.
+ * Timestamps are ISO-8601 naive-UTC strings. */
+data class ShortsLimitCycleDto(
+    val id: Int? = null,
+    val limitCount: Int? = null,
+    val currentCount: Int? = null,
+    val cycleStartedAt: String? = null,
+    val cycleExpiresAt: String? = null,
+    val status: String? = null,
+    val warningTriggered: Boolean? = null,
+    val limitReached: Boolean? = null,
+    val remainingSeconds: Long? = null,
+    val usageRatio: Double? = null,
+)
+
+/** The combined Shorts Control state — GET/PUT /shorts/control. Only the
+ * fields Android consumes are parsed (`limit_cycle`, `hud.appearance`,
+ * `applications.platforms`); the rest stays as raw maps. */
+data class ShortsControlDto(
+    val limitCycle: ShortsLimitCycleDto? = null,
+    val hudAppearance: String? = null,
+    val platforms: List<Map<String, Any?>> = emptyList(),
+    val raw: Map<String, Any?> = emptyMap(),
+)
+
+// ---------------------------------------------------------------------------
 // Read-only retrieval (Reports / Score / Rank)
 // ---------------------------------------------------------------------------
 

@@ -49,6 +49,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
+
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged manifest/resources for Room tests
+            // (P1-2 durable sync queue persistence/reload coverage).
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -84,10 +92,22 @@ dependencies {
     // Coroutines / StateFlow
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // Room — durable offline sync queue + Shorts local store (P1-2).
+    // The Phase 20 audit documented this seam as a Room/DataStore-based
+    // durable queue; kapt is already configured (Hilt), and SharedPreferences
+    // is explicitly ruled out for an arbitrary-size event queue.
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     testImplementation("junit:junit:4.13.2")
+    // Robolectric — runs Room + the Room-backed sync queue on the JVM so the
+    // persistence/reload/restart behavior is testable without a device.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

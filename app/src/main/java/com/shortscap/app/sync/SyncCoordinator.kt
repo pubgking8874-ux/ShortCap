@@ -28,7 +28,23 @@ object SyncCoordinator {
     /** Default API instance — the single real HTTP client. */
     val api: BackendApi by lazy { com.shortscap.app.network.HttpBackendApi() }
 
-    val queue: SyncQueue = InMemorySyncQueue()
+    /**
+     * The app-wide queue. P1-2: defaults to the in-memory queue (so the
+     * module stays usable standalone / in tests), and [ShortsCapApp]
+     * installs the durable Room-backed queue at app start — before any sync
+     * can run — so pending records survive process death and restart.
+     */
+    @Volatile
+    var queue: SyncQueue = InMemorySyncQueue()
+        private set
+
+    /**
+     * Installs the durable queue (P1-2). Called once from [ShortsCapApp]
+     * before any activity/service touches the manager.
+     */
+    fun installDurableQueue(durableQueue: SyncQueue) {
+        queue = durableQueue
+    }
 
     val manager: SyncManager by lazy {
         SyncManager(
@@ -38,6 +54,13 @@ object SyncCoordinator {
     }
 
     val reads: ReadClients by lazy { ReadClients(api) }
+
+    /** Best-effort Shorts Control sync (activate / edit / disable) through
+     *  the same single HTTP client — control commands are pushed directly,
+     *  never queued (the durable queue holds data records). */
+    val shortsControlSync: com.shortscap.app.shorts.ShortsControlSyncer by lazy {
+        com.shortscap.app.shorts.ShortsControlSyncer(api)
+    }
 
     // ------------------------------------------------------------------
     // Enqueue helpers

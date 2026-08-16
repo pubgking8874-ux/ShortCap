@@ -136,6 +136,146 @@ class ShortsEventResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Shorts Control — 24-hour limit cycle + HUD preference + insights
+# ---------------------------------------------------------------------------
+
+
+# Cycle status values mirror the Android ShortsLimitCycleStatus enum exactly.
+ShortsLimitCycleStatus = Literal["ACTIVE", "LIMIT_REACHED", "EXPIRED", "DISABLED"]
+
+# HUD appearance values mirror the Android ShortsHudAppearance enum exactly.
+ShortsHudAppearance = Literal["BRAIN", "LIVE_COUNTER", "SHORTSCAP"]
+
+
+class ShortsLimitCycleResponse(BaseModel):
+    """One persisted 24-hour Shorts limit cycle.
+
+    `remaining_seconds` and `usage_ratio` are DERIVED at response time (the
+    spec requires them on the limit-cycle API); they are never persisted as
+    continuously decreasing values. Defaults keep `model_validate` working
+    from ORM objects — the router fills them in explicitly."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    device_id: int | None = None
+    limit_count: int
+    current_count: int
+    cycle_started_at: datetime
+    cycle_expires_at: datetime
+    status: str
+    warning_triggered: bool
+    limit_reached: bool
+    remaining_seconds: int = 0
+    usage_ratio: float = 0.0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ShortControlLimitCycle(BaseModel):
+    """The computed limit-cycle block of the Shorts Control response: the
+    authoritative synchronized cycle info Android renders (count / limit,
+    status, window times, remaining seconds and usage ratio for circular
+    progress). Remaining time is DERIVED from timestamps at request time —
+    never a persisted, continuously decreasing value."""
+
+    limit_count: int
+    current_count: int
+    status: str
+    cycle_started_at: datetime
+    cycle_expires_at: datetime
+    remaining_seconds: int
+    usage_ratio: float
+    warning_triggered: bool
+    limit_reached: bool
+
+
+class ShortPlatformConfig(BaseModel):
+    """One canonical short-form platform configuration option (Short
+    Applications). The eight platforms are the product's supported set;
+    `enabled` is the default configuration state — runtime per-platform
+    toggles remain Android-local until the settings sync phase, and these
+    flags never claim real-device verification."""
+
+    id: str
+    name: str
+    domain: str
+    enabled: bool
+
+
+class ShortControlApplications(BaseModel):
+    """The Short Applications block — the canonical platform catalog."""
+
+    platforms: list[ShortPlatformConfig]
+
+
+class ShortsInsightsPeriod(BaseModel):
+    """One period's Shorts usage summary (aggregated from stored
+    `shorts_usage` rows — real data only, missing platforms never
+    fabricated)."""
+
+    total_shorts_count: int
+    total_duration_seconds: int
+    warning_count: int
+    limit_reached_count: int
+    platform_breakdown: list[dict]
+
+
+class ShortsInsights(BaseModel):
+    """The Shorts Insights block — Yesterday / Today / This Week / This Month."""
+
+    yesterday: ShortsInsightsPeriod
+    today: ShortsInsightsPeriod
+    this_week: ShortsInsightsPeriod
+    this_month: ShortsInsightsPeriod
+
+
+class ShortControlHud(BaseModel):
+    """The HUD block — the persisted HUD appearance preference."""
+
+    appearance: str
+
+
+class ShortControlResponse(BaseModel):
+    """The combined Shorts Control state consumed by Android:
+    applications (canonical platform catalog), the current limit cycle (or
+    None when no cycle is active), the HUD appearance preference and the
+    read-only insights summaries. The Android app remains the real-time
+    enforcement authority — this is synchronized configuration + state only."""
+
+    applications: ShortControlApplications
+    limit_cycle: ShortControlLimitCycle | None = None
+    hud: ShortControlHud
+    insights: ShortsInsights
+
+
+class ShortsControlUpdate(BaseModel):
+    """Partial update of the persisted Shorts Control settings (PUT
+    /shorts/control). Unspecified fields are preserved. Changing the limit
+    never resets an active cycle's count or 24-hour timer — only the
+    threshold changes for the existing window."""
+
+    limit_count: int | None = Field(default=None, ge=0)
+    warning_count: int | None = Field(default=None, ge=0)
+    warning_minutes: int | None = Field(default=None, ge=0)
+    is_enabled: bool | None = None
+    strict_mode_enabled: bool | None = None
+    hud_appearance: ShortsHudAppearance | None = None
+
+
+class ShortsLimitCycleActivate(BaseModel):
+    """Activate a 24-hour Shorts limit cycle with the given limit count.
+    `device_id` is optional (the approved single-device development reality
+    keeps the active cycle per-user); when supplied it must belong to the
+    caller. If an active cycle already exists, the API returns it unchanged
+    instead of creating a second one."""
+
+    limit_count: int = Field(..., gt=0)
+    device_id: int | None = None
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

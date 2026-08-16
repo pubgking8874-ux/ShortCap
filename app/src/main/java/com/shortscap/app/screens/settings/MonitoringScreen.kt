@@ -58,17 +58,17 @@ import com.shortscap.app.theme.ScTextStyles
  *   STRICT MODE      → Strict Mode switch
  *   STUDY MODE       → Study Mode (relocated from the General section; kept
  *                      exactly as it was — same card, same design)
- *   SHORTS           → Shorts Control (opens the dedicated per-platform screen)
  *   MONITORING SCHEDULE → Monitoring Schedule page
  *
  * Break Reminder / Break Duration is NOT a separate monitoring item — it
  * belongs exclusively to Study Mode (StudyModeScreen owns that feature),
  * which now lives in this section.
  *
- * App Blocking, Daily Screen Time Limit, per-platform Shorts toggles and the
- * read-only Statistics tiles no longer live here (their underlying concepts
- * and infrastructure are preserved for the future Settings/Restriction
- * section — only this page's dependency was removed).
+ * App Blocking, Daily Screen Time Limit and per-platform Shorts toggles no
+ * longer live here: Shorts controls were consolidated into their own
+ * top-level Settings → Short Control section (Short Applications / Shorts
+ * Limit / Shorts HUD / Shorts Insights) so there is exactly one canonical
+ * location for every Shorts setting.
  *
  * All state is driven by [MonitoringSettings] passed from the ViewModel; the
  * screen never hardcodes business logic or text (all labels come from the
@@ -87,7 +87,6 @@ fun MonitoringScreen(
     onToggleMonitoring: (Boolean) -> Unit,
     onToggleStrictMode: (Boolean) -> Unit,
     onOpenStudyMode: () -> Unit,
-    onOpenShortsControl: () -> Unit,
     onOpenSchedule: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -142,16 +141,11 @@ fun MonitoringScreen(
                 onClick = onOpenStudyMode,
             )
 
-            // ---- Section 3 — Shorts Control (dedicated screen) ----
-            SectionTitle(strings.monitoringShortsSection)
-            ScPremiumNavCard(
-                iconKey = IconKey.SHORTS_CONTROL,
-                title = strings.monitoringShortsControl,
-                subtitle = strings.monitoringShortsControlDesc,
-                onClick = onOpenShortsControl,
-            )
+            // Shorts controls were consolidated into Settings → Short Control
+            // (their own top-level section) — Monitoring now only carries
+            // general monitoring settings. Shorts Control no longer lives here.
 
-            // ---- Section 4 — Monitoring Schedule (dedicated page) ----
+            // ---- Section 3 — Monitoring Schedule (dedicated page) ----
             SectionTitle(strings.monitoringSchedule)
             ScPremiumNavCard(
                 iconKey = IconKey.SCHEDULE,

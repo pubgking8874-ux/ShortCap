@@ -5,10 +5,13 @@ SQLAlchemy -> MySQL. Routers contain NO database queries and services
 contain NO HTTP logic.
 
 Endpoints:
-  Usage sync   POST /shorts/usage/sync     (one or a batch of records)
+  Usage sync    POST /shorts/usage/sync     (one or a batch of records)
   Usage history GET /shorts/usage
-  Events       POST /shorts/events, GET /shorts/events
-  Summary      GET /shorts/summary
+  Events        POST /shorts/events, GET /shorts/events
+  Summary       GET /shorts/summary
+  Control       GET /shorts/control, PUT /shorts/control (combined state)
+  Limit cycle   GET /shorts/limit-cycle
+                POST /shorts/limit-cycle/activate, POST /shorts/limit-cycle/disable
 
 The backend is a DATA / SYNCHRONIZATION API only — no real-time Shorts
 detection, no server-side counting loop, no device control. Android remains
@@ -17,7 +20,11 @@ notifications and local buffering; the backend validates, stores and serves
 the synchronized history for later Reports and Your Score/Rank.
 
 Short settings (GET/PUT /settings/shorts) already exist in the Settings layer
-(Phase 7) and are reused — this phase is Shorts DATA, not Shorts SETTINGS.
+(Phase 7) and are reused — this phase adds the Shorts Control domain: the
+durable 24-hour limit cycle (`shorts_limit_cycles`), the persisted HUD
+appearance preference (on `shorts_settings`) and read-only insights. The
+cycle count is RECONCILED from synchronized usage after every usage sync —
+the backend never trusts a client-supplied cycle count.
 
 TEMPORARY DEVELOPMENT IDENTITY (NOT PRODUCTION AUTH):
 AWS Cognito is implemented in a later phase. Until then the API reads the
@@ -34,23 +41,49 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.routers.deps import ensure_dev_user, get_dev_user_id
+from app.models.shorts_limit_cycle import ShortsLimitCycle
 from app.schemas.shorts import (
+    ShortControlResponse,
+    ShortsControlUpdate,
     ShortsEventCreate,
     ShortsEventResponse,
     ShortsEventType,
+    ShortsLimitCycleActivate,
+    ShortsLimitCycleResponse,
     ShortsSummary,
     ShortsUsageRecord,
     ShortsUsageResponse,
 )
+from app.services.settings import ShortsSettingsService
 from app.services.shorts import (
+    ShortsControlService,
     ShortsError,
     ShortsEventService,
+    ShortsLimitCycleService,
     ShortsNotFoundError,
     ShortsUsageService,
     ShortsValidationError,
+    reconcile_cycle_after_usage_sync,
 )
+from app.utils.datetime import utcnow
 
 router = APIRouter(prefix="/shorts", tags=["shorts"])
+
+
+def _cycle_response(cycle: ShortsLimitCycle) -> ShortsLimitCycleResponse:
+    """Build the limit-cycle response with the spec-required derived fields
+    (`remaining_seconds` from timestamps, `usage_ratio` from count/limit).
+    Both are computed at response time — never persisted as decreasing
+    values."""
+    now = utcnow()
+    data = ShortsLimitCycleResponse.model_validate(cycle).model_dump()
+    data["remaining_seconds"] = max(0, int((cycle.cycle_expires_at - now).total_seconds()))
+    data["usage_ratio"] = (
+        round(cycle.current_count / cycle.limit_count, 3)
+        if cycle.limit_count > 0
+        else 0.0
+    )
+    return ShortsLimitCycleResponse(**data)
 
 
 def _raise_http(exc: ShortsError) -> None:
@@ -96,6 +129,9 @@ def sync_shorts_usage(
         synced = ShortsUsageService(db).sync_usage(
             user_id, [r.model_dump() for r in records]
         )
+        # Shorts Control: reconcile the active 24-hour cycle's count from the
+        # synchronized usage (idempotent — re-syncs can never double-count).
+        reconcile_cycle_after_usage_sync(db, user_id)
     except ShortsError as exc:
         _raise_http(exc)
     return [ShortsUsageResponse.model_validate(u) for u in synced]
@@ -197,6 +233,125 @@ def list_events(
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Shorts Control (combined state) + 24-hour limit cycle
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/control",
+    response_model=ShortControlResponse,
+    summary="Get combined Shorts Control state",
+)
+def get_shorts_control(
+    user_id: int = Depends(get_dev_user_id),
+    db: Session = Depends(get_db),
+) -> ShortControlResponse:
+    """The combined Shorts Control state for the current user: the canonical
+    Short Applications catalog, the current 24-hour limit cycle (or null),
+    the HUD appearance preference and read-only Yesterday / Today / This
+    Week / This Month insights. Only the caller's own data is returned."""
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    return ShortControlResponse.model_validate(
+        ShortsControlService(db).control(user_id)
+    )
+
+
+@router.put(
+    "/control",
+    response_model=ShortControlResponse,
+    summary="Update Shorts Control settings",
+)
+def update_shorts_control(
+    payload: ShortsControlUpdate,
+    user_id: int = Depends(get_dev_user_id),
+    db: Session = Depends(get_db),
+) -> ShortControlResponse:
+    """Partial update of the persisted Shorts Control settings (limit,
+    warning thresholds, enable/disable, strict mode, HUD appearance).
+    Changing the limit updates ONLY the active cycle's threshold — the
+    current count and the 24-hour timer are preserved. Returns the refreshed
+    control state."""
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    return ShortControlResponse.model_validate(
+        ShortsControlService(db).update_control(
+            user_id, payload.model_dump(exclude_unset=True)
+        )
+    )
+
+
+@router.get(
+    "/limit-cycle",
+    response_model=ShortsLimitCycleResponse,
+    summary="Get the current 24-hour Shorts limit cycle",
+)
+def get_limit_cycle(
+    user_id: int = Depends(get_dev_user_id),
+    db: Session = Depends(get_db),
+) -> ShortsLimitCycleResponse:
+    """Return the user's current 24-hour limit cycle (ACTIVE or
+    LIMIT_REACHED). Expired cycles are marked EXPIRED inline and then treated
+    as absent. 404 when no cycle is active yet — the control endpoint's
+    `limit_cycle` block is null in that case."""
+    cycle = ShortsLimitCycleService(db).get_active(user_id)
+    if cycle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active Shorts limit cycle.",
+        )
+    return _cycle_response(cycle)
+
+
+@router.post(
+    "/limit-cycle/activate",
+    response_model=ShortsLimitCycleResponse,
+    summary="Activate a 24-hour Shorts limit cycle",
+)
+def activate_limit_cycle(
+    payload: ShortsLimitCycleActivate,
+    user_id: int = Depends(get_dev_user_id),
+    db: Session = Depends(get_db),
+) -> ShortsLimitCycleResponse:
+    """Activate a 24-hour cycle with the given limit count. If an active
+    cycle already exists it is returned UNCHANGED (never a second cycle).
+    The cycle persists immediately; the count starts at zero and the window
+    is [now, now + 24h]. The limit is also persisted to the user's Shorts
+    settings (daily_limit_count)."""
+    ensure_dev_user(db, user_id)  # TEMPORARY DEVELOPMENT ONLY
+    try:
+        # Persist the configured limit to the user's Shorts settings (the
+        # threshold a future cycle starts from); does not touch any cycle.
+        ShortsSettingsService(db).update_settings(
+            user_id, {"daily_limit_count": payload.limit_count}
+        )
+        cycle = ShortsLimitCycleService(db).activate(
+            user_id, payload.limit_count, device_id=payload.device_id
+        )
+    except ShortsError as exc:
+        _raise_http(exc)
+    return _cycle_response(cycle)
+
+
+@router.post(
+    "/limit-cycle/disable",
+    response_model=ShortsLimitCycleResponse,
+    summary="Disable the current Shorts limit cycle",
+)
+def disable_limit_cycle(
+    user_id: int = Depends(get_dev_user_id),
+    db: Session = Depends(get_db),
+) -> ShortsLimitCycleResponse:
+    """Disable Shorts control: the active cycle becomes DISABLED (historical;
+    usage/events are never deleted). 404 when no active cycle exists."""
+    cycle = ShortsLimitCycleService(db).disable(user_id)
+    if cycle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active Shorts limit cycle.",
+        )
+    return _cycle_response(cycle)
 
 
 @router.get(

@@ -71,6 +71,9 @@ class User(Base):
     shorts_settings: Mapped["ShortsSettings"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    shorts_limit_cycles: Mapped[list["ShortsLimitCycle"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     shorts_usage: Mapped[list["ShortsUsage"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

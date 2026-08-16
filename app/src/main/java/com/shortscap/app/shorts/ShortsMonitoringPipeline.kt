@@ -35,6 +35,14 @@ class ShortsMonitoringPipeline(
     private val aggregator: ShortUsageAggregator = DefaultShortUsageAggregator(),
     private val budget: ShortsBudgetTracker = ShortsBudgetTracker(),
     private val store: ShortsLocalStore = InMemoryShortsLocalStore(),
+    /**
+     * P1-5: the authoritative control engine fed with every VALID Short
+     * (the aggregator already applied the 3–5 second rule). The engine owns
+     * the 24-hour count/limit/warning/expiry lifecycle and persists it;
+     * detection and counting stay separate. Null keeps the pipeline
+     * standalone for tests.
+     */
+    private val controlEngine: ShortsControlEngine? = null,
     private val detect: (ShortDetectionSignals) -> ShortDetectionResult = { signals ->
         registry.detect(signals)
     },
@@ -55,10 +63,40 @@ class ShortsMonitoringPipeline(
 
     companion object {
         /**
-         * The shared app-wide pipeline, subscribed to [MonitoringEventHub]
-         * exactly once. Idempotent.
+         * The store the shared pipeline records into. P1-2: defaults to the
+         * in-memory store; [ShortsCapApp] installs the durable Room-backed
+         * store at app start so pending Shorts usage/events survive process
+         * death and are drained after restart.
          */
-        private val shared = ShortsMonitoringPipeline()
+        @Volatile
+        private var sharedStore: ShortsLocalStore = InMemoryShortsLocalStore()
+
+        /**
+         * P1-5: the app-wide control engine installed at startup. The shared
+         * pipeline feeds every valid Short to it so the 24-hour cycle is the
+         * authoritative count for the HUD and Short Control page.
+         */
+        @Volatile
+        private var sharedControlEngine: ShortsControlEngine? = null
+
+        /** Installs the durable store before the shared pipeline is first used. */
+        fun installDurableStore(store: ShortsLocalStore) {
+            sharedStore = store
+        }
+
+        /** P1-5: installs the authoritative control engine at app start. */
+        fun installControlEngine(engine: ShortsControlEngine) {
+            sharedControlEngine = engine
+        }
+
+        /**
+         * The shared app-wide pipeline, subscribed to [MonitoringEventHub]
+         * exactly once. Idempotent. Created lazily so the durable store
+         * installed at app start is picked up.
+         */
+        private val shared by lazy {
+            ShortsMonitoringPipeline(store = sharedStore, controlEngine = sharedControlEngine)
+        }
 
         /**
          * The shared app-wide pipeline instance — the Shorts HUD (and any
@@ -157,6 +195,16 @@ class ShortsMonitoringPipeline(
         val update = aggregator.evaluate(result, signals)
         budget.apply(update)
         if (update.counted) {
+            // P1-5: the authoritative cycle consumes every valid Short. The
+            // candidate key is the context identity (package+class+start) so
+            // the engine can dedupe repeated callbacks; the 3–5s rule was
+            // already applied by the aggregator above.
+            controlEngine?.onShortCounted(
+                candidateKey = "${result.platform.name}:${result.surface.name}:${context.startedAt}",
+                occurredAt = context.startedAt,
+                durationMillis = update.durationMillis,
+                now = now,
+            )
             store.recordUsage(
                 LocalShortsUsage(
                     platform = update.platform,

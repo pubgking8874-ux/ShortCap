@@ -116,7 +116,15 @@ object IconTheme {
         // not a generic list icon.
         IconKey.ALLOWED_APPS -> AllowedAppsIcon
         IconKey.STRICT_MODE -> Icons.Filled.GppMaybe
+        // Short Control — SmartDisplay stays the section icon (Settings →
+        // Short Control row + hub entry). The sub-pages get their own icons:
         IconKey.SHORTS_CONTROL -> Icons.Filled.SmartDisplay
+        // Short Applications — the grid of enabled short-form platforms.
+        IconKey.SHORTS_APPLICATIONS -> Icons.Filled.Apps
+        // Shorts Limit — the 24-hour count/timer limit.
+        IconKey.SHORTS_LIMIT -> Icons.Filled.Timer
+        // Shorts Insights — read-only usage summaries.
+        IconKey.SHORTS_INSIGHTS -> Icons.Filled.Insights
         IconKey.BREAK_REMINDER -> Icons.Filled.SelfImprovement
         IconKey.REMINDER_INTERVAL -> Icons.Filled.Alarm
         IconKey.SCHEDULE -> Icons.Filled.CalendarMonth
@@ -279,6 +287,9 @@ private object VibrantPalette {
         IconKey.ALLOWED_APPS -> green
         IconKey.STRICT_MODE -> red
         IconKey.SHORTS_CONTROL -> cyan
+        IconKey.SHORTS_APPLICATIONS -> indigo
+        IconKey.SHORTS_LIMIT -> amber
+        IconKey.SHORTS_INSIGHTS -> purple
         IconKey.BREAK_REMINDER -> teal
         IconKey.REMINDER_INTERVAL -> purple
         IconKey.SCHEDULE -> indigo

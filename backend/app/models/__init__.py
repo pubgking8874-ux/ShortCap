@@ -20,6 +20,7 @@ from app.models.notification_preference import NotificationPreference
 from app.models.otp_verification import OtpVerification
 from app.models.permission_state import PermissionState
 from app.models.shorts_event import ShortsEvent
+from app.models.shorts_limit_cycle import ShortsLimitCycle
 from app.models.shorts_settings import ShortsSettings
 from app.models.shorts_usage import ShortsUsage
 from app.models.study_event import StudyEvent
@@ -46,6 +47,7 @@ __all__ = [
     "OtpVerification",
     "PermissionState",
     "ShortsEvent",
+    "ShortsLimitCycle",
     "ShortsSettings",
     "ShortsUsage",
     "StudyEvent",

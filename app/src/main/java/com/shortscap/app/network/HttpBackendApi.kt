@@ -557,6 +557,93 @@ class HttpBackendApi(
     }
 
     // ------------------------------------------------------------------
+    // Shorts Control (24-hour limit cycle + HUD preference)
+    // ------------------------------------------------------------------
+
+    override suspend fun getShortsControl(): ApiResult<ShortsControlDto> {
+        val result = request("GET", "/shorts/control")
+        return when (result) {
+            is ApiResult.Success -> {
+                val m = parseObject(result.data)
+                ApiResult.Success(parseControl(m))
+            }
+            is ApiResult.HttpError -> result
+            is ApiResult.NetworkError -> result
+        }
+    }
+
+    override suspend fun getShortsLimitCycle(): ApiResult<ShortsLimitCycleDto?> {
+        val result = request("GET", "/shorts/limit-cycle")
+        return when (result) {
+            is ApiResult.Success -> ApiResult.Success(parseCycle(parseObject(result.data)))
+            // 404 = no active cycle yet — a normal state, not an error.
+            is ApiResult.HttpError -> if (result.status == 404) ApiResult.Success(null) else result
+            is ApiResult.NetworkError -> result
+        }
+    }
+
+    override suspend fun activateShortsLimitCycle(limitCount: Int): ApiResult<ShortsLimitCycleDto?> {
+        val result = request(
+            "POST", "/shorts/limit-cycle/activate",
+            body("limit_count" to limitCount),
+        )
+        return when (result) {
+            is ApiResult.Success -> ApiResult.Success(parseCycle(parseObject(result.data)))
+            is ApiResult.HttpError -> result
+            is ApiResult.NetworkError -> result
+        }
+    }
+
+    override suspend fun updateShortsControl(limitCount: Int): ApiResult<ShortsControlDto> {
+        val result = request(
+            "PUT", "/shorts/control",
+            body("limit_count" to limitCount),
+        )
+        return when (result) {
+            is ApiResult.Success -> ApiResult.Success(parseControl(parseObject(result.data)))
+            is ApiResult.HttpError -> result
+            is ApiResult.NetworkError -> result
+        }
+    }
+
+    override suspend fun disableShortsLimitCycle(): ApiResult<ShortsLimitCycleDto?> {
+        val result = request("POST", "/shorts/limit-cycle/disable")
+        return when (result) {
+            is ApiResult.Success -> ApiResult.Success(parseCycle(parseObject(result.data)))
+            is ApiResult.HttpError -> if (result.status == 404) ApiResult.Success(null) else result
+            is ApiResult.NetworkError -> result
+        }
+    }
+
+    private fun parseCycle(m: Map<String, Any?>): ShortsLimitCycleDto = ShortsLimitCycleDto(
+        id = m["id"] as? Int,
+        limitCount = m["limit_count"] as? Int,
+        currentCount = m["current_count"] as? Int,
+        cycleStartedAt = m["cycle_started_at"] as? String,
+        cycleExpiresAt = m["cycle_expires_at"] as? String,
+        status = m["status"] as? String,
+        warningTriggered = m["warning_triggered"] as? Boolean,
+        limitReached = m["limit_reached"] as? Boolean,
+        remainingSeconds = (m["remaining_seconds"] as? Number)?.toLong(),
+        usageRatio = (m["usage_ratio"] as? Number)?.toDouble(),
+    )
+
+    private fun parseControl(m: Map<String, Any?>): ShortsControlDto {
+        val cycleMap = m["limit_cycle"] as? Map<String, Any?>
+        val hud = m["hud"] as? Map<String, Any?>
+        val applications = m["applications"] as? Map<String, Any?>
+        val platforms = (applications?.get("platforms") as? List<*>)
+            ?.mapNotNull { it as? Map<String, Any?> }
+            ?: emptyList()
+        return ShortsControlDto(
+            limitCycle = cycleMap?.let { parseCycle(it) },
+            hudAppearance = hud?.get("appearance") as? String,
+            platforms = platforms,
+            raw = m,
+        )
+    }
+
+    // ------------------------------------------------------------------
     // Web
     // ------------------------------------------------------------------
 

@@ -59,6 +59,24 @@
         data source and needs no UI changes.
     -->
     <queries>
+        <!-- Short Applications discovery (Short Control): every package the
+             existing ShortPlatformRegistry recognizes as a supported
+             short-form platform, so PackageManager can report whether each
+             is installed on Android 11+ (API 30+). Deliberately minimal
+             package visibility — no QUERY_ALL_PACKAGES; unknown/random
+             installed apps are never queried or listed. -->
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.ss.android.ugc.aweme" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.snapchat.android" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="in.mohalla.video" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.twitter.android.lite" />
+        <package android:name="com.linkedin.android" />
+
+        <!-- Installed app icons on Android 11+ (monitoring entity rows). -->
         <package android:name="com.instagram.android" />
         <package android:name="com.whatsapp" />
         <package android:name="com.android.chrome" />
@@ -72,6 +90,7 @@
     </queries>
 
     <application
+        android:name=".ShortsCapApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"

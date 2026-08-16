@@ -38,8 +38,11 @@ import com.shortscap.app.screens.settings.NotificationsScreen
 import com.shortscap.app.screens.settings.AddCustomSoundScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
+import com.shortscap.app.screens.settings.ShortsApplicationsScreen
 import com.shortscap.app.screens.settings.ShortsControlScreen
 import com.shortscap.app.screens.settings.ShortsHudScreen
+import com.shortscap.app.screens.settings.ShortsInsightsScreen
+import com.shortscap.app.screens.settings.ShortsLimitScreen
 import com.shortscap.app.screens.settings.SoundConfigScreen
 import com.shortscap.app.screens.settings.SoundEffectsScreen
 import com.shortscap.app.screens.settings.StudyAllowedItemsScreen
@@ -77,8 +80,12 @@ object SettingsDestinations {
     const val BLOCKED_APPS = "settings_blocked_apps"
     const val ALLOWED_APPS = "settings_allowed_apps"
     const val SCHEDULE = "settings_schedule"
+    // Short Control — canonical top-level Settings section (hub + sub-pages)
     const val SHORTS_CONTROL = "settings_shorts_control"
+    const val SHORTS_APPLICATIONS = "settings_shorts_applications"
+    const val SHORTS_LIMIT = "settings_shorts_limit"
     const val SHORTS_HUD = "settings_shorts_hud"
+    const val SHORTS_INSIGHTS = "settings_shorts_insights"
     const val STUDY_MODE = "settings_study_mode"
     const val STUDY_BREAK_REMINDER = "settings_study_break_reminder"
     const val STUDY_ALLOWED = "settings_study_allowed"
@@ -109,6 +116,7 @@ object SettingsDestinations {
 private fun SettingsDestination.startRoute(): String = when (this) {
     SettingsDestination.GENERAL -> SettingsDestinations.GENERAL
     SettingsDestination.MONITORING -> SettingsDestinations.MONITORING
+    SettingsDestination.SHORTS_CONTROL -> SettingsDestinations.SHORTS_CONTROL
     SettingsDestination.PERMISSIONS -> SettingsDestinations.PERMISSIONS
     SettingsDestination.NOTIFICATIONS -> SettingsDestinations.NOTIFICATIONS
     SettingsDestination.SOUND_EFFECTS -> SettingsDestinations.SOUND_EFFECTS
@@ -283,30 +291,63 @@ fun SettingsNavHost(
                 // Study Mode — the complete feature (relocated from General),
                 // opening the SAME StudyModeScreen and flows as before.
                 onOpenStudyMode = { navController.navigate(SettingsDestinations.STUDY_MODE) },
-                onOpenShortsControl = { navController.navigate(SettingsDestinations.SHORTS_CONTROL) },
                 onOpenSchedule = { navController.navigate(SettingsDestinations.SCHEDULE) },
                 onBack = { navController.backOrClose(onClose) },
             )
         }
 
+        // ---- Short Control — canonical top-level Settings section ----
+        // Settings → Short Control → { Short Applications, Shorts Limit,
+        // Shorts HUD, Shorts Insights }. The hub only navigates; every sub-
+        // page reads its state from the existing engines/stores, so there is
+        // exactly one authoritative location for each Shorts setting.
         composable(SettingsDestinations.SHORTS_CONTROL) {
-            // Shorts Control — per-platform Shorts monitoring switches. State
-            // comes from the same MonitoringSettings.platforms the backend
-            // GET/UPDATE APIs will feed; the screen never hardcodes values.
             ShortsControlScreen(
+                onOpenApplications = { navController.navigate(SettingsDestinations.SHORTS_APPLICATIONS) },
+                onOpenLimit = { navController.navigate(SettingsDestinations.SHORTS_LIMIT) },
+                onOpenHud = { navController.navigate(SettingsDestinations.SHORTS_HUD) },
+                onOpenInsights = { navController.navigate(SettingsDestinations.SHORTS_INSIGHTS) },
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.SHORTS_APPLICATIONS) {
+            // Short Applications — per-platform Shorts monitoring switches.
+            // State comes from the same MonitoringSettings.platforms the
+            // backend GET/UPDATE APIs will feed; the screen never hardcodes
+            // values.
+            ShortsApplicationsScreen(
                 platforms = state.monitoring.platforms,
                 onTogglePlatform = viewModel::togglePlatform,
                 onBack = { navController.backOrClose(onClose) },
             )
         }
 
+        composable(SettingsDestinations.SHORTS_LIMIT) {
+            // Shorts Limit — the authoritative 24-hour cycle (current /
+            // limit, remaining time, circular progress, limit picker) from
+            // the local ShortsControlEngine (P1-5).
+            ShortsLimitScreen(
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
         composable(SettingsDestinations.SHORTS_HUD) {
             // Shorts HUD — floating counter overlay appearance settings,
-            // opened from Settings → Appearance → Shorts HUD. All state lives
-            // in the local ShortsHudSettingsStore; the selected appearance is
-            // pushed live to the running controller so a visible overlay
-            // switches mode immediately.
+            // opened from Settings → Short Control → Shorts HUD. All state
+            // lives in the local ShortsHudSettingsStore; the selected
+            // appearance is pushed live to the running controller so a
+            // visible overlay switches mode immediately.
             ShortsHudScreen(
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
+        composable(SettingsDestinations.SHORTS_INSIGHTS) {
+            // Shorts Insights — read-only usage summaries (Yesterday / Today
+            // / This Week / This Month). Explicit empty state until backend
+            // aggregates are connected; no second reporting engine.
+            ShortsInsightsScreen(
                 onBack = { navController.backOrClose(onClose) },
             )
         }
@@ -419,7 +460,6 @@ fun SettingsNavHost(
                 onOpenChart = { navController.navigate(SettingsDestinations.APPEARANCE_CHART) },
                 onOpenFont = { navController.navigate(SettingsDestinations.APPEARANCE_FONT) },
                 onOpenTextSize = { navController.navigate(SettingsDestinations.APPEARANCE_TEXT_SIZE) },
-                onOpenShortsHud = { navController.navigate(SettingsDestinations.SHORTS_HUD) },
                 onBack = { navController.backOrClose(onClose) },
             )
         }

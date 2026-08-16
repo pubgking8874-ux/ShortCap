@@ -58,7 +58,12 @@ class SyncManager(
     }
 
     private suspend fun syncOne(record: SyncRecord): SyncResult {
-        queue.markSyncing(record.key)
+        // Atomic claim — another worker may already be sending this record;
+        // if so, we must NOT dispatch it (P1-2 STEP 15: no concurrent
+        // processing of the same item).
+        if (!queue.markSyncing(record.key)) {
+            return SyncResult.retrying(record.key, record.kind, "claimed by another worker")
+        }
         val result = try {
             dispatcher.dispatch(record)
         } catch (e: Exception) {
@@ -73,12 +78,12 @@ class SyncManager(
             // Transient: network or 5xx. Retry with backoff until the cap.
             result.isTransient && record.attempts < maxAttempts -> {
                 val backoff = baseBackoffMillis shl (record.attempts.coerceAtMost(5))
-                queue.markFailed(record.key, clock() + backoff)
+                queue.markFailed(record.key, clock() + backoff, sanitize(result))
                 SyncResult.retrying(record.key, record.kind, detail(result))
             }
             else -> {
                 // Permanent (4xx) or retries exhausted -> FAILED, no retry.
-                queue.markFailed(record.key, Long.MAX_VALUE)
+                queue.markFailed(record.key, Long.MAX_VALUE, sanitize(result))
                 SyncResult.failed(record.key, record.kind, detail(result))
             }
         }
@@ -88,5 +93,21 @@ class SyncManager(
         is ApiResult.Success -> ""
         is ApiResult.HttpError -> "HTTP ${result.status}: ${result.body ?: "error"}"
         is ApiResult.NetworkError -> result.message
+    }
+
+    /**
+     * Short, sanitized error classification stored on the durable record
+     * (P1-2 STEP 19): status/type only, bounded length — never the response
+     * body, payload, headers, tokens or secrets.
+     */
+    private fun sanitize(result: ApiResult<*>): String? = when (result) {
+        is ApiResult.Success -> null
+        is ApiResult.HttpError -> "HTTP ${result.status}".take(MAX_ERROR_LENGTH)
+        is ApiResult.NetworkError -> (result.message ?: "network error").take(MAX_ERROR_LENGTH)
+    }
+
+    private companion object {
+        /** Bounded length for persisted error classifications. */
+        const val MAX_ERROR_LENGTH = 200
     }
 }

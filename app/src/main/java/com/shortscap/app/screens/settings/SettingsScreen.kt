@@ -46,6 +46,10 @@ fun SettingsScreen(
     val settingsItems = listOf(
         SettingsItem(SettingsDestination.GENERAL, IconKey.GENERAL, strings.settingsGeneral),
         SettingsItem(SettingsDestination.MONITORING, IconKey.MONITORING, strings.settingsMonitoring),
+        // Short Control — canonical top-level Settings section owning every
+        // Shorts setting (Short Applications / Shorts Limit / Shorts HUD /
+        // Shorts Insights).
+        SettingsItem(SettingsDestination.SHORTS_CONTROL, IconKey.SHORTS_CONTROL, strings.settingsShortControl),
         SettingsItem(SettingsDestination.PERMISSIONS, IconKey.PERMISSIONS, strings.settingsPermissions),
         SettingsItem(SettingsDestination.NOTIFICATIONS, IconKey.NOTIFICATIONS, strings.settingsNotifications),
         // Sound & Effects — the central control panel for all ShortsCap app

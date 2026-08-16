@@ -3,6 +3,7 @@ package com.shortscap.app.hud
 import android.content.Context
 import com.shortscap.app.shorts.ShortFormSurfaceListener
 import com.shortscap.app.shorts.ShortFormSurfaceState
+import com.shortscap.app.shorts.ShortsControlEngine
 import com.shortscap.app.shorts.ShortsMonitoringPipeline
 
 /**
@@ -19,9 +20,12 @@ import com.shortscap.app.shorts.ShortsMonitoringPipeline
  * The controller NEVER detects Shorts itself — it consumes the pipeline's
  * broadcast [ShortFormSurfaceState] (non-null only when the foreground
  * context is positively short-form) and shows/hides the overlay
- * accordingly. The global count comes from the pipeline's budget tracker
- * (ONE count across all platforms — YouTube + Instagram + TikTok + ... all
- * contribute to the same total, never per-platform HUD counters).
+ * accordingly. Since P1-5 the count/limit come from the AUTHORITATIVE
+ * [ShortsControlEngine] (ONE count across all platforms feeding the same
+ * 24-hour cycle, persisted across restarts) — the HUD never maintains its
+ * own count. The engine limit is used when an active cycle exists;
+ * otherwise the configured HUD daily limit (the settings default) is
+ * displayed.
  *
  * The overlay is only shown when the HUD is enabled in settings AND the
  * SYSTEM_ALERT_WINDOW permission is granted; otherwise it fails gracefully.
@@ -98,13 +102,13 @@ object ShortsHudController {
 
     private fun updateUiState(state: ShortFormSurfaceState) {
         val store = context?.let { ShortsHudSettingsStore(it) } ?: return
-        uiState.count = globalCount()
-        uiState.limit = store.dailyLimit()
+        // P1-5: the authoritative 24-hour cycle is the HUD's count/limit
+        // source. When no active cycle exists (control disabled / not yet
+        // activated) the configured daily limit is displayed instead.
+        val controlState = ShortsControlEngine.shared.currentState()
+        uiState.count = controlState.currentCount
+        uiState.limit = if (controlState.limitCount > 0) controlState.limitCount else store.dailyLimit()
     }
-
-    /** Global Shorts count across ALL platforms (from the pipeline budget). */
-    private fun globalCount(): Int =
-        ShortsMonitoringPipeline.sharedInstance.currentBudget().totalShorts.toInt()
 
     /** Refreshes the daily limit from the local settings store. */
     private fun refreshLimit() {

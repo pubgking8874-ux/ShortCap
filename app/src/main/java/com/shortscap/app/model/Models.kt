@@ -71,7 +71,7 @@ data class ProfileData(
  * Settings -> <item> -> Back -> Settings.
  */
 enum class SettingsDestination {
-    GENERAL, MONITORING, PERMISSIONS, NOTIFICATIONS, SOUND_EFFECTS, APPEARANCE, ABOUT,
+    GENERAL, MONITORING, SHORTS_CONTROL, PERMISSIONS, NOTIFICATIONS, SOUND_EFFECTS, APPEARANCE, ABOUT,
 }
 
 /** One row on the Settings home — icon + title + chevron only (no subtitles). */
@@ -103,8 +103,12 @@ data class ShortVideoPlatform(
 val DefaultShortVideoPlatforms = listOf(
     ShortVideoPlatform("youtube_shorts", "YouTube Shorts", "youtube.com", true),
     ShortVideoPlatform("instagram_reels", "Instagram Reels", "instagram.com", true),
-    ShortVideoPlatform("facebook_reels", "Facebook Reels", "facebook.com", false),
+    ShortVideoPlatform("tiktok", "TikTok", "tiktok.com", true),
     ShortVideoPlatform("snapchat_spotlight", "Snapchat Spotlight", "snapchat.com", false),
+    ShortVideoPlatform("facebook_reels", "Facebook Reels", "facebook.com", false),
+    ShortVideoPlatform("moj", "Moj", "mojapp.in", true),
+    ShortVideoPlatform("x", "X", "x.com", true),
+    ShortVideoPlatform("linkedin", "LinkedIn", "linkedin.com", true),
 )
 
 /**

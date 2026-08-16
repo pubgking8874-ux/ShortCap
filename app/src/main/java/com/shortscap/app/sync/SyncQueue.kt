@@ -12,9 +12,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  * down. [enqueue] is idempotent by [SyncRecord.key]: an unsynced record with
  * the same key is not duplicated (Phase 16 §12).
  *
- * The interface keeps the queue swappable (in-memory today; SharedPreferences
- * / Room persistence is a documented future seam) without touching the
- * manager or syncers.
+ * P1-2 makes the queue DURABLE: the default implementation is Room-backed
+ * ([com.shortscap.app.sync.RoomSyncQueue]), so pending records survive
+ * process death and app restart. The interface itself is unchanged so the
+ * manager and syncers are untouched.
  */
 interface SyncQueue {
 
@@ -28,14 +29,23 @@ interface SyncQueue {
     /** All records not yet SYNCED (PENDING + FAILED), oldest first. */
     fun pending(): List<SyncRecord>
 
-    /** Marks [key] as being sent right now. */
-    fun markSyncing(key: String)
+    /**
+     * Atomically claims [key] for sending (PENDING/FAILED -> SYNCING).
+     * Returns true when THIS caller won the claim — the concurrent-worker
+     * guard: a second worker claiming the same key gets false and must not
+     * dispatch it (P1-2 STEP 15).
+     */
+    fun markSyncing(key: String): Boolean
 
     /** Marks [key] as successfully synced and removes it from the queue. */
     fun markSynced(key: String)
 
-    /** Marks [key] as failed, optionally scheduling a retry time. */
-    fun markFailed(key: String, nextRetryAtMillis: Long = 0L)
+    /**
+     * Marks [key] as failed, optionally scheduling a retry time and storing
+     * a SHORT sanitized error classification ([lastError] — never payloads,
+     * tokens, headers or secrets, P1-2 STEP 19).
+     */
+    fun markFailed(key: String, nextRetryAtMillis: Long = 0L, lastError: String? = null)
 
     /** Number of queued records (debug / UI badge). */
     fun size(): Int
@@ -45,11 +55,15 @@ interface SyncQueue {
 }
 
 /**
- * Thread-safe in-memory queue. Records are keyed by idempotency key; the
- * pending list preserves insertion order. A record is kept as FAILED with
- * its retry time until [markSynced] removes it — a permanent 4xx failure
- * stays visible for inspection without retrying (bounded by the manager's
- * attempt cap).
+ * Thread-safe in-memory queue (default / test queue). Records are keyed by
+ * idempotency key; the pending list preserves insertion order. A record is
+ * kept as FAILED with its retry time until [markSynced] removes it — a
+ * permanent 4xx failure stays visible for inspection without retrying
+ * (bounded by the manager's attempt cap).
+ *
+ * P1-2: [markSyncing] now actually transitions to SYNCING (matching the
+ * durable Room queue) so a second worker can never re-dispatch a record
+ * that is in flight.
  */
 class InMemorySyncQueue : SyncQueue {
 
@@ -68,12 +82,24 @@ class InMemorySyncQueue : SyncQueue {
 
     override fun pending(): List<SyncRecord> =
         order.mapNotNull { records[it] }
+            .filter { it.isOutstanding() }
             .sortedBy { it.createdAtMillis }
 
-    override fun markSyncing(key: String) {
+    override fun markSyncing(key: String): Boolean {
+        var claimed = false
         records.computeIfPresent(key) { _, record ->
-            record.copy(attempts = record.attempts + 1)
+            if (record.isOutstanding()) {
+                claimed = true
+                record.copy(
+                    state = SyncState.SYNCING,
+                    attempts = record.attempts + 1,
+                    lastAttemptAtMillis = System.currentTimeMillis(),
+                )
+            } else {
+                record
+            }
         }
+        return claimed
     }
 
     override fun markSynced(key: String) {
@@ -81,11 +107,12 @@ class InMemorySyncQueue : SyncQueue {
         order.remove(key)
     }
 
-    override fun markFailed(key: String, nextRetryAtMillis: Long) {
+    override fun markFailed(key: String, nextRetryAtMillis: Long, lastError: String?) {
         records.computeIfPresent(key) { _, record ->
             record.copy(
                 state = SyncState.FAILED,
                 nextRetryAtMillis = nextRetryAtMillis,
+                lastError = lastError,
             )
         }
     }
