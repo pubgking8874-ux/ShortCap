@@ -2401,6 +2401,31 @@ Android-side follow-up to the Shorts Control Backend (no backend changes):
   10 backend verify scripts still PASS. Backend / database / schema
   untouched.
 
+### Short Control Engine + Short Applications — Android-side follow-ups (Aug 16, 2026)
+
+**Status: completed. Backend-side no-op — contract only.**
+
+- **Short Control Engine (audit/consolidation):** the dedicated Android
+  Shorts control boundary (`ShortsControlEngine` + `ShortsLimitCycle`,
+  installed at app start, fed by the detection pipeline, read by the HUD and
+  Shorts Limit page) was audited end-to-end and confirmed complete — no
+  duplicate or contradictory Shorts logic exists to remove. Detection
+  (registry/adapters) → engine (limit/cycle/count/lock state) → HUD
+  (display-only) → sync (`ShortsControlSyncer`, best-effort) → backend
+  (durable `shorts_limit_cycles`) responsibilities stay separated.
+- **Short Applications (dynamic discovery):** `Settings → Short Control →
+  Short Applications` now discovers installed supported apps via
+  PackageManager against the existing platform registry (real label + icon,
+  deterministic order, `<queries>` visibility — no `QUERY_ALL_PACKAGES`),
+  refreshes on entry/resume/package broadcasts, and locks all toggles while
+  the 24-hour cycle is active (no mid-cycle bypass). Only stable platform
+  configuration is persisted/synced — no package inventory ever reaches the
+  backend. Backend contract unchanged (the 8-platform catalog + control
+  endpoints already exist); no schema, migration or API changes.
+- **Verification:** Android unit tests **129/129**, compile + release build
+  PASS, lint `NewApi` = 0 (P1-1 fixed), P1-2 durable queue intact; backend
+  untouched and still 10/10 verify scripts green.
+
 ## Planned / next (NOT implemented yet)
 
 Android → backend sync (settings, study, monitoring, shorts — including

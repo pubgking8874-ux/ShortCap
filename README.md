@@ -385,6 +385,7 @@ Settings → **Permissions** is a clean, minimal **permission status overview** 
 - **Status colors** — 🟢 green = Enabled; 🟠 orange / 🔴 red = Disabled (color reflects the internal state — not granted vs denied).
 - **Live OS checks** — `permissions/PermissionRepository.kt` resolves every status from the Android OS: Usage Access via `AppOpsManager`, Accessibility via `ENABLED_ACCESSIBILITY_SERVICES`, overlay via `Settings.canDrawOverlays`, notifications via `NotificationManagerCompat`, battery via `PowerManager`, storage via `ContextCompat.checkSelfPermission` (version-aware: `READ_MEDIA_*` on Android 13+, including partial "Select photos" access on 14+), System Audio Access via `isNotificationPolicyAccessGranted`.
 - **Automatic refresh** — `RefreshPermissionsOnResume` (a `LifecycleEventObserver`) re-checks all permissions every time a Permissions screen reaches `ON_RESUME`; returning from Android Settings updates the UI instantly.
+- **Accessibility persistence (P1-A11Y)** — the Accessibility status is NEVER a local flag: `accessibility/AccessibilityServiceStatus.kt` reads the real Android `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` value and matches ShortsCap's exact `ComponentName`. `PermissionRepository.checkAll` resolves it on app launch (`AppViewModel.init`) and again on every foreground resume (app-root `RefreshPermissionsOnResume`), so after the user enables the service in Android Settings the app does NOT ask again on restart, force-stop/reopen, activity recreation or navigation. Only if the user manually disables the service in Android Settings does the setup guidance reappear — the OS state is the single source of truth (no `permissionGranted = true`-style cached boolean anywhere).
 - **Last checked time** — every `PermissionInfo` stamps `lastCheckedAt`; the detail page shows it (or "Never").
 
 ## Permission Detail Page
@@ -2751,6 +2752,67 @@ platforms), never as a single-app feature.
   `NewApi` = 0 (P1-1 stays fixed), P1-2 durable queue intact; all 9 backend
   verify scripts PASS. Backend / database / schema untouched — no new Shorts
   engine implemented.
+
+### Short Applications — dynamic installed-app discovery + 24-hour configuration lock *(Aug 16, 2026)*
+
+- **What:** `Settings → Short Control → Short Applications` is NO longer a
+  hardcoded static list. It is derived from the apps actually installed on
+  the device: `PackageManager → InstalledShortApplicationRegistry →
+  ShortPlatformRegistry → ShortApplicationEntry`. Only supported short-form
+  platforms that are really installed appear (YouTube Shorts, Instagram
+  Reels, TikTok, Snapchat Spotlight, Facebook Reels, Moj, X, LinkedIn);
+  unknown/random apps never appear.
+- **Real label + icon:** each row resolves the installed app's REAL
+  application label and icon via PackageManager (generic brand-favicon /
+  letter fallback when unreadable — never crashes). Platform and installed
+  application are separate concepts; a platform may be architected but
+  absent from the device.
+- **Refresh:** list re-discovers on screen entry, on resume, and on
+  package added/removed/replaced broadcasts (`<queries>` visibility, no
+  polling loop, **no `QUERY_ALL_PACKAGES`** — minimal package visibility).
+- **24-hour lock:** while `ShortsControlEngine.hasActiveCycle()` is true all
+  toggles become read-only (lock icon + disabled switch + locked banner) so
+  the user cannot bypass enforcement mid-cycle — installing a NEW supported
+  app during an active cycle auto-adds it already locked; uninstalling never
+  alters the cycle, count or timer; after expiry the toggles unlock.
+- **Persistence:** only stable platform configuration (`platforms` in
+  `MonitoringSettings`) is stored; icons are resolved dynamically. Backend
+  sync continues through the existing Shorts settings contract (no package
+  inventory is uploaded).
+- **Verification:** compile + unit tests (129/129 incl. new
+  `InstalledShortApplicationRegistryTest`) pass; release build + lint
+  (`NewApi` = 0) verified; P1-1 / P1-2 stay fixed.
+
+### Short Control Engine — consolidated audit of the dedicated Shorts control boundary *(Aug 16, 2026)*
+
+- **Audit result:** the dedicated Shorts Control Engine boundary already
+  exists in the project (built across P1-5 and the follow-up pages) and is
+  fully wired end-to-end. No duplicate/contradictory Shorts logic was found
+  to remove; nothing needed to be re-implemented.
+- **The engine** (`shorts/ShortsControlEngine.kt` + `ShortsLimitCycle.kt`
+  domain model, installed in `ShortsCapApplication`) OWNS the Shorts limit,
+  the active 24-hour cycle, current count, remaining count, warning state,
+  limit-reached state, cycle lock and HUD-facing state. It does NOT own raw
+  accessibility detection, platform-specific detection, backend HTTP, Score,
+  Rank or Reports.
+- **Detection flow:** `MonitoringEventHub → ShortPlatformRegistry →
+  ShortPlatformAdapter → ShortDetectionResult → ShortsControlEngine`. The
+  engine consumes validated results; it never detects Shorts itself.
+- **Counting:** the existing 3–5 second meaningful-engagement rule is
+  preserved (applied by `ShortUsageAggregator`), one logical Short counts
+  once (duplicate-safe), platform-agnostic single `currentCount` for the
+  one active cycle.
+- **Boundaries:** Detection detects · Engine controls limit/cycle/count state
+  · ShortUsageAggregator aggregates · HUD displays (reads `currentState()`,
+  never its own count) · Sync synchronizes (`ShortsControlSyncer` best-effort
+  mirror) · Backend persists durable server state (`shorts_limit_cycles`).
+  The active-cycle lock is shared by Short Applications toggles, Shorts
+  Limit and the HUD — one lock state, no separate locks.
+- **Verification:** existing unit suites (engine, Room store, page state,
+  syncer) remain green; compile, release build and lint (`NewApi` = 0) pass;
+  P1-1 / P1-2 stay fixed. Backend unchanged — the engine is local-only and
+  the existing `/shorts/control` + `shorts_limit_cycles` backend already
+  mirrors it.
 
 ### Shorts Control Backend — 24-hour limit cycle + HUD preference + insights *(Aug 16, 2026)*
 
