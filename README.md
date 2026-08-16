@@ -3204,6 +3204,12 @@ appears in Settings → Short Control → Short Applications when installed
   (no `QUERY_ALL_PACKAGES`)
 - Registry tests extended for ShareChat (not executed in this pass)
 
+The pipeline is fronted by the named `ShortsAppDiscoveryEngine` boundary
+(`shorts/discovery/`) — the single entry the Shorts Applications UI calls;
+it delegates to the existing registry (no duplicated logic), so the flow is
+`PackageManager → ShortsAppDiscoveryEngine → InstalledShortApplicationRegistry
+→ ShortPlatformRegistry → ShortApplicationEntry → Short Control UI`.
+
 Engine separation preserved: Discovery (installed apps) / Detection (is a
 Short playing) / Control (limit + action) / Screen Activity (duration)
 remain independent. Detection adapters stay conservative — real-device

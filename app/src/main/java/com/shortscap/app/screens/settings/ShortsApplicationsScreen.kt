@@ -51,9 +51,9 @@ import com.shortscap.app.components.ScSwitch
 import com.shortscap.app.favicon.WebsiteFavicon
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.model.ShortVideoPlatform
-import com.shortscap.app.shorts.InstalledShortApplicationRegistry
 import com.shortscap.app.shorts.ShortApplicationEntry
 import com.shortscap.app.shorts.ShortsControlEngine
+import com.shortscap.app.shorts.discovery.ShortsAppDiscoveryEngine
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 import kotlinx.coroutines.Dispatchers
@@ -65,8 +65,9 @@ import kotlinx.coroutines.withContext
  *
  * The list is NOT a hardcoded static UI list. Flow:
  *
- *   PackageManager → InstalledShortApplicationRegistry
- *   → ShortPlatformRegistry (supported platforms) → ShortApplicationEntry
+ *   PackageManager → ShortsAppDiscoveryEngine
+ *   → InstalledShortApplicationRegistry → ShortPlatformRegistry
+ *   (supported platforms) → ShortApplicationEntry
  *
  * Only supported short-form platforms that are actually INSTALLED appear
  * (YouTube Shorts, Instagram Reels, TikTok, Snapchat Spotlight, Facebook
@@ -132,7 +133,9 @@ fun ShortsApplicationsScreen(
     val domainById = remember(platforms) { platforms.associate { it.id to it.domain } }
     val nameById = remember(platforms) { platforms.associate { it.id to it.name } }
     val entries = remember(context, platforms, locked, refreshKey) {
-        InstalledShortApplicationRegistry.discover(context, enabledById, locked)
+        // Automatic Application Detection Engine — the single named entry to
+        // the discovery pipeline (installed apps → classification → list).
+        ShortsAppDiscoveryEngine.discover(context, enabledById, locked)
     }
 
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
@@ -167,13 +170,13 @@ fun ShortsApplicationsScreen(
                 entries.forEach { entry ->
                     ShortApplicationRow(
                         entry = entry,
-                        displayName = nameById[InstalledShortApplicationRegistry.platformId(entry.platform)]
+                        displayName = nameById[ShortsAppDiscoveryEngine.platformId(entry.platform)]
                             ?: entry.platform.name,
-                        domain = domainById[InstalledShortApplicationRegistry.platformId(entry.platform)],
+                        domain = domainById[ShortsAppDiscoveryEngine.platformId(entry.platform)],
                         locked = locked,
                         onToggle = {
                             if (!locked) {
-                                onTogglePlatform(InstalledShortApplicationRegistry.platformId(entry.platform))
+                                onTogglePlatform(ShortsAppDiscoveryEngine.platformId(entry.platform))
                             }
                         },
                     )
