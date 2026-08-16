@@ -2444,49 +2444,56 @@ server (`X-Dev-User-Id: 1`, port 8000):
 Android-side follow-up to the Shorts Control Backend (no backend changes):
 
 - **FINAL PRODUCT RULE:** Shorts Limit is NOT optional — no enable/disable
-  toggle, no password. The activation flow is explicit: **CONFIGURE → SAVE
-  → READY TO ACTIVATE → user presses ACTIVE → 24-hour cycle starts → limit
-  LOCKED until expiry.** Saving a limit does NOT start the timer; the cycle
-  begins ONLY on the explicit ACTIVE press.
-- **What:** the corrected `Settings → Short Control → Shorts Limit` page
-  renders the authoritative local `ShortsControlEngine` state. First setup
-  shows a `24:00:00` circular 24-hour clock + presets (50/100/150/200/300/
-  500) + Custom, with a confirmation dialog; `Save Limit` only CONFIGURES
-  the limit (status READY TO ACTIVATE, timer NOT STARTED, editing
-  available; Custom also stays available in Edit Limit whenever editable).
-  A bottom-anchored full-width **ACTIVE** button is the primary CTA — green
-  + enabled in READY / EXPIRED, grey + disabled while a cycle runs (ACTIVE /
-  WARNING / LIMIT REACHED, never re-startable), always visible so the state
-  stays legible, green again after expiry. Pressing it asks ONE confirmation
-  ("Start your Shorts limit for the next 24 hours?" / Cancel / Activate),
-  then creates the 24-hour cycle (count 0, start = now, expires = +24h,
-  persisted immediately). The layout was compacted (148 dp ring, tighter
-  spacing) so the page fits with the bottom bar — no information removed.
-  The active page separates TIME progress (circular 24-hour clock, HH:MM:SS
-  countdown from `cycleExpiresAt - now`) from SHORTS USAGE progress
-  (`current / limit` + compact usage bar + remaining + status).
-- **24-hour edit lock:** Edit Limit keeps presets + Custom and is editable
-  BEFORE activation; once ACTIVE is pressed production cannot change the
-  limit until the cycle expires (lock message shown). A SAFE
-  DEVELOPMENT-ONLY seam (`BuildConfig.DEBUG`) lets debug builds edit for
-  testing; release builds enforce the lock. Never exposed as UI, never
-  stored as a preference.
+  toggle, no password. The activation flow is explicit: **CONFIGURE → READY
+  TO ACTIVATE → user presses ACTIVATE → 24-hour cycle starts → limit LOCKED
+  until expiry.** Entering a limit does NOT start the timer; the cycle begins
+  ONLY on the explicit ACTIVATE press.
+- **What:** the corrected `Settings → Short Control → Shorts Limit` page is a
+  SINGLE unified scrollable screen (no wizard/steps) rendering the
+  authoritative local `ShortsControlEngine` state. Layout: a `24:00:00`
+  circular 24-hour clock (live HH:MM:SS countdown once a cycle runs) → "Set
+  Shorts Limit" small compact numeric input (blue cursor; **no presets, no
+  Custom**) → Consumed Shorts / Remaining Shorts → colored percentage usage
+  progress bar → **Platform Usage** section → in-content green **ACTIVATE**
+  button beneath Platform Usage, with normal page margins (never attached to
+  or overlapping the Android system navigation area).
+- **Minimum limit = 50** — a hard 50-Shorts floor: values 1–49 are rejected
+  inline ("Minimum Shorts limit is 50."), ACTIVATE stays disabled below 50
+  and while a cycle runs; values 50+ are accepted.
+- **ACTIVATE (green, single activation color):** one green `#22C55E` for both
+  the page button and the confirmation dialog's Activate action — no blue.
+  Enabled in READY / EXPIRED, grey + disabled while a cycle runs (ACTIVE /
+  WARNING / LIMIT REACHED, never re-startable). Pressing it asks ONE
+  confirmation ("Start your Shorts limit for the next 24 hours?" / Cancel /
+  Activate), then creates the 24-hour cycle (count 0, start = now, expires =
+  +24h, persisted immediately). The active page separates TIME progress
+  (circular 24-hour clock, HH:MM:SS countdown from `cycleExpiresAt - now`)
+  from SHORTS USAGE progress (`current / limit` + compact usage bar +
+  remaining + status).
+- **24-hour edit lock:** the numeric input and ACTIVATE are disabled
+  once the cycle is running (lock message shown); the limit cannot be changed
+  until the cycle expires. A SAFE DEVELOPMENT-ONLY seam
+  (`BuildConfig.DEBUG`) lets debug builds edit for testing; release builds
+  enforce the lock. Never exposed as UI, never stored as a preference.
 - **Expiry:** the engine marks the window EXPIRED (page shows the expired
-  notice + ACTIVE button) and does NOT auto-roll — the user edits the limit
-  if desired and presses ACTIVE again, reusing the last window's limit. The
+  notice + ACTIVATE button) and does NOT auto-roll — the user edits the limit
+  if desired and presses ACTIVATE again, reusing the last window's limit. The
   saved-but-not-activated limit is a CONFIGURED row (`shorts_settings`
   mirror); the running window is the ACTIVE row (`shorts_limit_cycles`
   mirror) — consistent with the backend's config-vs-cycle separation.
+- **Platform Usage (backend-driven):** the section renders ONLY the real
+  backend `platform_usage` list (platform, Shorts count, consumed minutes)
+  polled every 15 s while the page is on screen; shows "No Shorts usage
+  recorded yet." until real data arrives. No demo/hardcoded rows are shown
+  and nothing is computed locally — production displays the actual backend
+  aggregation.
 - **Backend usage:** best-effort mirror pushes through the existing single
   HTTP client to the Shorts Control endpoints created above
   (`POST /shorts/limit-cycle/activate`, `PUT /shorts/control`,
   `POST /shorts/limit-cycle/disable`). The durable LOCAL state is never
   reset by network failure; no new endpoints, no schema changes.
 - **Verification:** `compileDebugKotlin` + `compileDebugUnitTestKotlin`
-  PASS; unit tests were not re-executed for this targeted correction (per
-  instructions) — the earlier verified baseline (119/119, lint `NewApi` = 0,
-  P1-1/P1-2 fixed) is untouched by this behavior-only change. Backend /
-  database / schema untouched.
+  PASS. Backend / database / schema untouched.
 
 ### Short Control Engine + Short Applications — Android-side follow-ups (Aug 16, 2026)
 

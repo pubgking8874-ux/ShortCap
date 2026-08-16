@@ -620,6 +620,8 @@ interface AppStrings {
     val shortsLimitCardDesc: String
     /** "Current Count" — stat label on the Shorts Limit page. */
     val shortsLimitCurrentCount: String
+    /** "Consumed Shorts" — consumed stat label on the Shorts Limit page. */
+    val shortsLimitConsumed: String
     /** "24-Hour Cycle" — section heading on the Shorts Limit page. */
     val shortsLimitCycle24Hour: String
     /** "Remaining Time" — stat label on the Shorts Limit page. */
@@ -634,6 +636,8 @@ interface AppStrings {
     val shortsLimitSetupDesc: String
     /** Accessibility label of the custom limit input. */
     val shortsLimitInputLabel: String
+    /** Placeholder text of the single numeric limit input. */
+    val shortsLimitPlaceholder: String
     /** "Shorts" — unit label next to the limit input. */
     val shortsLimitUnit: String
     /** "Activate Limit" — starts the 24-hour cycle. */
@@ -654,10 +658,12 @@ interface AppStrings {
     val shortsLimitReadyToActivate: String
     /** "Not started" — the 24-hour timer before ACTIVE is pressed. */
     val shortsLimitTimerNotStarted: String
-    /** "ACTIVE" — the button that starts the 24-hour cycle. */
+    /** "ACTIVATE" — the button that starts the 24-hour cycle. */
     val shortsLimitActivateNow: String
     /** ACTIVE confirmation title — "Start your Shorts limit for the next 24 hours?" */
     val shortsLimitActivateConfirmTitle: String
+    /** ACTIVE confirmation description — explains the 24-hour cycle that starts. */
+    val shortsLimitActivateConfirmDesc: String
     /** "Activate" — confirms starting the 24-hour cycle. */
     val shortsLimitActivateConfirmAction: String
     /** "Your Shorts limit is locked until the current 24-hour cycle ends." */
@@ -666,9 +672,10 @@ interface AppStrings {
     val shortsLimitUsageSection: String
     /** "Platform Usage" — active-page section heading (per-platform counts). */
     val shortsLimitPlatformSection: String
-    /** Per-platform usage row, e.g. "YouTube Shorts — 45" (%s name, %d count). */
-    fun shortsLimitPlatformRowFormat(name: String, count: Int): String
-    /** "No Shorts counted yet in this cycle." — honest empty state (real data). */
+    /** Per-platform usage row, e.g. "YouTube Shorts — 42 · 31 min" (%s name,
+     * %d count, %d minutes). */
+    fun shortsLimitPlatformRowFormat(name: String, count: Int, minutes: Int): String
+    /** "No Shorts usage recorded yet." — honest empty state (real data). */
     val shortsLimitPlatformEmpty: String
     /** "Your Limit" — active-page section heading (saved limit + edit). */
     val shortsLimitYourLimit: String
@@ -704,6 +711,8 @@ interface AppStrings {
     val shortsLimitInvalidNumber: String
     /** "Enter a number greater than zero." — non-positive validation. */
     val shortsLimitPositive: String
+    /** "Minimum Shorts limit is %d." — lower-bound validation. */
+    fun shortsLimitMinimum(min: Int): String
     /** "Keep it under %d." — upper-bound validation. */
     fun shortsLimitTooLarge(max: Int): String
     /** Edit-limit dialog description — count and timer stay unchanged. */

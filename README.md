@@ -305,6 +305,16 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 - **"#" removed** from the user's rank — the status card now reads **Your Rank / 12** (no prefix). "Your Rank" and "Your Score" labels are unchanged.
 - **Subtle one-shot trophy animation** on the Rank screen header: soft scale-in with a gentle bounce/settle (0.85 → 1.08 → 1.00) plus a faint glow pulse. It plays **once per Rank screen entry** (not on recomposition, never loops, no per-frame work) using lightweight native Compose animation — works offline, respects the existing theme colors.
 
+### Phase 8 — Shorts Limit screen: unified compact page *(Aug 16, 2026)*
+**Files:** `screens/settings/ShortsLimitScreen.kt` (rewritten single screen — old wizard composables removed), `i18n/AppStrings.kt` + all five catalogs (`EnglishStrings.kt` / `HindiStrings.kt` / `UrduStrings.kt` / `ChineseStrings.kt` / `SpanishStrings.kt`), and this `README.md`
+
+- **One unified screen instead of a wizard** — the former Setup → ReadyToActivate → Active branches were merged into a single scrollable page: 24-hour circular timer (full `24:00:00` before activation, live HH:MM:SS countdown once active) → "Set Shorts Limit" compact numeric input → Consumed Shorts / Remaining Shorts → colored percentage usage progress bar → **Platform Usage** section → green **ACTIVATE** button placed in-content immediately below Platform Usage (never attached to or overlapping the system navigation area).
+- **Compact limit input** — the previously oversized full-width card was replaced with a small right-sized number field (150 dp) with a visible **blue cursor**; still one free numeric field, no presets, no Custom chip, no persistence/duration settings.
+- **Minimum limit = 50** — a hard `MIN_SHORTS_LIMIT = 50` lower bound: values `1–49` are rejected inline ("Minimum Shorts limit is 50."), ACTIVATE stays disabled below 50 and while a cycle runs; values `50+` are accepted.
+- **Green ACTIVATE (single activation color)** — `ActivateGreen` (#22C55E) is used for BOTH the in-page ACTIVATE button and the confirmation dialog's final Activate action; no blue anywhere. Tapping ACTIVATE → existing confirmation popup → confirm starts the locked 24-hour cycle, live-updates countdown/consumed/remaining/progress, locks the input until the cycle ends, and greys out ACTIVATE.
+- **Platform Usage — real backend data only** — per-platform rows (platform, Shorts count, consumed minutes) come exclusively from the backend `platform_usage` aggregation polled every 15 s while on-screen; shows the honest empty state **"No Shorts usage recorded yet."** until real data arrives. No demo/sample/hardcoded rows, nothing computed locally, and the section stays dynamically expandable for any number of platforms. Removed the earlier TEMP demo dataset (`USE_DEMO_PLATFORM_USAGE`, `demoPlatformUsage`).
+- **All strings translated** in all 5 catalogs (new keys: `shortsLimitPlaceholder`, `shortsLimitConsumed`, `shortsLimitActivateConfirmDesc`, `shortsLimitMinimum(min)`, plus the 3-arg `shortsLimitPlatformRowFormat(name, count, minutes)`).
+
 ---
 
 ## Mobile Number Authentication (OTP Login)
@@ -2991,59 +3001,55 @@ platforms), never as a single-app feature.
 
 - **FINAL PRODUCT RULE:** Shorts Limit is NOT an optional on/off feature and
   there is NO enable/disable toggle and NO password. The flow is explicit:
-  **CONFIGURE → SAVE → READY TO ACTIVATE → user presses ACTIVE → 24-hour
-  cycle starts → limit is LOCKED until the cycle expires.** Saving a limit
-  does NOT start the timer — the cycle begins ONLY on the explicit ACTIVE
-  press.
-- **First setup (no active cycle):** a large circular 24-hour clock showing
-  `24:00:00` (the next cycle) over the "Set Shorts Limit" section — preset
-  chips (50 / 100 / 150 / 200 / 300 / 500) + Custom (any valid positive
-  integer up to 10,000; empty / non-numeric / zero / negative / absurdly
-  large values are rejected with explicit messages, never silently
-  converted). Tapping the primary CTA opens a confirmation dialog and `Save
-  Limit` CONFIGURES the limit only — status **READY TO ACTIVATE**, timer
-  **NOT STARTED**, no cycle row, editing still available. Custom remains
-  available in the Edit Limit flow whenever the limit is editable.
-- **Bottom-anchored ACTIVE button (the primary CTA):** a full-width green
-  button pinned at the bottom of the page, always visible. Green + enabled
-  in READY / EXPIRED (something to start); grey + disabled while a cycle is
-  running (ACTIVE / WARNING / LIMIT REACHED) so it can never be re-pressed
-  to restart or duplicate the cycle — it stays visible so the active state
-  stays legible, and returns to green once the cycle expires. Pressing it
-  asks ONE confirmation ("Start your Shorts limit for the next 24 hours?" /
-  Cancel / Activate), then starts the existing cycle: count 0, start = now,
-  expires = start + 24h, persisted immediately.
-- **Compact layout:** the circular 24-hour clock was slimmed (148 dp ring,
-  tighter label spacing) and section spacing reduced so the whole page fits
-  with room for the bottom ACTIVE bar — no information removed (limit,
-  count, timer, remaining, state all preserved).
+  **SET LIMIT → READY TO ACTIVATE → user presses ACTIVATE → 24-hour cycle
+  starts → limit is LOCKED until the cycle expires.** Entering a limit does
+  NOT start the timer — the cycle begins ONLY on the explicit ACTIVATE
+  press. The page is ONE unified scrollable screen (no wizard steps): 24-hour
+  circular clock (`24:00:00` before activation, live HH:MM:SS countdown once
+  active) → "Set Shorts Limit" compact numeric input → Consumed / Remaining
+  → usage progress bar → Platform Usage → in-content ACTIVATE.
+- **First setup (no active cycle):** a circular 24-hour clock showing
+  `24:00:00` (the next cycle) over the "Set Shorts Limit" section — a single
+  small, compact numeric input (blue cursor) with **no presets and no
+  Custom**. The input accepts whole numbers **from 50 upwards** (hard minimum
+  = 50): values 1–49 are rejected inline with "Minimum Shorts limit is 50.",
+  and empty / non-numeric / zero / below-minimum / absurdly large values are
+  rejected with explicit messages (upper bound 10,000), never silently
+  converted.
+- **In-content green ACTIVATE button (the primary CTA):** placed immediately
+  BELOW the Platform Usage section with normal page margins — it is never
+  attached to or overlapping the Android system navigation area. One green
+  `#22C55E` is used for BOTH the page button and the confirmation dialog's
+  Activate action (no blue). Green + enabled in READY / EXPIRED; grey +
+  disabled while a cycle is running (ACTIVE / WARNING / LIMIT REACHED) so it
+  can never be re-pressed to restart or duplicate the cycle, and returns to
+  green once the cycle expires. Pressing it asks ONE confirmation ("Start
+  your Shorts limit for the next 24 hours?" / Cancel / Activate), then starts
+  the cycle: count 0, start = now, expires = start + 24h, persisted
+  immediately.
 - **Active page — TWO DISTINCT progress values (never combined):**
   - *TIME progress* — the circular 24-hour clock: a smooth ring whose sweep
     is remaining / 24h (full circle at cycle start, depleting to 0 at
-    expiry) with a live HH:MM:SS countdown in the center (24:00:00 →
-    00:00:00), derived from `cycleExpiresAt - now` (the timestamp is
-    authoritative, nothing persisted per-second; one lightweight 1 s tick
-    while visible, cancelled with the composition).
-  - *SHORTS USAGE progress* — a separate card: `current / limit` (e.g.
-    `127 / 200`), a compact usage bar (count/limit clamped 0..1, never
-    divides by zero), Remaining Shorts (`limit - count`, never negative) and
-    the status (ACTIVE / WARNING / LIMIT REACHED) from the existing Shorts
-    Control state.
-- **Edit Limit — 24-hour lock:** Edit opens presets + Custom and is fully
-  editable BEFORE activation (READY state — the user may change the limit
-  freely). Once ACTIVE is pressed the limit is LOCKED: in production the
-  saved limit cannot change while the cycle runs ("Your Shorts limit is
-  locked until the current 24-hour cycle ends.") — no password, no bypass
-  preference. SAFE DEVELOPMENT-ONLY test seam: the lock is gated on
-  `BuildConfig.DEBUG`, so debug builds may edit during an active cycle
-  (developers don't wait 24 hours per test) while release builds enforce the
-  lock. The seam is never exposed as UI and never stored as a preference.
+    expiry) with a live HH:MM:SS countdown in the center, derived from
+    `cycleExpiresAt - now` (the timestamp is authoritative, nothing persisted
+    per-second; one lightweight 1 s tick while visible, cancelled with the
+    composition).
+  - *SHORTS USAGE progress* — Consumed Shorts / Remaining Shorts and a
+    colorful percentage usage bar (count/limit clamped 0..1, never divides
+    by zero; tier colors: primary < 75 %, warning ≥ 75 %, danger at limit).
+- **24-hour edit lock:** the compact numeric input and ACTIVATE are disabled
+  once the cycle is running ("Your Shorts limit is locked until the current
+  24-hour cycle ends.") — no password, no bypass preference. SAFE
+  DEVELOPMENT-ONLY test seam: the lock is gated on `BuildConfig.DEBUG`, so
+  debug builds may edit during an active cycle (developers don't wait 24
+  hours per test) while release builds enforce the lock. The seam is never
+  exposed as UI and never stored as a preference.
 - **Cycle persistence / expiry:** count, limit, start, expiry, status,
   warning and limit-reached state all survive navigation, app restart,
   process recreation and force-stop. The cycle resets ONLY when the 24-hour
   window expires — the engine marks it EXPIRED (page shows the expired
-  notice + ACTIVE button) and does NOT auto-roll: the user edits the limit
-  if desired and presses ACTIVE again, which reuses the last window's limit.
+  notice + ACTIVATE button) and does NOT auto-roll: the user edits the limit
+  if desired and presses ACTIVATE again, which reuses the last window's limit.
   Never reset because the app closed, the process was killed, the network
   dropped, or the user left Shorts / the HUD disappeared.
 - **Backend integration:** best-effort mirror pushes through
@@ -3052,28 +3058,24 @@ platforms), never as a single-app feature.
   `POST /shorts/limit-cycle/disable`. The durable LOCAL state is never reset
   by a network failure — an offline / sync-error banner surfaces the status
   and the next action re-pushes. No new backend endpoints were created.
-- **Verification:** extended `ShortsLimitPageStateTest` (page-state
-  derivation incl. READY_TO_ACTIVATE, limit validation, HH:MM:SS countdown
-  + time-progress math, save-does-not-start-timer, explicit ACTIVE
-  activation, production 24-hour lock enforcement + DEBUG test seam, restart
-  recovery, limit reached, EXPIRED no-auto-roll + re-activation, offline),
-  `ShortsControlEngineTest` (CONFIGURED/READY lifecycle, activate
+- **Verification:** `ShortsLimitPageStateTest` (page-state derivation incl.
+  READY_TO_ACTIVATE, limit validation incl. the 50 minimum, HH:MM:SS
+  countdown + time-progress math, enter-does-not-start-timer, explicit
+  ACTIVATE activation, production 24-hour lock enforcement + DEBUG test seam,
+  restart recovery, limit reached, EXPIRED no-auto-roll + re-activation,
+  offline), `ShortsControlEngineTest` (CONFIGURED/READY lifecycle, activate
   transitions, no count before activation) and `ShortsControlSyncerTest`
-  (backend mapping). `compileDebugKotlin` + `compileDebugUnitTestKotlin`
-  PASS; unit tests were not re-executed for this targeted correction (per
-  instructions) — the earlier verified baseline (119/119, lint `NewApi` = 0,
-  P1-1/P1-2 fixed) is untouched by this behavior-only change. No backend,
-  database or schema changes.
+  (backend mapping). Backend / database / schema unchanged.
 
 ### Shorts Limit page — Platform Usage section (Section E) *(Aug 16, 2026)*
 
-- **What:** the Shorts Limit page now renders the *Platform Usage* card
-  (Section E) inside the active-cycle view — REAL per-platform Shorts counts
-  within the current 24-hour window. No fabricated values ever: the section
-  is drawn ONLY from the backend's `GET /shorts/control` aggregation of the
-  user's synchronized `shorts_usage` rows (grouped by `platform`/`surface`
-  for the active cycle window), and it is hidden entirely when the fetch is
-  unavailable/offline.
+- **What:** the Shorts Limit page renders the *Platform Usage* section
+  (Section E) — REAL per-platform Shorts counts + consumed minutes within the
+  current 24-hour window. No fabricated or demo values ever and nothing is
+  computed locally: the section is drawn ONLY from the backend's
+  `GET /shorts/control` aggregation of the user's synchronized `shorts_usage`
+  rows (grouped by `platform`/`surface` for the active cycle window), and it
+  remains dynamically expandable for any number of platforms.
 - **Backend (smallest change, no new tables/columns):**
   - `ShortsLimitCycleService.platform_usage(user_id)` — SUM(`shorts_count` +
     `duration_seconds`) grouped by (`platform`, `surface`) with the SAME
@@ -3089,12 +3091,14 @@ platforms), never as a single-app feature.
     and `sum(platform_usage) == current_count`.
 - **Android (page only):** `ShortsControlDto` + `HttpBackendApi.parseControl`
   parse `platform_usage`; `ShortsControlSyncer.fetchControl()` is a read-only
-  fetch of the combined control state; the page fetches on open and renders
-  the compact Platform Usage card (platform label + count, header +
-  honest "No Shorts counted yet in this cycle." empty state when the real
-  data is empty). The local `ShortsControlEngine` remains authoritative for
-  count / timer / lock; platform usage is backend-data-only. New i18n strings
-  added in all 5 languages.
+  fetch of the combined control state; the page polls it every 15 s while on
+  screen and renders the sections (platform name, count, minutes). The
+  client shows the honest empty state **"No Shorts usage recorded yet."** —
+  including before activation / while the fetch is unavailable — instead of
+  any demo/sample rows (a TEMP demo dataset shipped earlier was removed). The
+  local `ShortsControlEngine` remains authoritative for count / timer / lock;
+  platform usage is backend-data-only. New i18n strings added in all 5
+  languages.
 - **Already satisfied (verified, no change needed):** Short Applications is
   locked during an active cycle via `ShortsControlEngine.hasActiveCycle()`
   read-only toggles, and the HUD shares the same engine state

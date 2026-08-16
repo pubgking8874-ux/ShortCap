@@ -14,16 +14,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,13 +39,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScSubScreenTopBar
@@ -68,7 +66,6 @@ import com.shortscap.app.shorts.deriveLimitPageState
 import com.shortscap.app.shorts.limitProgressFraction
 import com.shortscap.app.shorts.parseLimitInput
 import com.shortscap.app.shorts.remainingCountdownHms
-import com.shortscap.app.shorts.remainingHoursMinutes
 import com.shortscap.app.shorts.timeProgressFraction
 import com.shortscap.app.sync.SyncCoordinator
 import com.shortscap.app.theme.LocalScColors
@@ -77,36 +74,43 @@ import com.shortscap.app.theme.ScTextStyles
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** Activation green used for BOTH the ACTIVATE button and the confirmation
+ * dialog's final Activate action — a single activation color (not blue). */
+private val ActivateGreen = Color(0xFF22C55E)
+
+/** Hard minimum Shorts limit — values below this are rejected at input. */
+private const val MIN_SHORTS_LIMIT = 50
+
 /**
- * Shorts Limit — the FINAL 24-hour limit control page (Settings → Short
- * Control → Shorts Limit).
+ * Shorts Limit — the 24-hour Shorts limit control page (Settings → Short
+ * Control → Shorts Limit). ONE unified screen, not a wizard:
  *
- * FINAL PRODUCT RULE: Shorts Limit is NOT an optional on/off feature. The
- * flow is explicit: CONFIGURE → SAVE → READY TO ACTIVATE → user presses the
- * bottom-anchored ACTIVE button → 24-hour cycle starts → limit is LOCKED
- * until the cycle expires. There is NO enable/disable toggle and NO password.
+ *  1. The 24-hour circular T I M E  clock at the top. Before activation it
+ *     shows a full 24:00:00 window (the countdown does NOT run); once ACTIVE
+ *     it live-updates as the remaining HH:MM:SS derived from the engine's
+ *     authoritative expiry timestamp.
+ *  2. ONE numeric "Set Shorts Limit" input — no presets, no Custom chip, no
+ *     separate "Selected Limit" section, no persistence/duration settings.
+ *     Accepts whole numbers from 50 upwards (minimum 50, validated inline).
+ *  3. Consumed Shorts + Remaining Shorts, derived from the engine state.
+ *  4. A colorful percentage-based Shorts usage progress bar.
+ *  5. Platform-wise Shorts usage, from the backend `shorts_usage`
+ *     aggregation (real data only, never fabricated; refreshed while
+ *     on-screen). Shows "No Shorts usage recorded yet." until the backend
+ *     provides data — no demo/sample rows.
+ *  6. The green ACTIVATE button — the primary CTA, placed below the Platform
+ *     Usage section with normal page margins, well above the system nav bar.
  *
- * The page never counts Shorts and never owns a cycle: it renders the
- * AUTHORITATIVE [ShortsControlState] from [ShortsControlEngine] and persists
- * every action through the engine's Room-backed store, so count / limit /
- * cycle survive app restart, process death and force-stop.
+ * Activation: the user enters a limit and presses ACTIVATE; a confirmation
+ * dialog explains that this starts a locked 24-hour Shorts limit cycle. On
+ * confirmation the limit is applied to the engine, the cycle starts, the
+ * countdown/consumed/remaining/progress/platform values begin live-updating,
+ * the limit configuration is locked until the cycle ends, and ACTIVATE turns
+ * grey + disabled. ACTIVATE can never restart or duplicate a running cycle.
  *
- * The ACTIVE button is the primary CTA, anchored at the bottom of the page
- * and always visible: green + enabled in READY / EXPIRED (something to
- * start), grey + disabled while a cycle is running (ACTIVE / WARNING /
- * LIMIT_REACHED) so it can never restart or duplicate the cycle. Pressing it
- * asks one confirmation ("Start your Shorts limit for the next 24 hours?"),
- * then starts the existing cycle through the engine.
- *
- * Two DISTINCT progress values (never combined):
- *  - TIME progress — the circular 24-hour clock: remaining / 24h, shown as a
- *    live HH:MM:SS countdown derived from cycleExpiresAt - now.
- *  - SHORTS USAGE progress — currentCount / limitCount, shown separately.
- *
- * The 24-hour edit lock is enforced by the engine ([ShortsControlEngine.isLimitLocked]);
- * debug builds get the SAFE development-only test seam (edit during an active
- * cycle) while release/production builds enforce the lock — never exposed as
- * a UI toggle, never stored as a preference.
+ * The page renders the AUTHORITATIVE [ShortsControlState] from
+ * [ShortsControlEngine]; count / limit / cycle survive restart, process death
+ * and force-stop.
  */
 @Composable
 fun ShortsLimitScreen(
@@ -119,8 +123,7 @@ fun ShortsLimitScreen(
     val scope = rememberCoroutineScope()
 
     // Live clock — drives the visible countdown. One lightweight tick per
-    // second while the page is on screen; the LaunchedEffect is cancelled
-    // with the composition, so there is no background loop.
+    // second while the page is on screen; cancelled with the composition.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -134,28 +137,39 @@ fun ShortsLimitScreen(
     val pageState = deriveLimitPageState(state)
     var syncStatus by remember { mutableStateOf(ShortsSyncStatus.IDLE) }
 
-    var confirmOpen by remember { mutableStateOf(false) }
-    var pendingLimit by remember { mutableStateOf<Int?>(null) }
-    var editOpen by remember { mutableStateOf(false) }
+    // Unified limit input — single source of the limit the user wants.
+    var limitText by remember { mutableStateOf(state.limitCount.takeIf { it > 0 }?.toString() ?: "") }
+
+    // A cycle is RUNNING while ACTIVE / WARNING / LIMIT_REACHED. In that
+    // state the configuration is locked, the countdown runs, and ACTIVATE is
+    // disabled. READY_TO_ACTIVATE / EXPIRED / unconfigured = nothing running.
+    val running = when (pageState) {
+        ShortsLimitPageState.ACTIVE,
+        ShortsLimitPageState.WARNING,
+        ShortsLimitPageState.LIMIT_REACHED,
+        -> true
+        else -> false
+    }
+
     var activateConfirmOpen by remember { mutableStateOf(false) }
 
-    // Section E — PLATFORM USAGE within the current cycle. Read-only fetch of
-    // the combined Shorts Control state (real `shorts_usage` aggregation);
-    // the backend response is the ONLY source here — a missing/offline fetch
-    // renders nothing, never fabricated numbers. The local engine remains
-    // authoritative for count/timer/lock.
+    // Real per-platform usage within the current cycle window — from the
+    // backend only. Polled while the page is on screen so consumption,
+    // platform rows, consumed/remaining and the progress bar all stay live.
     var platformUsage by remember { mutableStateOf<List<ShortsPlatformUsageDto>>(emptyList()) }
-    var platformUsageLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val s = syncer ?: return@LaunchedEffect
-        when (val result = s.fetchControl()) {
-            is ApiResult.Success -> {
-                platformUsage = result.data.platformUsage
-                platformUsageLoaded = true
+        while (true) {
+            when (val result = s.fetchControl()) {
+                is ApiResult.Success -> platformUsage = result.data.platformUsage
+                else -> Unit
             }
-            else -> platformUsageLoaded = false
+            delay(15_000L)
         }
     }
+
+    // Platform rows shown on screen: real backend aggregation only — never
+    // fabricated, never derived locally. Empty until the backend provides data.
 
     fun pushSync(block: suspend ShortsControlSyncer.() -> ShortsSyncStatus) {
         val s = syncer ?: return
@@ -165,17 +179,42 @@ fun ShortsLimitScreen(
         }
     }
 
-    // ACTIVE is the single action that starts the 24-hour cycle. Enabled only
-    // when there is something to start (READY after saving, or EXPIRED for
-    // the next window); grey + disabled while a cycle is running (ACTIVE /
-    // WARNING / LIMIT_REACHED) so it can never be re-pressed to restart or
-    // duplicate the cycle. During first-time setup no limit is saved yet, so
-    // the button stays disabled until "Set Shorts Limit" confirms one.
-    val canActivate = when (pageState) {
-        ShortsLimitPageState.READY_TO_ACTIVATE,
-        ShortsLimitPageState.EXPIRED,
-        -> true
-        else -> false
+    // Validation of the single numeric input — a whole number from 50 upwards.
+    val parsedLimit = parseLimitInput(limitText)
+    val limit = (parsedLimit as? LimitInputResult.Valid)?.value ?: 0
+    val inputError = when {
+        limitText.isEmpty() -> null
+        parsedLimit is LimitInputResult.Valid && parsedLimit.value < MIN_SHORTS_LIMIT -> strings.shortsLimitMinimum(MIN_SHORTS_LIMIT)
+        parsedLimit is LimitInputResult.Valid -> null
+        parsedLimit == LimitInputResult.Empty -> strings.shortsLimitRequired
+        parsedLimit is LimitInputResult.Invalid -> when (parsedLimit.reason) {
+            LimitInputError.NOT_A_NUMBER -> strings.shortsLimitInvalidNumber
+            LimitInputError.NOT_POSITIVE -> strings.shortsLimitPositive
+            LimitInputError.TOO_LARGE -> strings.shortsLimitTooLarge(DEFAULT_LIMIT_UPPER_BOUND)
+        }
+        else -> null
+    }
+
+    // Effective limit for consumed/remaining/progress: the running cycle's
+    // locked limit, else the entered value (falling back to the saved limit).
+    val displayLimit = if (running) state.limitCount else (limit.takeIf { it > 0 } ?: state.limitCount.takeIf { it > 0 } ?: 0)
+    val consumed = state.currentCount
+    val remaining = (displayLimit - consumed).coerceAtLeast(0)
+    val fraction = limitProgressFraction(consumed, displayLimit)
+
+    // ACTIVATE: enabled only when the limit is valid AND at least the 50-Shorts
+    // minimum AND no cycle is running; grey + disabled while active so it can
+    // never be re-pressed.
+    val canActivate = !running && limit >= MIN_SHORTS_LIMIT
+
+    val onActivate: () -> Unit = {
+        activateConfirmOpen = false
+        val valid = parsedLimit as? LimitInputResult.Valid
+        if (valid != null) {
+            engine.setLimit(valid.value)
+            engine.activate()
+            pushSync { syncActivate(valid.value) }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
@@ -188,687 +227,83 @@ fun ShortsLimitScreen(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // State banners — warning / limit-reached / expired / sync.
             when (pageState) {
-                ShortsLimitPageState.LOADING -> {
-                    Text(strings.loading, color = colors.TextSecondary, style = ScTextStyles.Body)
-                }
-
-                // Never configured / disabled -> first-time setup.
-                ShortsLimitPageState.NO_LIMIT_CONFIGURED,
-                ShortsLimitPageState.LIMIT_SETUP,
-                ShortsLimitPageState.DISABLED,
-                -> {
-                    SetupView(
-                        onSetLimit = { limit ->
-                            pendingLimit = limit
-                            confirmOpen = true
-                        },
-                    )
-                }
-
-                // Limit saved but NOT activated — READY state: timer not
-                // started, limit not locked, editing available.
-                ShortsLimitPageState.READY_TO_ACTIVATE,
-                ShortsLimitPageState.EXPIRED,
-                -> {
-                    if (pageState == ShortsLimitPageState.EXPIRED) {
-                        NoticeBanner(text = strings.shortsLimitExpiredNotice, color = colors.Warning)
-                    }
-                    ReadyToActivateView(
-                        state = state,
-                        onEdit = { editOpen = true },
-                    )
-                }
-
-                // Cycle running: 24-hour countdown + locked limit.
-                ShortsLimitPageState.ACTIVE,
-                ShortsLimitPageState.WARNING,
-                ShortsLimitPageState.LIMIT_REACHED,
-                -> {
-                    ActiveView(
-                        state = state,
-                        pageState = pageState,
-                        isLocked = engine.isLimitLocked(),
-                        onEdit = { editOpen = true },
-                        platformUsage = platformUsage,
-                        platformUsageLoaded = platformUsageLoaded,
-                    )
-                }
+                ShortsLimitPageState.EXPIRED -> NoticeBanner(text = strings.shortsLimitExpiredNotice, color = colors.Warning)
+                ShortsLimitPageState.WARNING -> NoticeBanner(text = strings.shortsLimitWarningDesc, color = colors.Warning)
+                ShortsLimitPageState.LIMIT_REACHED -> NoticeBanner(text = strings.shortsLimitReachedDesc, color = colors.Danger)
+                else -> Unit
             }
-
-            // Sync status — the durable local state stays authoritative; the
-            // banner only tells the user the mirror push did not arrive.
             when (syncStatus) {
                 ShortsSyncStatus.OFFLINE -> NoticeBanner(text = strings.shortsLimitOffline, color = colors.Warning)
                 ShortsSyncStatus.ERROR -> NoticeBanner(text = strings.shortsLimitSyncError, color = colors.Danger)
                 else -> Unit
             }
+
+            // 1. 24-hour circular timer — full 24:00:00 before activation,
+            // live HH:MM:SS countdown while a cycle is running.
+            CycleTimerRing(
+                value = if (running) remainingCountdownHms(state.remainingCycleMillis) else "24:00:00",
+                progress = if (running) timeProgressFraction(state.remainingCycleMillis, ShortsControlEngine.CYCLE_DURATION_MILLIS) else 1f,
+                label = strings.shortsLimitCycle24Hour,
+                contentDesc = strings.shortsCircularProgress,
+            )
+
+            // 2. ONE numeric input — no presets.
+            SectionTitle(strings.shortsLimitSetButton)
+            LimitInput(
+                text = limitText,
+                enabled = !running,
+                placeholder = strings.shortsLimitPlaceholder,
+                contentDesc = strings.shortsLimitInputLabel,
+                onTextChange = { new ->
+                    limitText = new.filter { it.isDigit() }.take(6)
+                },
+            )
+            inputError?.let {
+                Text(it, color = colors.Danger, style = ScTextStyles.Caption, modifier = Modifier.fillMaxWidth())
+            }
+
+            // 3. Consumed / Remaining.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                StatBlock(label = strings.shortsLimitConsumed, value = "$consumed", colors = colors)
+                StatBlock(label = strings.shortsLimitRemainingShorts, value = "$remaining", colors = colors)
+            }
+
+            // 4. Colorful percentage-based usage progress bar.
+            UsageProgressBar(fraction = fraction, strings = strings, colors = colors)
+
+            // 5. Platform-wise Shorts usage — real backend aggregation.
+            SectionTitle(strings.shortsLimitPlatformSection)
+            PlatformUsageCard(
+                usages = platformUsage,
+                strings = strings,
+                colors = colors,
+            )
+
+            // 6. Green ACTIVATE — in-content, immediately below the Platform
+            // Usage section, well above the Android system navigation bar.
+            PrimaryButton(
+                label = strings.shortsLimitActivateNow,
+                enabled = canActivate,
+                onClick = { activateConfirmOpen = true },
+            )
         }
-
-        // Bottom-anchored ACTIVE — the primary CTA, always visible so the
-        // cycle state stays legible (green + enabled to start, grey +
-        // disabled while the 24-hour cycle is running).
-        ActivateBar(
-            enabled = canActivate,
-            onClick = { activateConfirmOpen = true },
-        )
     }
 
-    // First save: confirmation — the limit is CONFIGURED only; the 24-hour
-    // cycle starts when the user presses ACTIVE on the READY page.
-    if (confirmOpen && pendingLimit != null) {
-        SaveLimitConfirmDialog(
-            onSave = {
-                confirmOpen = false
-                engine.setLimit(pendingLimit!!)
-                pushSync { syncEditLimit(pendingLimit!!) }
-            },
-            onDismiss = { confirmOpen = false },
-        )
-    }
-
-    // ACTIVE confirmation — one dialog, then the existing cycle starts.
     if (activateConfirmOpen) {
         ActivateConfirmDialog(
-            onActivate = {
-                activateConfirmOpen = false
-                engine.activate()
-                pushSync { syncActivate(state.limitCount) }
-            },
+            onActivate = onActivate,
             onDismiss = { activateConfirmOpen = false },
         )
     }
-
-    if (editOpen) {
-        EditLimitDialog(
-            current = state.limitCount.takeIf { it > 0 } ?: 200,
-            locked = engine.isLimitLocked(),
-            onSave = { limit ->
-                editOpen = false
-                engine.setLimit(limit)
-                pushSync { syncEditLimit(limit) }
-            },
-            onDismiss = { editOpen = false },
-        )
-    }
 }
 
 // ---------------------------------------------------------------------------
-// Setup (no active cycle): 24:00:00 timer ring + presets + Custom + confirm
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun SetupView(
-    onSetLimit: (Int) -> Unit,
-) {
-    val strings = LocalAppStrings.current
-    val colors = LocalScColors.current
-    val presets = listOf(50, 100, 150, 200, 300, 500)
-    var selected by remember { mutableStateOf<Int?>(200) }
-    var customMode by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf("200") }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    // The next cycle preview — a full 24:00:00 window that will begin when
-    // the user saves their limit.
-    CycleTimerRing(
-        value = "24:00:00",
-        progress = 1f,
-        label = strings.shortsLimitCycle24Hour,
-        contentDesc = strings.shortsCircularProgress,
-    )
-
-    SectionTitle(strings.shortsLimitSetButton)
-
-    // Preset chips + Custom.
-    Text(strings.shortsLimitPresets, color = colors.TextSecondary, style = ScTextStyles.Label)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        presets.forEach { preset ->
-            PresetChip(
-                label = "$preset",
-                selected = !customMode && selected == preset,
-                onClick = {
-                    customMode = false
-                    selected = preset
-                    text = preset.toString()
-                    error = null
-                },
-            )
-        }
-        PresetChip(
-            label = strings.shortsLimitCustom,
-            selected = customMode,
-            onClick = {
-                customMode = true
-                error = null
-            },
-        )
-    }
-
-    // Custom input row (steppers + numeric keyboard + validation).
-    if (customMode) {
-        LimitInputRow(
-            text = text,
-            onTextChange = { new ->
-                text = new.filter { it.isDigit() }.take(6)
-                error = null
-            },
-            onAdjust = { delta ->
-                val base = (parseLimitInput(text) as? LimitInputResult.Valid)?.value ?: 200
-                text = (base + delta).coerceIn(1, DEFAULT_LIMIT_UPPER_BOUND).toString()
-                error = null
-            },
-            unitLabel = strings.shortsLimitUnit,
-            inputLabel = strings.shortsLimitInputLabel,
-            incrementLabel = strings.shortsLimitStepperIncrement,
-            decrementLabel = strings.shortsLimitStepperDecrement,
-        )
-        error?.let {
-            Text(it, color = colors.Danger, style = ScTextStyles.Caption, modifier = Modifier.fillMaxWidth())
-        }
-    }
-
-    // Primary CTA — validates, then asks for confirmation.
-    PrimaryButton(
-        label = strings.shortsLimitSetButton,
-        enabled = selected != null,
-        onClick = {
-            when (val result = if (customMode) parseLimitInput(text) else LimitInputResult.Valid(selected!!)) {
-                is LimitInputResult.Valid -> onSetLimit(result.value)
-                LimitInputResult.Empty -> error = strings.shortsLimitRequired
-                is LimitInputResult.Invalid -> error = when (result.reason) {
-                    LimitInputError.NOT_A_NUMBER -> strings.shortsLimitInvalidNumber
-                    LimitInputError.NOT_POSITIVE -> strings.shortsLimitPositive
-                    LimitInputError.TOO_LARGE -> strings.shortsLimitTooLarge(DEFAULT_LIMIT_UPPER_BOUND)
-                }
-            }
-        },
-    )
-}
-
-/**
- * The bottom-anchored ACTIVE bar — the primary CTA of the page. Always
- * visible so the cycle state stays legible: green + enabled when there is
- * something to start (READY / EXPIRED), grey + disabled while a 24-hour
- * cycle is running (ACTIVE / WARNING / LIMIT_REACHED) so it can never be
- * re-pressed to restart or duplicate the cycle.
- */
-@Composable
-private fun ActivateBar(
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.Bg)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        PrimaryButton(
-            label = strings.shortsLimitActivateNow,
-            enabled = enabled,
-            onClick = onClick,
-        )
-    }
-}
-
-/** ACTIVE confirmation — one dialog, then the existing cycle starts. */
-@Composable
-private fun ActivateConfirmDialog(
-    onActivate: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = colors.Card,
-        titleContentColor = colors.TextPrimary,
-        textContentColor = colors.TextPrimary,
-        title = { Text(strings.shortsLimitActivateConfirmTitle) },
-        confirmButton = {
-            TextButton(onClick = onActivate) {
-                Text(strings.shortsLimitActivateConfirmAction, color = colors.Accent)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(strings.cancel, color = colors.TextSecondary)
-            }
-        },
-    )
-}
-
-/** First-save confirmation — saving CONFIGURES the limit; ACTIVE starts the cycle. */
-@Composable
-private fun SaveLimitConfirmDialog(
-    onSave: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = colors.Card,
-        titleContentColor = colors.TextPrimary,
-        textContentColor = colors.TextPrimary,
-        title = { Text(strings.shortsLimitConfirmTitle) },
-        text = {
-            Text(strings.shortsLimitConfirmDesc, color = colors.TextSecondary, style = ScTextStyles.Body)
-        },
-        confirmButton = {
-            TextButton(onClick = onSave) {
-                Text(strings.shortsLimitSaveLimit, color = colors.Accent)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(strings.cancel, color = colors.TextSecondary)
-            }
-        },
-    )
-}
-
-// ---------------------------------------------------------------------------
-// READY_TO_ACTIVATE — limit saved, cycle NOT started
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun ReadyToActivateView(
-    state: ShortsControlState,
-    onEdit: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-
-    // The saved limit, clearly displayed (the bottom ACTIVE bar starts it).
-    SectionTitle(strings.shortsLimitYourLimit)
-    LimitCard(
-        state = state,
-        locked = false,
-        onEdit = onEdit,
-        strings = strings,
-        colors = colors,
-    )
-
-    // Limit summary: Set Limit / Current Used / Remaining (one compact card).
-    LimitSummary(state = state, strings = strings, colors = colors)
-
-    // Status + timer: READY TO ACTIVATE / NOT STARTED (compact two-stat row).
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        StatBlock(label = strings.shortsLimitState, value = strings.shortsLimitReadyToActivate, colors = colors)
-        StatBlock(label = strings.shortsLimitCycle24Hour, value = strings.shortsLimitTimerNotStarted, colors = colors)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Active cycle page
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun ActiveView(
-    state: ShortsControlState,
-    pageState: ShortsLimitPageState,
-    isLocked: Boolean,
-    onEdit: () -> Unit,
-    platformUsage: List<ShortsPlatformUsageDto>,
-    platformUsageLoaded: Boolean,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-
-    // Warning / limit-reached banners above the cycle.
-    when (pageState) {
-        ShortsLimitPageState.WARNING -> NoticeBanner(text = strings.shortsLimitWarningDesc, color = colors.Warning)
-        ShortsLimitPageState.LIMIT_REACHED -> NoticeBanner(text = strings.shortsLimitReachedDesc, color = colors.Danger)
-        else -> Unit
-    }
-
-    // ---- 24-HOUR CYCLE — the TIME clock (remaining / 24h). ----
-    SectionTitle(strings.shortsLimitCycle24Hour)
-    CycleTimerRing(
-        value = remainingCountdownHms(state.remainingCycleMillis),
-        progress = timeProgressFraction(state.remainingCycleMillis, ShortsControlEngine.CYCLE_DURATION_MILLIS),
-        label = strings.shortsLimitCycle24Hour,
-        contentDesc = "${strings.shortsLimitCycle24Hour} ${remainingCountdownHms(state.remainingCycleMillis)}",
-    )
-    val (hours, minutes) = remainingHoursMinutes(state.remainingCycleMillis)
-    Text(
-        text = strings.shortsLimitCycleRemainingFormat.format(hours, minutes),
-        color = colors.TextSecondary,
-        style = ScTextStyles.Body,
-        modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Center,
-    )
-
-    // Limit summary: Set Limit / Current Used / Remaining (one compact card).
-    LimitSummary(state = state, strings = strings, colors = colors)
-
-    // ---- SHORTS USAGE — the count progress (current / limit). ----
-    SectionTitle(strings.shortsLimitUsageSection)
-    UsageCard(state = state, strings = strings, colors = colors)
-
-    // ---- PLATFORM USAGE — real per-platform counts within this cycle. ----
-    // Only rendered from the backend aggregation; offline/unloaded renders
-    // nothing (never fabricated data).
-    if (platformUsageLoaded) {
-        SectionTitle(strings.shortsLimitPlatformSection)
-        PlatformUsageCard(
-            usages = platformUsage,
-            strings = strings,
-            colors = colors,
-        )
-    }
-
-    // ---- YOUR LIMIT — saved limit + edit (locked while the cycle runs). ----
-    SectionTitle(strings.shortsLimitYourLimit)
-    LimitCard(
-        state = state,
-        locked = isLocked,
-        onEdit = onEdit,
-        strings = strings,
-        colors = colors,
-    )
-}
-
-/** The active-usage card: current/limit, remaining, status, usage bar. */
-@Composable
-private fun UsageCard(
-    state: ShortsControlState,
-    strings: AppStrings,
-    colors: ScColors,
-) {
-    val shape = RoundedCornerShape(22.dp)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(colors.Card, shape)
-            .border(1.dp, colors.Divider, shape)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            text = strings.shortsLimitCounterFormat.format(state.currentCount, state.limitCount),
-            color = colors.TextPrimary,
-            style = ScTextStyles.BigStat,
-        )
-        // Compact usage progress bar — separate from the 24-hour clock.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(colors.ProgressTrack),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(limitProgressFraction(state.currentCount, state.limitCount))
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.primary),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            StatBlock(label = strings.shortsLimitRemainingShorts, value = "${state.remainingCount}", colors = colors)
-            StatBlock(label = strings.shortsLimitState, value = statusLabel(state, strings), colors = colors)
-        }
-    }
-}
-
-/** Limit summary card — Set Limit / Current Used / Remaining in one compact,
- * evenly-spaced row (e.g. Limit: 200 · Used: 127 · Remaining: 73). Rendered
- * from the authoritative engine state on both the ready and active pages. */
-@Composable
-private fun LimitSummary(
-    state: ShortsControlState,
-    strings: AppStrings,
-    colors: ScColors,
-) {
-    val shape = RoundedCornerShape(22.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(colors.Card, shape)
-            .border(1.dp, colors.Divider, shape)
-            .padding(vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        SummaryStat(label = strings.shortsLimitSet, value = "${state.limitCount}", colors = colors)
-        SummaryStat(label = strings.shortsLimitCurrentCount, value = "${state.currentCount}", colors = colors)
-        SummaryStat(label = strings.shortsLimitRemaining, value = "${state.remainingCount}", colors = colors)
-    }
-}
-
-@Composable
-private fun SummaryStat(label: String, value: String, colors: ScColors) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(label, color = colors.TextSecondary, style = ScTextStyles.Label)
-        Text(value, color = colors.TextPrimary, style = ScTextStyles.BigStat)
-    }
-}
-
-/** The platform-usage card — REAL per-platform counts within the current
- * 24-hour cycle (Section E). The list comes only from the backend's
- * `shorts_usage` aggregation; an empty list shows the honest empty state and
- * an unavailable fetch renders the section entirely hidden (never fabricated
- * values). The per-platform counts always sum to [ShortsControlState.currentCount]. */
-@Composable
-private fun PlatformUsageCard(
-    usages: List<ShortsPlatformUsageDto>,
-    strings: AppStrings,
-    colors: ScColors,
-) {
-    val shape = RoundedCornerShape(22.dp)
-    val rows = usages.sortedByDescending { it.shortsCount }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(colors.Card, shape)
-            .border(1.dp, colors.Divider, shape)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (rows.isEmpty()) {
-            Text(strings.shortsLimitPlatformEmpty, color = colors.TextSecondary, style = ScTextStyles.Body)
-        } else {
-            rows.forEach { usage ->
-                val name = platformDisplayName(usage.platform)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics {
-                            contentDescription = strings.shortsLimitPlatformRowFormat(name, usage.shortsCount)
-                        },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = name,
-                        color = colors.TextPrimary,
-                        style = ScTextStyles.BodySemiBold.copy(fontSize = 14.sp),
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = "${usage.shortsCount} ${strings.shortsLimitUnit}",
-                        color = colors.TextSecondary,
-                        style = ScTextStyles.Body,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Friendly display label for a backend `platform` literal (ShortPlatform
- * enum name). Falls back to the raw literal — never a fabricated platform. */
-private fun platformDisplayName(platform: String?): String = when (platform) {
-    "YOUTUBE" -> "YouTube Shorts"
-    "INSTAGRAM" -> "Instagram Reels"
-    "TIKTOK" -> "TikTok"
-    "SNAPCHAT" -> "Snapchat Spotlight"
-    "FACEBOOK" -> "Facebook Reels"
-    "MOJ" -> "Moj"
-    "X" -> "X"
-    "LINKEDIN" -> "LinkedIn"
-    else -> platform ?: "Shorts"
-}
-
-/** The saved-limit card: \"200 Shorts\" + Edit Limit (locked message shown). */
-@Composable
-private fun LimitCard(
-    state: ShortsControlState,
-    locked: Boolean,
-    onEdit: () -> Unit,
-    strings: AppStrings,
-    colors: ScColors,
-) {
-    val shape = RoundedCornerShape(22.dp)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(colors.Card, shape)
-            .border(1.dp, colors.Divider, shape)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-            .semantics { contentDescription = strings.shortsLimitCardDesc },
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "${state.limitCount} ${strings.shortsLimitUnit}",
-                color = colors.TextPrimary,
-                style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp),
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onEdit) {
-                Text(strings.shortsLimitEdit, color = colors.Accent)
-            }
-        }
-        if (locked) {
-            NoticeBanner(text = strings.shortsLimitLockedMessage, color = colors.TextSecondary)
-        }
-    }
-}
-
-/** Edit dialog — presets + Custom, but Save respects the 24-hour lock. */
-@Composable
-private fun EditLimitDialog(
-    current: Int,
-    locked: Boolean,
-    onSave: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = LocalScColors.current
-    val strings = LocalAppStrings.current
-    val presets = listOf(50, 100, 150, 200, 300, 500)
-    var selected by remember { mutableStateOf<Int?>(current) }
-    var customMode by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(current.toString()) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = colors.Card,
-        titleContentColor = colors.TextPrimary,
-        textContentColor = colors.TextPrimary,
-        title = { Text(strings.shortsLimitEdit) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (locked) {
-                    NoticeBanner(text = strings.shortsLimitLockedMessage, color = colors.TextSecondary)
-                }
-                Text(strings.shortsLimitPresets, color = colors.TextSecondary, style = ScTextStyles.Label)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    presets.forEach { preset ->
-                        PresetChip(
-                            label = "$preset",
-                            selected = !customMode && selected == preset,
-                            onClick = {
-                                customMode = false
-                                selected = preset
-                                text = preset.toString()
-                                error = null
-                            },
-                        )
-                    }
-                    PresetChip(
-                        label = strings.shortsLimitCustom,
-                        selected = customMode,
-                        onClick = {
-                            customMode = true
-                            error = null
-                        },
-                    )
-                }
-                if (customMode) {
-                    LimitInputRow(
-                        text = text,
-                        onTextChange = { new ->
-                            text = new.filter { it.isDigit() }.take(6)
-                            error = null
-                        },
-                        onAdjust = { delta ->
-                            val base = (parseLimitInput(text) as? LimitInputResult.Valid)?.value ?: current
-                            text = (base + delta).coerceIn(1, DEFAULT_LIMIT_UPPER_BOUND).toString()
-                            error = null
-                        },
-                        unitLabel = strings.shortsLimitUnit,
-                        inputLabel = strings.shortsLimitInputLabel,
-                        incrementLabel = strings.shortsLimitStepperIncrement,
-                        decrementLabel = strings.shortsLimitStepperDecrement,
-                    )
-                    error?.let {
-                        Text(it, color = colors.Danger, style = ScTextStyles.Caption, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !locked && selected != null,
-                onClick = {
-                    val result = if (customMode) parseLimitInput(text) else LimitInputResult.Valid(selected!!)
-                    when (result) {
-                        is LimitInputResult.Valid -> onSave(result.value)
-                        LimitInputResult.Empty -> error = strings.shortsLimitRequired
-                        is LimitInputResult.Invalid -> error = when (result.reason) {
-                            LimitInputError.NOT_A_NUMBER -> strings.shortsLimitInvalidNumber
-                            LimitInputError.NOT_POSITIVE -> strings.shortsLimitPositive
-                            LimitInputError.TOO_LARGE -> strings.shortsLimitTooLarge(DEFAULT_LIMIT_UPPER_BOUND)
-                        }
-                    }
-                },
-            ) {
-                Text(strings.shortsLimitSaveLimit, color = if (locked) colors.TextDisabled else colors.Accent)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(strings.cancel, color = colors.TextSecondary)
-            }
-        },
-    )
-}
-
-// ---------------------------------------------------------------------------
-// Small building blocks
+// 24-hour circular timer
 // ---------------------------------------------------------------------------
 
 /**
@@ -932,97 +367,203 @@ private fun CycleTimerRing(
     }
 }
 
-/** A rounded preset/custom chip with a clear selected state. */
+// ---------------------------------------------------------------------------
+// Single numeric limit input
+// ---------------------------------------------------------------------------
+
+/** The ONE compact limit input — a right-sized number field with a
+ * placeholder. Not full-width and not a large card; only large enough to
+ * enter the number. No presets, no steppers, no Custom chip. */
 @Composable
-private fun PresetChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
+private fun LimitInput(
+    text: String,
+    enabled: Boolean,
+    placeholder: String,
+    contentDesc: String,
+    onTextChange: (String) -> Unit,
 ) {
     val colors = LocalScColors.current
+    val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (selected) colors.ChipActiveBg else colors.Card)
-            .border(1.dp, if (selected) colors.Accent.copy(alpha = 0.5f) else colors.Divider, RoundedCornerShape(999.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .width(150.dp)
+            .clip(shape)
+            .background(colors.Card, shape)
+            .border(1.dp, colors.Divider, shape)
+            .clickable(enabled = enabled) { /* focus via text field */ }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .semantics { contentDescription = contentDesc },
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            color = if (selected) colors.ChipActiveText else colors.TextPrimary,
-            style = ScTextStyles.BodySemiBold,
+        if (text.isEmpty()) {
+            Text(
+                placeholder,
+                color = colors.TextSecondary,
+                style = ScTextStyles.Body.copy(fontSize = 13.sp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        BasicTextField(
+            value = text,
+            onValueChange = onTextChange,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+            textStyle = ScTextStyles.Body.copy(
+                color = if (enabled) colors.TextPrimary else colors.TextDisabled,
+                textAlign = TextAlign.Center,
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            cursorBrush = SolidColor(colors.Accent),
         )
     }
 }
 
-/** The numeric limit input: [−] text [+] steppers plus a numeric keyboard. */
+// ---------------------------------------------------------------------------
+// ACTIVATE + confirmation
+// ---------------------------------------------------------------------------
+
+/** ACTIVATE confirmation — one dialog, then the 24-hour cycle starts. */
 @Composable
-private fun LimitInputRow(
-    text: String,
-    onTextChange: (String) -> Unit,
-    onAdjust: (Int) -> Unit,
-    unitLabel: String,
-    inputLabel: String,
-    incrementLabel: String,
-    decrementLabel: String,
+private fun ActivateConfirmDialog(
+    onActivate: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val colors = LocalScColors.current
-    val shape = RoundedCornerShape(16.dp)
-    Row(
+    val strings = LocalAppStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.Card,
+        titleContentColor = colors.TextPrimary,
+        textContentColor = colors.TextPrimary,
+        title = { Text(strings.shortsLimitActivateConfirmTitle) },
+        text = { Text(strings.shortsLimitActivateConfirmDesc, color = colors.TextSecondary, style = ScTextStyles.Body) },
+        confirmButton = {
+            TextButton(onClick = onActivate) {
+                Text(strings.shortsLimitActivateConfirmAction, color = ActivateGreen)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(strings.cancel, color = colors.TextSecondary)
+            }
+        },
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Consumed / Remaining + usage progress
+// ---------------------------------------------------------------------------
+
+/** Colorful percentage-based Shorts usage progress bar (consumed / limit). */
+@Composable
+private fun UsageProgressBar(fraction: Float, strings: AppStrings, colors: ScColors) {
+    val pct = (fraction.coerceIn(0f, 1f) * 100).toInt()
+    val tierColor = when {
+        fraction >= 1f -> colors.Danger
+        fraction >= 0.75f -> colors.Warning
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val fillBrush = Brush.linearGradient(listOf(tierColor, MaterialTheme.colorScheme.secondary))
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(strings.shortsLimitUsageSection, color = colors.TextSecondary, style = ScTextStyles.Label)
+            Text("$pct%", color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(colors.ProgressTrack),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(fillBrush),
+            )
+        }
+    }
+}
+
+/** The platform-usage card — REAL per-platform counts + minutes within the
+ * current 24-hour cycle (from the backend `shorts_usage` aggregation only;
+ * an empty list shows the honest empty state). No platform icons. */
+@Composable
+private fun PlatformUsageCard(
+    usages: List<ShortsPlatformUsageDto>,
+    strings: AppStrings,
+    colors: ScColors,
+) {
+    val shape = RoundedCornerShape(22.dp)
+    val rows = usages.sortedByDescending { it.shortsCount }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
             .background(colors.Card, shape)
             .border(1.dp, colors.Divider, shape)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        StepperButton(icon = Icons.Filled.Remove, label = decrementLabel, onClick = { onAdjust(-10) })
-        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            BasicTextField(
-                value = text,
-                onValueChange = onTextChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = inputLabel },
-                textStyle = ScTextStyles.StatValue.copy(color = colors.TextPrimary, textAlign = TextAlign.Center),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-            )
+        if (rows.isEmpty()) {
+            Text(strings.shortsLimitPlatformEmpty, color = colors.TextSecondary, style = ScTextStyles.Body)
+        } else {
+            rows.forEach { usage ->
+                val name = platformDisplayName(usage.platform)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = strings.shortsLimitPlatformRowFormat(name, usage.shortsCount, usage.durationSeconds / 60)
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = name,
+                        color = colors.TextPrimary,
+                        style = ScTextStyles.BodySemiBold.copy(fontSize = 14.sp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = strings.shortsLimitPlatformRowFormat(name, usage.shortsCount, usage.durationSeconds / 60),
+                        color = colors.TextSecondary,
+                        style = ScTextStyles.Body,
+                    )
+                }
+            }
         }
-        StepperButton(icon = Icons.Filled.Add, label = incrementLabel, onClick = { onAdjust(10) })
-    }
-    Text(
-        text = unitLabel,
-        color = colors.TextSecondary,
-        style = ScTextStyles.Label,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp),
-        textAlign = TextAlign.Center,
-    )
-}
-
-@Composable
-private fun StepperButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    val colors = LocalScColors.current
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(colors.CardHover)
-            .border(1.dp, colors.Divider, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = colors.TextPrimary, modifier = Modifier.size(20.dp))
     }
 }
 
-/** Filled primary CTA, matching the app's accent language. */
+/** Friendly display label for a backend `platform` literal (ShortPlatform
+ * enum name). Falls back to the raw literal — never a fabricated platform. */
+private fun platformDisplayName(platform: String?): String = when (platform) {
+    "YOUTUBE" -> "YouTube Shorts"
+    "INSTAGRAM" -> "Instagram Reels"
+    "TIKTOK" -> "TikTok"
+    "SNAPCHAT" -> "Snapchat Spotlight"
+    "FACEBOOK" -> "Facebook Reels"
+    "MOJ" -> "Moj"
+    "X" -> "X"
+    "LINKEDIN" -> "LinkedIn"
+    else -> platform ?: "Shorts"
+}
+
+// ---------------------------------------------------------------------------
+// Small building blocks
+// ---------------------------------------------------------------------------
+
+/** Filled primary CTA — green when ready, grey when disabled. Deliberately a
+ * single activation color (never blue); the dialog's Activate action uses the
+ * same green. */
 @Composable
 private fun PrimaryButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     val colors = LocalScColors.current
@@ -1031,7 +572,7 @@ private fun PrimaryButton(label: String, enabled: Boolean, onClick: () -> Unit) 
             .fillMaxWidth()
             .padding(top = 8.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (enabled) colors.Accent else colors.CardHover)
+            .background(if (enabled) ActivateGreen else colors.CardHover)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center,
@@ -1075,10 +616,4 @@ private fun SectionTitle(text: String) {
         color = LocalScColors.current.TextSecondary,
         style = ScTextStyles.SectionTitle,
     )
-}
-
-private fun statusLabel(state: ShortsControlState, strings: AppStrings): String = when {
-    state.limitReached -> strings.shortsLimitStateLimitReached
-    state.warningTriggered -> strings.shortsLimitWarning
-    else -> strings.shortsLimitStateActive
 }
