@@ -24,6 +24,7 @@ enum class ShortPlatform {
     MOJ,
     X,
     LINKEDIN,
+    SHARE_CHAT,
     UNKNOWN,
     ;
 
@@ -42,6 +43,7 @@ enum class ShortPlatform {
             "in.mohalla.video" -> MOJ
             "com.twitter.android", "com.twitter.android.lite" -> X
             "com.linkedin.android" -> LINKEDIN
+            "com.sharechat.android" -> SHARE_CHAT
             else -> UNKNOWN
         }
     }

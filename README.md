@@ -3143,6 +3143,73 @@ Android client sends via `BackendConfig`:
   consumed by the UI (no fetch-on-open). Backend value → UI display is
   therefore one-directional today (push mirror), not pull-refreshed.
 
+### First Launch Permission Setup gate *(Aug 16, 2026)*
+
+One-time permission-orchestration flow inserted into the launch sequence:
+`Splash → Permission Setup → Login / Create Account / Guest → Home`. It
+appears ONLY on a fresh installation — completion is persisted
+(`FirstLaunchSetupStore`, one boolean in the existing `shorts_cap_settings`
+prefs), so it never re-appears on later launches, force-stops or reboots, and
+Accessibility is never re-requested every start.
+
+- **Centralized required set:** `SetupRequiredPermissionIds` — the exact
+  permissions the current engines need (Usage Access + Accessibility for
+  Screen Activity/Shorts detection, Overlay for the Shorts HUD,
+  Notifications for Study/Shorts alerts), one contract shared with the gate.
+  Battery optimization / storage media / system audio access stay optional
+  (Settings → Permissions still shows all seven).
+- **Real OS state only:** every row resolves its status through the SAME
+  `PermissionRepository` seam the Settings → Permissions screen uses
+  (no fake states, no hardcoded grants). Already-granted permissions are
+  never requested again.
+- **Per-permission behavior:** special permissions (Usage Access,
+  Accessibility, Overlay) show the explanation in-app, open the correct
+  Android system-settings page via `PermissionActions`, and re-check on
+  return (resume lifecycle observer — first open AND after settings).
+  Notifications uses the standard Android runtime dialog on API 33+ and the
+  app-notification-settings page below it.
+- **Completion gate:** `Continue` stays disabled until every required
+  permission is granted ("All required permissions are ready"). It proceeds
+  to the UNCHANGED auth flow (Welcome → Login/Create Account/Guest).
+- **Engine isolation preserved:** the gate checks only the required set — it
+  never couples Shorts Control to Screen Activity (or vice versa). Later
+  revocations are NOT re-gated: Settings → Permissions reflects the real OS
+  state instead.
+- Files: `auth/screens/PermissionSetupScreen.kt`, `permissions/FirstLaunchSetupStore.kt`,
+  `permissions/PermissionModels.kt` (`SetupRequiredPermissionIds`),
+  `auth/navigation/AuthNavGraph.kt` + `AuthScreen.kt` (route wiring).
+  Tests: `permissions/FirstLaunchSetupStoreTest` (Robolectric). No backend,
+  database, auth logic or existing Settings layout changes.
+
+### Dynamic Shorts Application Discovery — ShareChat added *(Aug 16, 2026)*
+
+The dynamic Shorts application discovery layer already existed
+(`InstalledShortApplicationRegistry` → `ShortPlatformRegistry` → per-platform
+adapters → `ShortApplicationEntry` → Short Applications UI; PackageManager
+installed-app discovery with real icons/labels, refresh on entry/resume and
+package added/removed/replaced broadcasts, 24-hour lock, no polling loop).
+This change adds the missing **ShareChat** platform to every seam so it
+appears in Settings → Short Control → Short Applications when installed
+(required because ShareChat is present on the current test device):
+
+- `ShortPlatform.SHARE_CHAT` + package mapping (`com.sharechat.android`)
+- New `ShareChatShortsAdapter` (conservative, mirrors the Moj adapter: the
+  platform is recognized, but the surface stays UNKNOWN — no Short is ever
+  counted from package identity alone)
+- Registered in `ShortPlatformRegistry` (package → adapter, deterministic
+  order) → discovery + detection both pick it up automatically
+- `platformId("sharechat")` round-trip + `ShortVideoPlatform` UI entry
+  (`DefaultShortVideoPlatforms`) + `platformDisplayName` label
+- Manifest `<queries>` entry for Android 11+ package visibility
+  (no `QUERY_ALL_PACKAGES`)
+- Registry tests extended for ShareChat (not executed in this pass)
+
+Engine separation preserved: Discovery (installed apps) / Detection (is a
+Short playing) / Control (limit + action) / Screen Activity (duration)
+remain independent. Detection adapters stay conservative — real-device
+ShareChat surface detection and backend platform-literal support remain
+later-phase items. No backend, database, auth or other engine changes.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service

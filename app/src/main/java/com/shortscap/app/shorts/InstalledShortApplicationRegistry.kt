@@ -76,6 +76,7 @@ object InstalledShortApplicationRegistry {
         ShortPlatform.MOJ -> "moj"
         ShortPlatform.X -> "x"
         ShortPlatform.LINKEDIN -> "linkedin"
+        ShortPlatform.SHARE_CHAT -> "sharechat"
         ShortPlatform.UNKNOWN -> "unknown"
     }
 

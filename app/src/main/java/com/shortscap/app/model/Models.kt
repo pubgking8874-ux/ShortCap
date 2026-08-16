@@ -109,6 +109,7 @@ val DefaultShortVideoPlatforms = listOf(
     ShortVideoPlatform("moj", "Moj", "mojapp.in", true),
     ShortVideoPlatform("x", "X", "x.com", true),
     ShortVideoPlatform("linkedin", "LinkedIn", "linkedin.com", true),
+    ShortVideoPlatform("sharechat", "ShareChat", "sharechat.com", true),
 )
 
 /**

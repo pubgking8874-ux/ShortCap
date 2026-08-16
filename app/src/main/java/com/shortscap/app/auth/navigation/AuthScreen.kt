@@ -15,6 +15,9 @@ import android.net.Uri
  */
 sealed class AuthScreen(val route: String) {
     data object Splash : AuthScreen("splash")
+    // First-launch permission gate — shown once between Splash and Welcome on
+    // a fresh installation (see FirstLaunchSetupStore); never on later starts.
+    data object PermissionSetup : AuthScreen("permission_setup")
     data object Welcome : AuthScreen("welcome")
     data object Login : AuthScreen("login")
     data object MobileLogin : AuthScreen("mobile_login")

@@ -53,6 +53,10 @@ class InstalledShortApplicationRegistryTest {
             setOf("com.linkedin.android"),
             InstalledShortApplicationRegistry.supportedPackages[ShortPlatform.LINKEDIN],
         )
+        assertEquals(
+            setOf("com.sharechat.android"),
+            InstalledShortApplicationRegistry.supportedPackages[ShortPlatform.SHARE_CHAT],
+        )
         // The generic fallback adapter (no package names) is not a platform.
         assertFalse(InstalledShortApplicationRegistry.supportedPackages.containsKey(ShortPlatform.UNKNOWN))
     }
@@ -67,6 +71,7 @@ class InstalledShortApplicationRegistryTest {
         assertEquals("moj", InstalledShortApplicationRegistry.platformId(ShortPlatform.MOJ))
         assertEquals("x", InstalledShortApplicationRegistry.platformId(ShortPlatform.X))
         assertEquals("linkedin", InstalledShortApplicationRegistry.platformId(ShortPlatform.LINKEDIN))
+        assertEquals("sharechat", InstalledShortApplicationRegistry.platformId(ShortPlatform.SHARE_CHAT))
         // Round-trip.
         assertEquals(ShortPlatform.YOUTUBE, InstalledShortApplicationRegistry.platformForId("youtube_shorts"))
         assertEquals(ShortPlatform.TIKTOK, InstalledShortApplicationRegistry.platformForId("tiktok"))
@@ -85,6 +90,7 @@ class InstalledShortApplicationRegistryTest {
                 ShortPlatform.MOJ,
                 ShortPlatform.X,
                 ShortPlatform.LINKEDIN,
+                ShortPlatform.SHARE_CHAT,
             ),
             InstalledShortApplicationRegistry.platformOrder,
         )
@@ -120,6 +126,25 @@ class InstalledShortApplicationRegistryTest {
         )
         assertEquals(2, withRandom.size)
         assertTrue(withRandom.none { it.packageName == "com.random.game" })
+    }
+
+    @Test
+    fun `sharechat installed - appears as a supported application`() {
+        val entries = InstalledShortApplicationRegistry.buildEntries(
+            isInstalled = { it == "com.sharechat.android" },
+            enabledByPlatformId = enabledAll,
+            locked = false,
+        )
+        assertEquals(1, entries.size)
+        assertEquals(ShortPlatform.SHARE_CHAT, entries[0].platform)
+        assertEquals("com.sharechat.android", entries[0].packageName)
+        // Unknown random apps are never classified as ShareChat.
+        val unknown = InstalledShortApplicationRegistry.buildEntries(
+            isInstalled = { it == "com.random.app" },
+            enabledByPlatformId = enabledAll,
+            locked = false,
+        )
+        assertTrue(unknown.isEmpty())
     }
 
     @Test

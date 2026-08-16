@@ -25,6 +25,7 @@ object ShortPlatformRegistry {
         MojAdapter,
         XVideoAdapter,
         LinkedInVideoAdapter,
+        ShareChatShortsAdapter,
     )
 
     private val genericFallback: ShortPlatformAdapter = GenericShortVideoAdapter

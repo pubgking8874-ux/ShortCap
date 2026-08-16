@@ -36,6 +36,30 @@ val MonitoringRequiredPermissionIds: Set<PermissionId> = setOf(
 )
 
 /**
+ * The permissions required by the core ShortsCap ENGINES — the first-launch
+ * Permission Setup gate checks EXACTLY this set, one centralized contract
+ * (Settings → Permissions keeps showing all seven for fine-grained control).
+ *
+ *  - USAGE_ACCESS   → Screen Activity / general app-usage collection
+ *  - ACCESSIBILITY  → foreground app/window observation (Shorts detection +
+ *                     Screen Activity)
+ *  - OVERLAY        → Shorts HUD overlay rendering
+ *  - NOTIFICATIONS  → Study Mode / Shorts limit alerts
+ *
+ * BATTERY_OPTIMIZATION / STORAGE_MEDIA / SYSTEM_AUDIO_ACCESS stay optional:
+ * they gate only power-saving, custom-sound and ringer-mode extras — never
+ * the app's core engines. Adding/removing a required permission touches only
+ * this set; the setup screen and its "all required permissions are ready"
+ * gate react automatically.
+ */
+val SetupRequiredPermissionIds: Set<PermissionId> = setOf(
+    PermissionId.USAGE_ACCESS,
+    PermissionId.ACCESSIBILITY,
+    PermissionId.OVERLAY,
+    PermissionId.NOTIFICATIONS,
+)
+
+/**
  * Live status of a permission — all three come from real Android checks
  * (see [PermissionRepository]). The UI normalizes them to just two visible
  * labels: Enabled ([GRANTED]) / Disabled ([NOT_GRANTED], [DISABLED]).

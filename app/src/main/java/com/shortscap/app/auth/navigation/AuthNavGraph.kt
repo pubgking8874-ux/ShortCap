@@ -11,15 +11,18 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.ui.platform.LocalContext
 import com.shortscap.app.auth.screens.CompleteProfileScreen
 import com.shortscap.app.auth.screens.CreateAccountScreen
 import com.shortscap.app.auth.screens.ForgotPasswordScreen
 import com.shortscap.app.auth.screens.LoginScreen
 import com.shortscap.app.auth.screens.MobileLoginScreen
 import com.shortscap.app.auth.screens.OtpVerificationScreen
+import com.shortscap.app.auth.screens.PermissionSetupScreen
 import com.shortscap.app.auth.screens.ResetPasswordScreen
 import com.shortscap.app.auth.screens.SplashScreen
 import com.shortscap.app.auth.screens.WelcomeScreen
+import com.shortscap.app.permissions.FirstLaunchSetupStore
 
 /**
  * Full auth flow, mock-navigation only:
@@ -49,10 +52,35 @@ fun AuthNavGraph(
         popExitTransition = { fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { it / 6 } }
     ) {
         composable(AuthScreen.Splash.route) {
+            val context = LocalContext.current
             SplashScreen(
                 onSplashFinished = {
-                    navController.navigate(AuthScreen.Welcome.route) {
+                    // Fresh installation (setup not completed yet): route through
+                    // the one-time Permission Setup gate before authentication.
+                    // Every later launch (force-stop / reboot included) goes
+                    // straight to Welcome — Accessibility is never re-requested.
+                    val target = if (FirstLaunchSetupStore(context).isCompleted()) {
+                        AuthScreen.Welcome.route
+                    } else {
+                        AuthScreen.PermissionSetup.route
+                    }
+                    navController.navigate(target) {
                         popUpTo(AuthScreen.Splash.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(AuthScreen.PermissionSetup.route) {
+            val context = LocalContext.current
+            PermissionSetupScreen(
+                onContinue = {
+                    // The gate completes once: the flag is persisted so the
+                    // Permission Setup screen never shows again. Later
+                    // revocations are handled by Settings → Permissions.
+                    FirstLaunchSetupStore(context).markCompleted()
+                    navController.navigate(AuthScreen.Welcome.route) {
+                        popUpTo(AuthScreen.PermissionSetup.route) { inclusive = true }
                     }
                 }
             )

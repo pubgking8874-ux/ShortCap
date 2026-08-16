@@ -554,6 +554,7 @@ private fun platformDisplayName(platform: String?): String = when (platform) {
     "MOJ" -> "Moj"
     "X" -> "X"
     "LINKEDIN" -> "LinkedIn"
+    "SHARE_CHAT" -> "ShareChat"
     else -> platform ?: "Shorts"
 }
 
