@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network security config — RELEASE / main variant (Phase 19 hardening).
+
+    Cleartext (plain HTTP) traffic is BLOCKED everywhere: production and
+    staging endpoints must use HTTPS. The debug-only exception for local
+    development lives in src/debug/res/xml/network_security_config.xml
+    (cleartext permitted for the local dev host), so the exception is
+    isolated to debug builds and never ships in a release APK.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

@@ -49,7 +49,11 @@ class HttpBackendApi(
                 connectTimeout = config.CONNECT_TIMEOUT_MS
                 readTimeout = config.READ_TIMEOUT_MS
                 // TEMPORARY DEVELOPMENT IDENTITY (Cognito replaces this later).
-                setRequestProperty(config.DEV_USER_ID_HEADER, config.devUserId)
+                // Sent ONLY in debug builds — release builds fail closed and
+                // never send the dev identity header (see BackendConfig).
+                if (config.devIdentityEnabled) {
+                    setRequestProperty(config.DEV_USER_ID_HEADER, config.devUserId)
+                }
                 if (body != null) {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")

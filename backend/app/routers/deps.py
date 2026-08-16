@@ -13,10 +13,24 @@ swap `get_dev_user_id` for real auth later without touching any endpoint.
 from fastapi import Header, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.user import User
 
 # TEMPORARY DEVELOPMENT ONLY — see module docstring.
 DEV_USER_ID_HEADER = "X-Dev-User-Id"
+
+
+def _require_dev_identity() -> None:
+    """TEMPORARY DEVELOPMENT ONLY — fail closed when the development
+    identity is disabled (production configuration). This is the guard that
+    stops X-Dev-User-Id from becoming an authentication bypass in a deployed
+    environment; real auth (Cognito) replaces the whole dependency later.
+    """
+    if not settings.dev_identity_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Development identity is disabled in this environment.",
+        )
 
 
 def ensure_dev_user(db: Session, user_id: int) -> None:
@@ -28,6 +42,7 @@ def ensure_dev_user(db: Session, user_id: int) -> None:
     Delete this together with the X-Dev-User-Id header when Cognito is
     integrated — production users will already exist before any API call.
     """
+    _require_dev_identity()
     exists = db.query(User.id).filter(User.id == user_id).first() is not None
     if not exists:
         db.add(User(id=user_id))  # all user columns except id are nullable
@@ -39,10 +54,12 @@ def get_dev_user_id(
 ) -> int:
     """Resolve the temporary development user ID from the request header.
 
-    Raises 400 for a missing / malformed ID. This is a clearly marked
-    development-only seam: swap this dependency for real auth (Cognito)
-    later without touching the endpoints.
+    Fails closed (403) when the development identity is disabled — see
+    [DEV_IDENTITY_ENABLED] in `app/config.py`. Raises 400 for a missing /
+    malformed ID. This is a clearly marked development-only seam: swap this
+    dependency for real auth (Cognito) later without touching the endpoints.
     """
+    _require_dev_identity()
     if x_dev_user_id is None or not x_dev_user_id.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

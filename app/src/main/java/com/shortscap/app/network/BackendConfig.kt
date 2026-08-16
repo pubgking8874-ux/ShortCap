@@ -1,5 +1,7 @@
 package com.shortscap.app.network
 
+import com.shortscap.app.BuildConfig
+
 /**
  * BackendConfig — the single, centralized place for the backend base URL and
  * the temporary development identity (Phase 16 synchronization layer).
@@ -55,4 +57,13 @@ object BackendConfig {
     /** The development user id sent with every request (Cognito replaces it). */
     @Volatile
     var devUserId: String = "1"
+
+    /**
+     * Whether the temporary development identity may be sent at all (Phase 19
+     * hardening). DEBUG builds only — the header is NEVER sent by
+     * release/production builds (fail closed), so the dev identity can't be
+     * used accidentally outside development. Cognito replaces the whole
+     * mechanism later.
+     */
+    val devIdentityEnabled: Boolean get() = BuildConfig.DEBUG
 }

@@ -21,6 +21,9 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig is referenced by BackendConfig (debug/release boundary
+        // for the temporary development identity, Phase 19 hardening).
+        buildConfig = true
     }
 
     compileOptions {
@@ -38,7 +41,11 @@ android {
 
     buildTypes {
         release {
+            // R8 minification + resource shrinking (Phase 19 hardening — a
+            // resilience measure, not secrecy). See proguard-rules.pro for
+            // the explicit keep rules.
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

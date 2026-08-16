@@ -2525,6 +2525,81 @@ platforms), never as a single-app feature.
   see the Shorts HUD Runtime Integration report. Backend untouched: no
   schema change, no score/rank/report changes.
 
+### Phase 19 — Security Hardening & Security Audit *(Aug 16, 2026)*
+
+- **Security audit + controlled hardening pass** using OWASP MASVS as the
+  mobile baseline; the FastAPI backend was assessed separately. No CRITICAL
+  findings and **no secrets** in the repository. Full report:
+  `backend/docs/security_audit.md`.
+- **Secret handling:** `.env` is git-ignored (root + backend); no MySQL
+  password, AWS key, private key or token exists in source, resources,
+  assets, BuildConfig or README files. A repository-wide secret scan runs in
+  `backend/scripts/verify_security.py` (reports file + secret TYPE only).
+- **Backend hardening:** the temporary development identity
+  (`X-Dev-User-Id`) now **fails closed in production** (`DEV_IDENTITY_ENABLED`,
+  default derived from `APP_ENV`); environment-aware CORS (`"*"` rejected
+  outside development); configurable trusted hosts (`ALLOWED_HOSTS`);
+  minimal security headers (nosniff / frame / referrer); sanitized
+  DEBUG-only access logging (never headers/bodies/query strings). Input
+  validation, user isolation, error masking and idempotent sync were
+  audited and verified already in place.
+- **Android hardening:** release builds block all cleartext traffic via
+  `res/xml/network_security_config.xml` (local-dev HTTP exception exists
+  only in the debug variant); the dev identity header is sent only in debug
+  builds (`BuildConfig.DEBUG`); `android:allowBackup="false"`; R8 resource
+  shrinking enabled + documented `proguard-rules.pro`.
+- **Play Integrity:** preparation only — token acquisition points and the
+  backend verification boundary are documented; requires Google Play
+  project credentials (deferred).
+- **Deferred (marked, not implemented):** AWS deployment, Cognito
+  authentication (a **required** production dependency), production
+  TLS/domain, WAF/rate limiting, production secrets management.
+- **Verification:** `backend/scripts/verify_security.py` (static + live
+  security checks); full backend regression (study / monitoring / shorts /
+  web / reports / score / rank / sync contracts); `:app:compileDebugKotlin`,
+  `:app:testDebugUnitTest` and `:app:assembleRelease` build successfully.
+  Database schema **unchanged** (no Alembic migration); AWS **not
+  modified**; Cognito **not implemented**.
+
+### Phase 20 — Final Pre-Production Audit & Gap Analysis *(Aug 16, 2026)*
+
+- **Audit-first phase — no code changed.** Full evidence-based audit of every
+  phase, documented vs actual implementation: `backend/docs/preproduction_audit.md`.
+- **Verified:** backend 556/556 checks (study/monitoring/shorts/web/reports/
+  score/rank/sync-contracts/security), Android 40/40 unit tests,
+  debug + release builds (R8 + resource shrinking), Alembic consistent
+  (`657ba9f4d4f8` current = head), 25/25 tables, Phase 19 security controls hold.
+- **Honest gaps (not production-ready):** no real-device/emulator run has been
+  performed; real Android app-usage collection and real-time web enforcement are
+  NOT implemented (explicit seams); the sync queue and Shorts local store are
+  in-memory (lost on process death); lint reports 2 pre-existing errors
+  (incl. an API-34 `LocalDate.ofInstant` call in `SyncCoordinator` — P1 crash
+  risk on API 26–33). P0 blockers: none identified from static/build evidence.
+- **Next:** fix the two P1 items, then a controlled real-device test pass;
+  AWS + Cognito remain required before any production claim.
+
+### P1-1 — Android API compatibility crash fix *(Aug 16, 2026)*
+
+- **Root cause:** `SyncCoordinator.kt` used `LocalDate.ofInstant(...)` to build
+  the UTC date bucket for Shorts usage aggregation. That method only exists
+  from Android API 34, while the app supports `minSdk = 26` — a
+  `NoSuchMethodError` crash risk on API 26–33 devices.
+- **Affected API range:** Android API 26–33 (API 34+ unaffected).
+- **Compatibility-safe replacement:** extracted the bucket logic into a small
+  `utcDateKey(epochMillis)` helper that uses `Instant.ofEpochMilli(...)
+  .atZone(ZoneOffset.UTC).toLocalDate()` — java.time APIs available since API
+  26 (the same pattern already used elsewhere in the project). Date/time
+  behavior is unchanged: buckets are the UTC calendar date of the occurrence,
+  exactly as before, so sync-period computation, midnight boundaries and
+  pending/retry logic are identical. No new date/time framework, no sync
+  architecture change.
+- **Verification:** `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (new
+  focused `SyncCoordinatorTest` — UTC/local midnight, month start/end, leap
+  day, DST, epoch zero — 5/5) and `:app:assembleRelease` all pass; the lint
+  `NewApi` error is gone (remaining lint error is the pre-existing cosmetic
+  `HighAppVersionCode` heuristic). No other API-34-only date/time calls exist
+  in the sync path. Database, backend, UI and `minSdk` untouched.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service

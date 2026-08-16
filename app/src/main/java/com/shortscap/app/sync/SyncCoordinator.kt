@@ -7,7 +7,6 @@ import com.shortscap.app.shorts.ShortPlatform
 import com.shortscap.app.shorts.ShortSurface
 import com.shortscap.app.shorts.ShortsLocalStore
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
@@ -62,8 +61,7 @@ object SyncCoordinator {
         // Aggregate usage: sum duration/count per (date, platform, surface).
         val aggregated = mutableMapOf<Triple<String, ShortPlatform, ShortSurface>, Pair<Int, Long>>()
         store.usageSnapshot().forEach { usage ->
-            val date = LocalDate.ofInstant(Instant.ofEpochMilli(usage.occurredAt), ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val date = utcDateKey(usage.occurredAt)
             val key = Triple(date, usage.platform, usage.surface)
             val (count, millis) = aggregated.getOrElse(key) { 0 to 0L }
             aggregated[key] = (count + usage.countDelta) to (millis + usage.durationMillis)
@@ -123,3 +121,20 @@ object SyncCoordinator {
     fun enqueueWebEvent(event: WebEventDto): Boolean =
         enqueue(WebSyncer.event(event))
 }
+
+/**
+ * UTC calendar date key (YYYY-MM-DD) for [epochMillis] — the bucket key used
+ * when aggregating Shorts usage per (date, platform, surface).
+ *
+ * P1-1 compatibility fix: uses [Instant.atZone] + [ZonedDateTime.toLocalDate]
+ * (java.time, available since API 26) instead of `LocalDate.ofInstant(...)`
+ * which only exists from API 34 — the old call would throw
+ * `NoSuchMethodError` on API 26–33 devices. Date/time behavior is unchanged:
+ * the bucket is always the UTC calendar date of the occurrence, exactly as
+ * before, so sync period computation and the midnight boundary are identical.
+ */
+internal fun utcDateKey(epochMillis: Long): String =
+    Instant.ofEpochMilli(epochMillis)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+        .format(DateTimeFormatter.ISO_LOCAL_DATE)

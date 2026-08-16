@@ -2143,6 +2143,123 @@ reporting and ranking keep working unchanged.
   migrations (`alembic revision --autogenerate` + `alembic upgrade head`) —
   avoid manual schema changes.
 
+## Phase 19 — Security Hardening
+
+**Status: completed (audit + controlled hardening pass, August 16, 2026).**
+OWASP MASVS used as the mobile baseline; the FastAPI backend was assessed
+separately. Full details: `docs/security_audit.md`.
+
+### Security audit
+
+- **Findings:** no CRITICAL issues and **no secrets** in the repository. One
+  HIGH (development identity accepted in production), three MEDIUM (CORS,
+  trusted hosts, Android cleartext policy) and several LOW/INFO — all
+  documented with impact, fix and verification in `docs/security_audit.md`.
+- **No vulnerabilities were invented** — every finding was verified in code
+  before it was listed.
+
+### Secret handling
+
+- `.env` and `.env.*` are git-ignored (root + backend); no `.env` is tracked.
+- No MySQL password, AWS key, private key, token or client secret exists in
+  source, resources, assets, BuildConfig, README files or Git history of the
+  working tree. The repository-wide scan runs in `scripts/verify_security.py`
+  and reports file + secret TYPE only (never the value).
+- `.env.example` is a placeholder template (no real credentials) and now
+  documents the Phase 19 settings.
+
+### Backend hardening
+
+- **Development identity boundary:** `X-Dev-User-Id` fails closed —
+  `DEV_IDENTITY_ENABLED` (default derives from `APP_ENV`) disables it in
+  production (`403`). Cognito remains the required production replacement.
+- **CORS:** environment-aware (`CORS_ALLOW_ORIGINS`); `"*"` is rejected
+  outside the development environment; empty = no cross-origin access
+  (native Android clients unaffected).
+- **Trusted hosts:** configurable `ALLOWED_HOSTS` via
+  `TrustedHostMiddleware` (empty = not enforced yet; ready for deployment).
+- **Security headers:** `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` on every response.
+- **Logging:** sanitized access log (method / path / status / duration),
+  DEBUG-only, never logs headers, bodies or query strings.
+- **Input validation:** Pydantic schema bounds everywhere (lengths, enums,
+  positive durations, valid weekdays, valid timezones, normalized domains);
+  pagination capped (`page_size ≤ 100`) on every paginated endpoint.
+- **User isolation:** the caller identity comes only from the dependency;
+  cross-user reads/updates return 404; device references are ownership
+  checked; reports/score/rank are computed on the current user only.
+- **Error handling:** database errors return a generic 500; domain errors
+  map to 4xx without internals; error bodies never contain stack traces,
+  paths, URLs or credentials.
+- **SQL safety:** all queries are SQLAlchemy-parameterized; no string-built
+  SQL from user input; no raw SQL in services.
+- **Idempotency/replay:** usage sync is per-day idempotent (upserts, no
+  duplicate rows); event endpoints remain append-only by design (see
+  `docs/security_audit.md` I-04).
+- **Rate limiting:** DEFERRED to infrastructure (AWS WAF / API Gateway) — a
+  fragile local in-process limiter was deliberately not introduced.
+
+### Android hardening
+
+- **Release network policy:** `res/xml/network_security_config.xml` blocks
+  all cleartext in release builds; the local-dev HTTP exception exists only
+  in the debug variant (`src/debug/`).
+- **Dev identity in release:** the `X-Dev-User-Id` header is sent only when
+  `BuildConfig.DEBUG` — release builds never send it (fail closed).
+- **Backup:** `android:allowBackup="false"` (on-device usage data is not
+  extractable via backup).
+- **Release protection:** R8 minification + `isShrinkResources = true` and a
+  documented `proguard-rules.pro`. R8 is resilience, not secrecy.
+- **Audited clean:** logging (error-only, no secrets/payloads), permissions
+  (minimal, exported components justified), overlay (presentation-only,
+  permission-gated, released on hide), AccessibilityService (metadata only,
+  stores nothing), storage (SharedPreferences only, no tokens).
+
+### Play Integrity — preparation only
+
+- Tokens are to be obtained on Android at app start (and before sensitive
+  operations); the backend verifies them before account/device operations,
+  high-value synchronization and rank/leaderboard participation. Not
+  configured yet — requires Google Play project credentials (deferred).
+
+### Deferred Cognito / AWS controls
+
+- **Cognito is a required production dependency** (replaces `X-Dev-User-Id`).
+- AWS deployment, production TLS/domain, WAF/rate limiting, production
+  secrets management, and Play Integrity backend credentials are all marked
+  deferred — the architecture is ready for them without code redesign.
+
+### Verification status
+
+- `scripts/verify_security.py` — static (dev-identity fail-closed, CORS
+  wildcard guard, secret scan, Android HTTPS/cleartext/boundary checks) +
+  live (headers, CORS, identity, cross-user isolation, 422 validation,
+  pagination caps, domain rejection, no internals leaked, idempotent sync).
+- Full regression: study / monitoring / shorts / web / reports / score /
+  rank / sync-contracts verify scripts all pass.
+- Android: `:app:compileDebugKotlin`, `:app:testDebugUnitTest` and
+  `:app:assembleRelease` build successfully.
+- Database schema: **unchanged**. Alembic: **no new migration**. AWS:
+  **not modified**. Cognito: **not implemented**.
+
+## Phase 20 — Final Pre-Production Audit & Gap Analysis
+
+**Status: completed (audit-first, no code changed, August 16, 2026).** Full
+report: `docs/preproduction_audit.md`.
+
+- **Verified:** all 9 verification scripts pass (556 checks — study 56,
+  monitoring 55, shorts 67, web 72, reports 61, score 83, rank 47, sync
+  contracts 86, security 29); Alembic consistent (`657ba9f4d4f8` current =
+  head); 25/25 tables; Android 40/40 unit tests; debug + release builds
+  (R8 + resource shrinking); Phase 19 security controls re-verified.
+- **Key gaps (reported, not fixed):** no real-device/emulator run performed;
+  Android real app-usage collection and real-time web enforcement are NOT
+  implemented (explicit seams); sync queue + Shorts local store are in-memory;
+  `SyncCoordinator.kt` uses an API-34 `LocalDate.ofInstant` at minSdk 26 (P1
+  crash risk on API 26–33). P0 blockers: none from static/build evidence.
+- **Not production-ready:** real-device validation + AWS/Cognito deployment
+  remain required.
+
 ## Planned / next (NOT implemented yet)
 
 Android → backend sync (settings, study, monitoring, shorts — including
