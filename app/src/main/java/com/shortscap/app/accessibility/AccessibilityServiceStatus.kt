@@ -28,15 +28,29 @@ object AccessibilityServiceStatus {
     /**
      * True when the ShortsCap accessibility service is in the OS's enabled
      * services list (i.e. the user actually enabled it). Format of the
-     * setting: a colon-separated list of flattened ComponentNames, e.g.
-     * "com.shortscap.app/com.shortscap.app.accessibility.ShortsCapAccessibilityService".
+     * setting: a colon-separated list of ComponentNames, e.g.
+     * "com.shortscap.app/com.shortscap.app.accessibility.ShortsCapAccessibilityService"
+     * (or, on some devices/OS versions, the short relative form
+     * "com.shortscap.app/.accessibility.ShortsCapAccessibilityService" taken
+     * from the manifest).
+     *
+     * Each entry is compared as a PARSED ComponentName ([unflattenFromString]
+     * normalizes BOTH the long and the short/relative form), never as a raw
+     * string — a raw equality against the long form silently reports
+     * "Disabled" on devices that store the short form even though the system
+     * shows the service as ON.
      */
     fun isEnabled(context: Context): Boolean {
         val enabledServices = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ) ?: return false
-        val expected = component(context).flattenToString()
-        return enabledServices.split(':').any { it == expected }
+        val expected = component(context)
+        return enabledServices.split(':').any { entry ->
+            val enabled = ComponentName.unflattenFromString(entry)
+            enabled != null &&
+                enabled.packageName == expected.packageName &&
+                enabled.className == expected.className
+        }
     }
 }

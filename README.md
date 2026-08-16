@@ -3246,6 +3246,28 @@ The Shorts HUD visibility trigger is now a dedicated engine boundary
   + secondary caption). No changes to Shorts Limit / Control / Screen
   Activity / Discovery / auth / Settings UI.
 
+### Accessibility permission status fix — component-form comparison *(Aug 16, 2026)*
+
+Fixed the Accessibility/Monitoring permission showing **Disabled** while the
+Android system Accessibility Settings shows the ShortsCap service **ON**.
+
+- **Root cause:** `AccessibilityServiceStatus.isEnabled()` compared the raw
+  stored setting entries against the LONG flattened component string
+  (`com.shortscap.app/com.shortscap.app.accessibility.ShortsCapAccessibilityService`).
+  Many devices/OS versions store the SHORT relative form taken from the
+  manifest (`com.shortscap.app/.accessibility.ShortsCapAccessibilityService`),
+  so the equality failed and the app reported Disabled even though the
+  service was genuinely enabled.
+- **Fix (one function):** each colon-separated entry is now parsed with
+  `ComponentName.unflattenFromString()` and compared package + class —
+  normalizes BOTH forms. Everything downstream (Permissions / Monitoring
+  screens, monitoring-paused state, HUD gate) reads through this one
+  function, so the fix propagates automatically.
+- Regression tests added (`AccessibilityServiceStatusTest` — long form,
+  short form, other-package exclusion, empty/missing). No permission-system
+  redesign; no Shorts Control / Limit / Screen Activity / HUD / backend
+  changes.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service
