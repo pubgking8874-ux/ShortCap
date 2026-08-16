@@ -42,13 +42,22 @@ data class ShortsLimitCycle(
 
 /** The allowed lifecycle states of one [ShortsLimitCycle]. */
 enum class ShortsLimitCycleStatus {
+    /**
+     * The limit has been SAVED/CONFIGURED but the 24-hour cycle has NOT been
+     * activated yet (READY state). No timestamps, no countdown, no lock —
+     * the user must press ACTIVE to start the cycle. The configured limit is
+     * the persistent setting (mirrors the backend `shorts_settings`
+     * configured limit), separate from the runtime cycle rows.
+     */
+    CONFIGURED,
+
     /** Window running, limit not yet reached. */
     ACTIVE,
 
     /** Window running and currentCount >= limitCount — persists until expiry. */
     LIMIT_REACHED,
 
-    /** Window passed cycleExpiresAt — replaced by the next cycle. */
+    /** Window passed cycleExpiresAt — no auto-roll; the user re-activates. */
     EXPIRED,
 
     /** Shorts control is turned off — history is kept, nothing is counted. */
@@ -104,6 +113,14 @@ interface ShortsLimitCycleStore {
     /** The single active (ACTIVE/LIMIT_REACHED) cycle, newest first, or null. */
     fun currentCycle(): ShortsLimitCycle?
 
+    /**
+     * The saved-but-not-activated configured limit row (status CONFIGURED),
+     * or null. The configured limit is the persistent setting (mirrors
+     * `shorts_settings` on the backend) and survives restart; it does NOT
+     * start a 24-hour cycle until [ShortsControlEngine.activate] is called.
+     */
+    fun configuredCycle(): ShortsLimitCycle?
+
     /** Insert (localId == 0) or update the cycle. */
     fun save(cycle: ShortsLimitCycle): ShortsLimitCycle
 
@@ -122,6 +139,9 @@ class InMemoryShortsLimitCycleStore : ShortsLimitCycleStore {
 
     override fun currentCycle(): ShortsLimitCycle? =
         rows.filter { it.isActive }.maxByOrNull { it.cycleStartedAt }
+
+    override fun configuredCycle(): ShortsLimitCycle? =
+        rows.filter { it.status == ShortsLimitCycleStatus.CONFIGURED }.maxByOrNull { it.updatedAt }
 
     override fun save(cycle: ShortsLimitCycle): ShortsLimitCycle {
         val saved = if (cycle.localId == 0L) cycle.copy(localId = nextId++) else cycle

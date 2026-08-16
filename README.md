@@ -2501,10 +2501,20 @@ platforms), never as a single-app feature.
 - **State transitions:** the video swaps only when the state actually
   changes; an unchanged state never restarts playback, and normal Compose
   recomposition is a no-op (`BrainVideoView.showState`).
-- **HUD visibility:** the overlay appears only while the detection layer
-  reports a positively detected short-form surface (`isShortForm` +
-  confidence ≥ 0.5) and hides immediately when the user leaves it — never
-  on Home, Settings, long-form video, unrelated apps or unknown content.
+- **HUD visibility (all conditions required):** the overlay appears ONLY
+  when EVERY condition holds — (1) ShortsCap monitoring is switched on, (2)
+  the Accessibility service is actually active in the OS, (3) the current
+  foreground app is a supported Shorts application, (4) the detection layer
+  reports `isShortForm == true`, and (5) confidence ≥ the existing detector
+  threshold (0.5). Granting Accessibility / monitoring permissions, opening
+  ShortsCap, Settings, the Permissions page, the Home screen, starting
+  MonitoringService, granting overlay permission, app/device restart or
+  changing Shorts settings only PREPARE monitoring — none of them trigger
+  the overlay. `ShortsHudController.canShowHud()` enforces the
+  monitoring-enabled + accessibility-active prerequisites; the overlay is
+  removed the instant the short-form context ends (leaving Shorts, switching
+  apps, returning to ShortsCap, opening a non-short-form screen) — never a
+  stale overlay.
 - **Overlay:** reuses the existing `ShortsHudOverlayManager`
   (TYPE_APPLICATION_OVERLAY). If the SYSTEM_ALERT_WINDOW permission is
   missing or revoked the HUD fails gracefully — no crash, no repeated
@@ -2881,20 +2891,22 @@ platforms), never as a single-app feature.
 
 ### Shorts Limit page — final 24-hour limit + lock behavior *(Aug 16, 2026)*
 
-- **FINAL PRODUCT RULE:** Shorts Limit is NOT an optional on/off feature.
-  Once the user saves a limit it becomes ACTIVE immediately, the 24-hour
-  cycle begins, the limit is enforced, and the limit is LOCKED until the
-  cycle expires. There is NO enable/disable toggle and NO password — the
-  disable button/strings from the earlier build were removed.
+- **FINAL PRODUCT RULE:** Shorts Limit is NOT an optional on/off feature and
+  there is NO enable/disable toggle and NO password. The flow is explicit:
+  **CONFIGURE → SAVE → READY TO ACTIVATE → user presses ACTIVE → 24-hour
+  cycle starts → limit is LOCKED until the cycle expires.** Saving a limit
+  does NOT start the timer — the cycle begins ONLY on the explicit ACTIVE
+  press.
 - **First setup (no active cycle):** a large circular 24-hour clock showing
-  `24:00:00` (the next cycle that begins on save) over the "Set Shorts
-  Limit" section — preset chips (50 / 100 / 150 / 200 / 300 / 500) + Custom
-  (any valid positive integer up to 10,000; empty / non-numeric / zero /
-  negative / absurdly large values are rejected with explicit messages,
-  never silently converted). Tapping the primary CTA opens a confirmation
-  dialog ("Your Shorts limit will become active immediately and remain
-  locked for the current 24-hour cycle…") and only `Save Limit` creates the
-  cycle: count 0, start = now, expires = start + 24h, persisted immediately.
+  `24:00:00` (the next cycle) over the "Set Shorts Limit" section — preset
+  chips (50 / 100 / 150 / 200 / 300 / 500) + Custom (any valid positive
+  integer up to 10,000; empty / non-numeric / zero / negative / absurdly
+  large values are rejected with explicit messages, never silently
+  converted). Tapping the primary CTA opens a confirmation dialog and `Save
+  Limit` CONFIGURES the limit only — status **READY TO ACTIVATE**, timer
+  **NOT STARTED**, no cycle row, editing still available. The user must then
+  press the explicit **ACTIVE** button, which creates the 24-hour cycle:
+  count 0, start = now, expires = start + 24h, persisted immediately.
 - **Active page — TWO DISTINCT progress values (never combined):**
   - *TIME progress* — the circular 24-hour clock: a smooth ring whose sweep
     is remaining / 24h (full circle at cycle start, depleting to 0 at
@@ -2907,20 +2919,23 @@ platforms), never as a single-app feature.
     divides by zero), Remaining Shorts (`limit - count`, never negative) and
     the status (ACTIVE / WARNING / LIMIT REACHED) from the existing Shorts
     Control state.
-- **Edit Limit — 24-hour lock:** Edit opens presets + Custom, but Save
-  respects the lock: in production the saved limit cannot change while the
-  cycle is active ("Your Shorts limit is locked until the current 24-hour
-  cycle ends.") — no password, no bypass preference. SAFE DEVELOPMENT-ONLY
-  test seam: the lock is gated on `BuildConfig.DEBUG`, so debug builds may
-  edit during an active cycle (developers don't wait 24 hours per test)
-  while release builds enforce the lock. The seam is never exposed as UI and
-  never stored as a preference.
+- **Edit Limit — 24-hour lock:** Edit opens presets + Custom and is fully
+  editable BEFORE activation (READY state — the user may change the limit
+  freely). Once ACTIVE is pressed the limit is LOCKED: in production the
+  saved limit cannot change while the cycle runs ("Your Shorts limit is
+  locked until the current 24-hour cycle ends.") — no password, no bypass
+  preference. SAFE DEVELOPMENT-ONLY test seam: the lock is gated on
+  `BuildConfig.DEBUG`, so debug builds may edit during an active cycle
+  (developers don't wait 24 hours per test) while release builds enforce the
+  lock. The seam is never exposed as UI and never stored as a preference.
 - **Cycle persistence / expiry:** count, limit, start, expiry, status,
   warning and limit-reached state all survive navigation, app restart,
   process recreation and force-stop. The cycle resets ONLY when the 24-hour
-  window expires (then the engine rolls the next window); never because the
-  app closed, the process was killed, the network dropped, or the user left
-  Shorts / the HUD disappeared.
+  window expires — the engine marks it EXPIRED (page shows the expired
+  notice + ACTIVE button) and does NOT auto-roll: the user edits the limit
+  if desired and presses ACTIVE again, which reuses the last window's limit.
+  Never reset because the app closed, the process was killed, the network
+  dropped, or the user left Shorts / the HUD disappeared.
 - **Backend integration:** best-effort mirror pushes through
   `ShortsControlSyncer` (the existing single HTTP client, no second queue)
   to `POST /shorts/limit-cycle/activate`, `PUT /shorts/control` and
@@ -2928,14 +2943,47 @@ platforms), never as a single-app feature.
   by a network failure — an offline / sync-error banner surfaces the status
   and the next action re-pushes. No new backend endpoints were created.
 - **Verification:** extended `ShortsLimitPageStateTest` (page-state
-  derivation, limit validation, HH:MM:SS countdown + time-progress math,
-  first-save activation, production 24-hour lock enforcement + DEBUG test
-  seam, restart recovery, limit reached, expiry, offline) and
-  `ShortsControlSyncerTest` (backend mapping). Unit tests **119/119**,
-  `compileDebugKotlin` and `assembleRelease` PASS, lint `NewApi` = 0 (P1-1
-  stays fixed), P1-2 durable queue intact, all backend verify scripts (incl.
-  `verify_shorts` 67/67, `verify_short_control` 59/59) PASS. No backend,
+  derivation incl. READY_TO_ACTIVATE, limit validation, HH:MM:SS countdown
+  + time-progress math, save-does-not-start-timer, explicit ACTIVE
+  activation, production 24-hour lock enforcement + DEBUG test seam, restart
+  recovery, limit reached, EXPIRED no-auto-roll + re-activation, offline),
+  `ShortsControlEngineTest` (CONFIGURED/READY lifecycle, activate
+  transitions, no count before activation) and `ShortsControlSyncerTest`
+  (backend mapping). `compileDebugKotlin` + `compileDebugUnitTestKotlin`
+  PASS; unit tests were not re-executed for this targeted correction (per
+  instructions) — the earlier verified baseline (119/119, lint `NewApi` = 0,
+  P1-1/P1-2 fixed) is untouched by this behavior-only change. No backend,
   database or schema changes.
+
+### Short Control frontend ↔ backend link sanity check *(Aug 16, 2026)*
+
+Small connectivity check (no UI/API/schema changes) against the LIVE FastAPI
+server — `X-Dev-User-Id: 1` on `http://127.0.0.1:8000`, mirroring what the
+Android client sends via `BackendConfig`:
+
+- **GET /shorts/control → 200:** combined state returned — `applications`
+  catalog (8 platforms), `hud.appearance` (BRAIN), `limit_cycle` (null when
+  no 24-hour cycle is active — the normal state, 404-mapped to null by the
+  client). Android `HttpBackendApi.getShortsControl()` parses exactly these
+  fields (`ShortsControlDto`), matching the live JSON keys.
+- **PUT /shorts/control `{"limit_count": 180}` → 200:** the 200 → 180
+  minimum-test change; the configured limit persisted and was confirmed via
+  `GET /settings/shorts` → `daily_limit_count: 180` (MySQL-backed
+  `shorts_settings` row). Android pushes edits the same way
+  (`ShortsControlSyncer.syncEditLimit` → `PUT /shorts/control`).
+- **Persistence:** re-fetching the control state returns the same persisted
+  data; the DB row (`updated_at` refreshed) holds 180.
+- **Contract check — no mocks:** the Android client uses the real
+  `HttpBackendApi` (real HTTP to `BackendConfig.baseUrl`); the
+  `ScriptedControlApi` fake exists only in tests. No hardcoded/mock Short
+  Control data in the production path.
+- **Honest gap (by design, not a bug):** the Short Control UI is
+  **local-authoritative** — it renders the Room-backed `ShortsControlEngine`
+  state and pushes best-effort (activate / edit / disable). The `GET`
+  endpoints (`getShortsControl`, `getShortsLimitCycle`) are implemented in
+  the API client and verified against the live server but are NOT yet
+  consumed by the UI (no fetch-on-open). Backend value → UI display is
+  therefore one-directional today (push mirror), not pull-refreshed.
 
 ## Database connection status
 

@@ -490,8 +490,14 @@ object EnglishStrings : AppStrings {
     override val shortsLimitCustom = "Custom"
     override val shortsLimitPresets = "Presets"
     override val shortsLimitConfirmTitle = "Confirm Shorts Limit"
-    override val shortsLimitConfirmDesc = "Your Shorts limit will become active immediately and remain locked for the current 24-hour cycle. You can change the limit after this cycle ends."
+    override val shortsLimitConfirmDesc = "Your limit will be saved. It only becomes active when you press ACTIVE, starting a locked 24-hour cycle."
     override val shortsLimitSaveLimit = "Save Limit"
+    /** "Ready to activate" — status after saving but before pressing ACTIVE. */
+    override val shortsLimitReadyToActivate = "Ready to activate"
+    /** "Not started" — the 24-hour timer before ACTIVE is pressed. */
+    override val shortsLimitTimerNotStarted = "Not started"
+    /** "ACTIVE" — the button that starts the 24-hour cycle. */
+    override val shortsLimitActivateNow = "ACTIVE"
     override val shortsLimitLockedMessage = "Your Shorts limit is locked until the current 24-hour cycle ends."
     override val shortsLimitUsageSection = "Shorts Usage"
     override val shortsLimitYourLimit = "Your Limit"
@@ -507,7 +513,7 @@ object EnglishStrings : AppStrings {
     override val shortsLimitDisabledNotice = "Shorts control is disabled. Activate a limit to start a new 24-hour cycle."
     override val shortsLimitOffline = "Offline — showing your saved state. Changes will sync when you're back online."
     override val shortsLimitSyncError = "Couldn't sync your Shorts settings. Showing your saved state."
-    override val shortsLimitExpiredNotice = "This 24-hour cycle has ended — a new cycle has started."
+    override val shortsLimitExpiredNotice = "This 24-hour cycle has ended. You can change your limit and press ACTIVE to start the next one."
     override val shortsLimitRequired = "Enter a limit first."
     override val shortsLimitInvalidNumber = "Enter a whole number."
     override val shortsLimitPositive = "Enter a number greater than zero."

@@ -22,6 +22,9 @@ class RoomShortsLimitCycleStore(
     override fun currentCycle(): ShortsLimitCycle? =
         ioBlocking { dao.currentActive() }?.toCycle()
 
+    override fun configuredCycle(): ShortsLimitCycle? =
+        ioBlocking { dao.configured() }?.toCycle()
+
     override fun save(cycle: ShortsLimitCycle): ShortsLimitCycle =
         ioBlocking {
             if (cycle.localId == 0L) {

@@ -642,10 +642,16 @@ interface AppStrings {
     val shortsLimitPresets: String
     /** Confirmation title when saving a limit for the first time. */
     val shortsLimitConfirmTitle: String
-    /** Confirmation text — the limit activates immediately and stays locked for 24 hours. */
+    /** Confirmation text — saving configures the limit; ACTIVE starts the cycle. */
     val shortsLimitConfirmDesc: String
-    /** "Save Limit" — confirmation button that creates the active cycle. */
+    /** "Save Limit" — confirmation button that saves the configured limit. */
     val shortsLimitSaveLimit: String
+    /** "Ready to activate" — status after saving but before pressing ACTIVE. */
+    val shortsLimitReadyToActivate: String
+    /** "Not started" — the 24-hour timer before ACTIVE is pressed. */
+    val shortsLimitTimerNotStarted: String
+    /** "ACTIVE" — the button that starts the 24-hour cycle. */
+    val shortsLimitActivateNow: String
     /** "Your Shorts limit is locked until the current 24-hour cycle ends." */
     val shortsLimitLockedMessage: String
     /** "Shorts Usage" — active-page section heading (count/limit). */

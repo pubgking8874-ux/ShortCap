@@ -1895,6 +1895,24 @@ it never guesses. The HUD consumes these results; it never detects Shorts
 itself and never talks to the backend (sync stays: Shorts local state →
 existing Sync Layer → FastAPI).
 
+### Visibility contract (HUD trigger fix)
+
+Granting Accessibility / monitoring permissions **never** shows the HUD by
+itself. The overlay appears ONLY when every condition holds:
+
+1. ShortsCap monitoring is switched on (`MonitoringService` enabled flag);
+2. the Accessibility service is actually active in the OS
+   (`AccessibilityServiceStatus`);
+3. the foreground app is a supported Shorts application;
+4. the detection result is `isShortForm == true`;
+5. confidence ≥ the existing detector threshold (0.5).
+
+`ShortsHudController.canShowHud()` enforces the monitoring + accessibility
+prerequisites; opening ShortsCap, Settings, Home, the Permissions page,
+starting MonitoringService, overlay permission, app/device restart or
+changing Shorts settings only prepare monitoring. The overlay is removed the
+moment the short-form context ends — no stale overlay.
+
 ### What it shows
 
 - **Global count:** `CURRENT / DAILY_LIMIT` (e.g. `4 / 200`) — ONE count
@@ -2371,35 +2389,66 @@ the backend is a data / synchronization API only.
   `GET /shorts/control` verified live. Score / Rank / Reports / Web / Study /
   Monitoring logic unchanged; no AWS / Cognito work.
 
+### Short Control frontend ↔ backend link sanity check *(Aug 16, 2026)*
+
+Connectivity-only check (no API/schema changes) against the running dev
+server (`X-Dev-User-Id: 1`, port 8000):
+
+- **GET /shorts/control → 200** — combined state returned (`applications`
+  with the 8-platform catalog, `hud.appearance`, `limit_cycle` null when no
+  active 24-hour cycle exists — the client maps that 404/empty case to
+  null). Keys match what `HttpBackendApi.getShortsControl()` parses.
+- **PUT /shorts/control `{"limit_count": 180}` → 200** — the 200 → 180
+  minimum-test edit; persistence confirmed via `GET /settings/shorts`
+  (`daily_limit_count: 180`, MySQL `shorts_settings` row updated). Android
+  edits the same way (`ShortsControlSyncer.syncEditLimit`).
+- **No mocks:** the Android client performs real HTTP (`HttpBackendApi` →
+  `BackendConfig.baseUrl`); the scripted fake is test-only. The one
+  documented gap is by design: the Android UI is local-authoritative and
+  pushes best-effort — the implemented GETs are not yet consumed by the UI
+  (no fetch-on-open), so backend → UI is a push mirror today.
+
 ### Shorts Limit page — final 24-hour limit + lock behavior *(Aug 16, 2026)*
 
 Android-side follow-up to the Shorts Control Backend (no backend changes):
 
-- **FINAL PRODUCT RULE:** Shorts Limit is NOT optional. Saving a limit
-  activates it immediately for a 24-hour cycle and LOCKS it until that cycle
-  expires — no enable/disable toggle, no password. The earlier disable
-  button/strings were removed from the Android UI.
+- **FINAL PRODUCT RULE:** Shorts Limit is NOT optional — no enable/disable
+  toggle, no password. The activation flow is explicit: **CONFIGURE → SAVE
+  → READY TO ACTIVATE → user presses ACTIVE → 24-hour cycle starts → limit
+  LOCKED until expiry.** Saving a limit does NOT start the timer; the cycle
+  begins ONLY on the explicit ACTIVE press.
 - **What:** the corrected `Settings → Short Control → Shorts Limit` page
   renders the authoritative local `ShortsControlEngine` state. First setup
   shows a `24:00:00` circular 24-hour clock + presets (50/100/150/200/300/
-  500) + Custom, with a confirmation dialog before `Save Limit` activates
-  the cycle. The active page separates TIME progress (circular 24-hour
+  500) + Custom, with a confirmation dialog; `Save Limit` only CONFIGURES
+  the limit (status READY TO ACTIVATE, timer NOT STARTED, editing
+  available). The user then presses the explicit **ACTIVE** button to create
+  the 24-hour cycle (count 0, start = now, expires = +24h, persisted
+  immediately). The active page separates TIME progress (circular 24-hour
   clock, HH:MM:SS countdown from `cycleExpiresAt - now`) from SHORTS USAGE
   progress (`current / limit` + compact usage bar + remaining + status).
-- **24-hour edit lock:** Edit Limit keeps presets + Custom, but production
-  cannot change the limit during an active cycle (lock message shown). A
-  SAFE DEVELOPMENT-ONLY seam (`BuildConfig.DEBUG`) lets debug builds edit
-  for testing; release builds enforce the lock. Never exposed as UI, never
+- **24-hour edit lock:** Edit Limit keeps presets + Custom and is editable
+  BEFORE activation; once ACTIVE is pressed production cannot change the
+  limit until the cycle expires (lock message shown). A SAFE
+  DEVELOPMENT-ONLY seam (`BuildConfig.DEBUG`) lets debug builds edit for
+  testing; release builds enforce the lock. Never exposed as UI, never
   stored as a preference.
+- **Expiry:** the engine marks the window EXPIRED (page shows the expired
+  notice + ACTIVE button) and does NOT auto-roll — the user edits the limit
+  if desired and presses ACTIVE again, reusing the last window's limit. The
+  saved-but-not-activated limit is a CONFIGURED row (`shorts_settings`
+  mirror); the running window is the ACTIVE row (`shorts_limit_cycles`
+  mirror) — consistent with the backend's config-vs-cycle separation.
 - **Backend usage:** best-effort mirror pushes through the existing single
   HTTP client to the Shorts Control endpoints created above
   (`POST /shorts/limit-cycle/activate`, `PUT /shorts/control`,
   `POST /shorts/limit-cycle/disable`). The durable LOCAL state is never
   reset by network failure; no new endpoints, no schema changes.
-- **Verification:** Android unit tests **119/119**, compile + release build
-  PASS, lint `NewApi` = 0 (P1-1 stays fixed), P1-2 durable queue intact, all
-  10 backend verify scripts still PASS. Backend / database / schema
-  untouched.
+- **Verification:** `compileDebugKotlin` + `compileDebugUnitTestKotlin`
+  PASS; unit tests were not re-executed for this targeted correction (per
+  instructions) — the earlier verified baseline (119/119, lint `NewApi` = 0,
+  P1-1/P1-2 fixed) is untouched by this behavior-only change. Backend /
+  database / schema untouched.
 
 ### Short Control Engine + Short Applications — Android-side follow-ups (Aug 16, 2026)
 

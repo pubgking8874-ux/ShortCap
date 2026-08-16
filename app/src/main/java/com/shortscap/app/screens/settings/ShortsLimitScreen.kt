@@ -152,16 +152,11 @@ fun ShortsLimitScreen(
                     Text(strings.loading, color = colors.TextSecondary, style = ScTextStyles.Body)
                 }
 
-                // No active cycle (never configured, disabled, or defensively
-                // expired) -> the setup screen with the next-cycle timer.
+                // Never configured / disabled -> first-time setup.
                 ShortsLimitPageState.NO_LIMIT_CONFIGURED,
                 ShortsLimitPageState.LIMIT_SETUP,
                 ShortsLimitPageState.DISABLED,
-                ShortsLimitPageState.EXPIRED,
                 -> {
-                    if (pageState == ShortsLimitPageState.EXPIRED) {
-                        NoticeBanner(text = strings.shortsLimitExpiredNotice, color = colors.Warning)
-                    }
                     SetupView(
                         onSetLimit = { limit ->
                             pendingLimit = limit
@@ -170,6 +165,25 @@ fun ShortsLimitScreen(
                     )
                 }
 
+                // Limit saved but NOT activated — READY state: timer not
+                // started, limit not locked, editing available, ACTIVE button.
+                ShortsLimitPageState.READY_TO_ACTIVATE,
+                ShortsLimitPageState.EXPIRED,
+                -> {
+                    if (pageState == ShortsLimitPageState.EXPIRED) {
+                        NoticeBanner(text = strings.shortsLimitExpiredNotice, color = colors.Warning)
+                    }
+                    ReadyToActivateView(
+                        state = state,
+                        onActivate = {
+                            engine.activate()
+                            pushSync { syncActivate(state.limitCount) }
+                        },
+                        onEdit = { editOpen = true },
+                    )
+                }
+
+                // Cycle running: 24-hour countdown + locked limit.
                 ShortsLimitPageState.ACTIVE,
                 ShortsLimitPageState.WARNING,
                 ShortsLimitPageState.LIMIT_REACHED,
@@ -193,13 +207,14 @@ fun ShortsLimitScreen(
         }
     }
 
-    // First save: confirmation before the limit activates + locks for 24h.
+    // First save: confirmation — the limit is CONFIGURED only; the 24-hour
+    // cycle starts when the user presses ACTIVE on the READY page.
     if (confirmOpen && pendingLimit != null) {
         SaveLimitConfirmDialog(
             onSave = {
                 confirmOpen = false
                 engine.setLimit(pendingLimit!!)
-                pushSync { syncActivate(pendingLimit!!) }
+                pushSync { syncEditLimit(pendingLimit!!) }
             },
             onDismiss = { confirmOpen = false },
         )
@@ -315,7 +330,7 @@ private fun SetupView(
     )
 }
 
-/** First-save confirmation — the limit activates immediately and locks. */
+/** First-save confirmation — saving CONFIGURES the limit; ACTIVE starts the cycle. */
 @Composable
 private fun SaveLimitConfirmDialog(
     onSave: () -> Unit,
@@ -342,6 +357,46 @@ private fun SaveLimitConfirmDialog(
                 Text(strings.cancel, color = colors.TextSecondary)
             }
         },
+    )
+}
+
+// ---------------------------------------------------------------------------
+// READY_TO_ACTIVATE — limit saved, cycle NOT started
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ReadyToActivateView(
+    state: ShortsControlState,
+    onActivate: () -> Unit,
+    onEdit: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+
+    // The saved limit, clearly displayed.
+    SectionTitle(strings.shortsLimitYourLimit)
+    LimitCard(
+        state = state,
+        locked = false,
+        onEdit = onEdit,
+        strings = strings,
+        colors = colors,
+    )
+
+    // Status + timer: READY TO ACTIVATE / NOT STARTED.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        StatBlock(label = strings.shortsLimitState, value = strings.shortsLimitReadyToActivate, colors = colors)
+        StatBlock(label = strings.shortsLimitCycle24Hour, value = strings.shortsLimitTimerNotStarted, colors = colors)
+    }
+
+    // The explicit ACTIVE button — ONLY this starts the 24-hour cycle.
+    PrimaryButton(
+        label = strings.shortsLimitActivateNow,
+        enabled = true,
+        onClick = onActivate,
     )
 }
 
@@ -387,7 +442,7 @@ private fun ActiveView(
     SectionTitle(strings.shortsLimitUsageSection)
     UsageCard(state = state, strings = strings, colors = colors)
 
-    // ---- YOUR LIMIT — saved limit + edit (locked per product rule). ----
+    // ---- YOUR LIMIT — saved limit + edit (locked while the cycle runs). ----
     SectionTitle(strings.shortsLimitYourLimit)
     LimitCard(
         state = state,

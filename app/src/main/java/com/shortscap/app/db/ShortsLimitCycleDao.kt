@@ -14,8 +14,9 @@ import androidx.room.Update
  * Mirrors [com.shortscap.app.shorts.ShortsLimitCycle]: one row per 24-hour
  * window. The single active (ACTIVE / LIMIT_REACHED) row is the authoritative
  * runtime state; completed/disabled windows are retained as history (never
- * deleted when control is disabled). The engine — not the UI — is the only
- * writer.
+ * deleted when control is disabled). A CONFIGURED row holds the
+ * saved-but-not-activated limit (READY state — no cycle running yet). The
+ * engine — not the UI — is the only writer.
  */
 @Entity(tableName = "shorts_limit_cycle")
 data class ShortsLimitCycleEntity(
@@ -41,6 +42,13 @@ interface ShortsLimitCycleDao {
             "ORDER BY cycleStartedAt DESC LIMIT 1"
     )
     suspend fun currentActive(): ShortsLimitCycleEntity?
+
+    /** The saved-but-not-activated configured limit (CONFIGURED), newest first. */
+    @Query(
+        "SELECT * FROM shorts_limit_cycle WHERE status = 'CONFIGURED' " +
+            "ORDER BY updatedAt DESC LIMIT 1"
+    )
+    suspend fun configured(): ShortsLimitCycleEntity?
 
     /** Inserts a new window, returning its local id. */
     @Insert

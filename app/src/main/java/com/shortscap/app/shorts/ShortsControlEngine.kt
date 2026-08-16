@@ -90,44 +90,106 @@ class ShortsControlEngine(
     // ------------------------------------------------------------------
 
     /**
-     * Activates Shorts control with [limitCount] — the limit becomes ACTIVE
-     * immediately (no separate toggle). While an active 24-hour cycle is
-     * running the limit is LOCKED: in production ([allowEditWhileActive] =
-     * false) an edit is rejected and the current state is returned unchanged.
-     * The DEBUG test seam ([allowEditWhileActive] = true, the default in
-     * debug builds) permits a threshold-only change for testing — count and
-     * timers are preserved. A limit <= 0 is rejected (control stays off).
+     * SAVES/CONFIGURES the Shorts limit WITHOUT starting a 24-hour cycle
+     * (READY state). The user must then press ACTIVE ([activate]) for the
+     * cycle to start — the timer never starts on save, the limit is never
+     * locked and no cycle row is created here.
+     *
+     * While an active 24-hour cycle is ALREADY running the limit is LOCKED:
+     * in production ([allowEditWhileActive] = false) an edit is rejected and
+     * the current state is returned unchanged. The DEBUG test seam
+     * ([allowEditWhileActive] = true, the default in debug builds) permits a
+     * threshold-only change on the running cycle for testing — count and
+     * timers are preserved. A limit <= 0 is rejected (nothing saved).
      */
     fun setLimit(limitCount: Int, now: Long = nowMillis()): ShortsControlState {
         if (limitCount <= 0) return currentState()
         val active = store.currentCycle()
-        val fresh = active == null || active.cycleExpiresAt <= now
-        if (fresh) {
+        if (active != null && active.cycleExpiresAt > now) {
+            // A cycle is running: production lock rejects; debug seam allows a
+            // threshold-only edit on the SAME window.
+            if (isLimitLocked(now)) return currentState()
+            store.save(active.copy(limitCount = limitCount, updatedAt = now))
+            return currentState()
+        }
+        // No running cycle: persist the CONFIGURED limit (READY state). The
+        // configured row survives restart; activating later uses this limit.
+        val configured = store.configuredCycle()
+        if (configured != null) {
+            store.save(configured.copy(limitCount = limitCount, updatedAt = now))
+        } else {
             store.save(
                 ShortsLimitCycle(
                     limitCount = limitCount,
-                    cycleStartedAt = now,
-                    cycleExpiresAt = now + cycleDurationMillis,
-                    status = ShortsLimitCycleStatus.ACTIVE,
+                    cycleStartedAt = 0L,
+                    cycleExpiresAt = 0L,
+                    status = ShortsLimitCycleStatus.CONFIGURED,
                     createdAt = now,
                     updatedAt = now,
                 )
             )
-        } else {
-            // 24-hour lock: reject the edit while a cycle is active unless
-            // the development test seam is enabled.
-            if (isLimitLocked(now)) return currentState()
-            // Threshold-only change: same window, same count, same timers.
-            store.save(active!!.copy(limitCount = limitCount, updatedAt = now))
         }
         return currentState()
     }
 
     /**
-     * Whether the saved Shorts limit is currently locked. Locked while an
-     * unexpired cycle is active AND the production lock is enforced; the
-     * DEBUG test seam reports unlocked so developers can test limit changes
-     * without waiting 24 hours. Expired cycles are never locked.
+     * Explicitly STARTS the 24-hour cycle (READY → ACTIVE). No-op when there
+     * is nothing to activate (no configured limit and no prior window) or a
+     * cycle is already running (an active cycle is never restarted, reset or
+     * duplicated).
+     *
+     * The limit comes from the CONFIGURED row when one exists (that row is
+     * transitioned in place into the ACTIVE cycle — one row per window);
+     * after an expiry with no fresh configuration, the most recent EXPIRED
+     * window's limit is reused so the user can simply press ACTIVE again
+     * without re-entering the limit. On success: cycleStartedAt = now,
+     * cycleExpiresAt = now + 24h, currentCount = 0, status = ACTIVE.
+     */
+    fun activate(now: Long = nowMillis()): ShortsControlState {
+        val active = store.currentCycle()
+        if (active != null && active.cycleExpiresAt > now) return currentState()
+        val configured = store.configuredCycle()
+        if (configured != null) {
+            // Start the window with the configured limit; the CONFIGURED row
+            // is transitioned in place into the ACTIVE cycle.
+            store.save(
+                configured.copy(
+                    currentCount = 0,
+                    cycleDurationMillis = 0L,
+                    cycleStartedAt = now,
+                    cycleExpiresAt = now + cycleDurationMillis,
+                    status = ShortsLimitCycleStatus.ACTIVE,
+                    warningTriggered = false,
+                    limitReached = false,
+                    updatedAt = now,
+                )
+            )
+            return currentState()
+        }
+        // After expiry: reuse the last window's limit for the next cycle.
+        val lastExpired = store.history()
+            .firstOrNull { it.status == ShortsLimitCycleStatus.EXPIRED }
+            ?: return currentState()
+        store.save(
+            ShortsLimitCycle(
+                limitCount = lastExpired.limitCount,
+                cycleStartedAt = now,
+                cycleExpiresAt = now + cycleDurationMillis,
+                status = ShortsLimitCycleStatus.ACTIVE,
+                createdAt = now,
+                updatedAt = now,
+            )
+        )
+        return currentState()
+    }
+
+    /**
+     * Whether the saved Shorts limit is currently locked. Locked ONLY while
+     * an unexpired cycle is ACTIVE and the production lock is enforced; a
+     * CONFIGURED (saved, not activated) limit is NEVER locked — editing
+     * stays available before the user presses ACTIVE. The DEBUG test seam
+     * reports unlocked for active cycles so developers can test limit
+     * changes without waiting 24 hours. Expired cycles are never locked.
      */
     fun isLimitLocked(now: Long = nowMillis()): Boolean {
         val active = store.currentCycle() ?: return false
@@ -206,20 +268,32 @@ class ShortsControlEngine(
 
     /**
      * The derived current state. Loads the persisted cycle, applies expiry
-     * (marking the old window EXPIRED and initializing the next one), and
-     * returns the read-only state consumers (Short Control page, HUD,
-     * enforcement layer) render. Never resets on restart.
+     * (marking the old window EXPIRED — the NEXT cycle only starts when the
+     * user explicitly activates it), and returns the read-only state
+     * consumers (Short Control page, HUD, enforcement layer) render. Never
+     * resets on restart. A saved-but-not-activated limit reports status
+     * CONFIGURED (READY_TO_ACTIVATE — no cycle, no countdown, no lock).
      */
     fun currentState(now: Long = nowMillis()): ShortsControlState {
-        val cycle = ensureFreshCycle(now)
-        return cycle?.let { deriveState(it, now) }
-            ?: ShortsControlState(
-                cycle = null,
-                status = ShortsLimitCycleStatus.DISABLED,
+        val cycle = store.currentCycle()
+        if (cycle != null) {
+            if (cycle.cycleExpiresAt > now) return deriveState(cycle, now)
+            // Expired: persist EXPIRED (no auto-roll — the user re-activates)
+            // and surface the EXPIRED state so the page shows the expired
+            // notice + ACTIVE button instead of silently resetting.
+            val expired = cycle.copy(status = ShortsLimitCycleStatus.EXPIRED, updatedAt = now)
+            store.save(expired)
+            return deriveState(expired, now)
+        }
+        val configured = store.configuredCycle()
+        if (configured != null) {
+            return ShortsControlState(
+                cycle = configured,
+                status = ShortsLimitCycleStatus.CONFIGURED,
                 currentCount = 0,
-                limitCount = 0,
+                limitCount = configured.limitCount,
                 usageRatio = 0f,
-                remainingCount = 0,
+                remainingCount = configured.limitCount,
                 cycleStartedAt = null,
                 cycleExpiresAt = null,
                 remainingCycleMillis = 0L,
@@ -227,6 +301,27 @@ class ShortsControlEngine(
                 warningTriggered = false,
                 limitReached = false,
             )
+        }
+        // No active window and no fresh configuration: keep surfacing the most
+        // recent EXPIRED window (editing + re-activation available) rather
+        // than falling back to first-time setup.
+        store.history().firstOrNull { it.status == ShortsLimitCycleStatus.EXPIRED }?.let {
+            return deriveState(it, now)
+        }
+        return ShortsControlState(
+            cycle = null,
+            status = ShortsLimitCycleStatus.DISABLED,
+            currentCount = 0,
+            limitCount = 0,
+            usageRatio = 0f,
+            remainingCount = 0,
+            cycleStartedAt = null,
+            cycleExpiresAt = null,
+            remainingCycleMillis = 0L,
+            enforcementState = ShortsEnforcementState.ALLOW,
+            warningTriggered = false,
+            limitReached = false,
+        )
     }
 
     // ------------------------------------------------------------------
@@ -234,31 +329,27 @@ class ShortsControlEngine(
     // ------------------------------------------------------------------
 
     /**
-     * Returns the active cycle valid at [now]: the persisted active window
-     * if unexpired, otherwise a fresh window initialized after marking the
-     * expired one EXPIRED. Null when control is disabled (no active window).
+     * Returns the active cycle valid at [now] for counting, or null when no
+     * cycle is running. A saved-but-not-activated limit (CONFIGURED) is NOT
+     * counted; an expired window is marked EXPIRED and no next cycle is
+     * auto-created — counting resumes only after an explicit [activate].
      */
     private fun ensureFreshCycle(now: Long): ShortsLimitCycle? {
         val active = store.currentCycle() ?: return null
         if (active.cycleExpiresAt > now) return active
-        // Expired: persist EXPIRED, then initialize the next window.
         store.save(active.copy(status = ShortsLimitCycleStatus.EXPIRED, updatedAt = now))
-        val fresh = ShortsLimitCycle(
-            limitCount = active.limitCount,
-            cycleStartedAt = now,
-            cycleExpiresAt = now + cycleDurationMillis,
-            status = ShortsLimitCycleStatus.ACTIVE,
-            createdAt = now,
-            updatedAt = now,
-        )
-        return store.save(fresh)
+        return null
     }
 
     private fun deriveState(cycle: ShortsLimitCycle, now: Long): ShortsControlState {
         val limit = cycle.limitCount
         val ratio = if (limit > 0) cycle.currentCount.toFloat() / limit else 0f
+        // A finished window (EXPIRED / DISABLED) is never in an enforcement
+        // state — enforcement belongs to the running window only.
+        val windowOver = cycle.status == ShortsLimitCycleStatus.EXPIRED ||
+            cycle.status == ShortsLimitCycleStatus.DISABLED
         val enforcement = when {
-            cycle.status == ShortsLimitCycleStatus.DISABLED -> ShortsEnforcementState.ALLOW
+            windowOver -> ShortsEnforcementState.ALLOW
             cycle.limitReached || cycle.currentCount >= limit -> ShortsEnforcementState.LIMIT_REACHED
             cycle.warningTriggered -> ShortsEnforcementState.WARNING
             else -> ShortsEnforcementState.ALLOW
@@ -275,7 +366,7 @@ class ShortsControlEngine(
             remainingCycleMillis = (cycle.cycleExpiresAt - now).coerceAtLeast(0L),
             enforcementState = enforcement,
             warningTriggered = cycle.warningTriggered,
-            limitReached = cycle.limitReached || cycle.currentCount >= limit,
+            limitReached = if (windowOver) false else cycle.limitReached || cycle.currentCount >= limit,
         )
     }
 

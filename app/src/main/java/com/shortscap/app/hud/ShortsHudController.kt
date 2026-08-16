@@ -1,6 +1,8 @@
 package com.shortscap.app.hud
 
 import android.content.Context
+import com.shortscap.app.accessibility.AccessibilityServiceStatus
+import com.shortscap.app.monitoring.MonitoringService
 import com.shortscap.app.shorts.ShortFormSurfaceListener
 import com.shortscap.app.shorts.ShortFormSurfaceState
 import com.shortscap.app.shorts.ShortsControlEngine
@@ -27,8 +29,32 @@ import com.shortscap.app.shorts.ShortsMonitoringPipeline
  * otherwise the configured HUD daily limit (the settings default) is
  * displayed.
  *
- * The overlay is only shown when the HUD is enabled in settings AND the
- * SYSTEM_ALERT_WINDOW permission is granted; otherwise it fails gracefully.
+ * HUD VISIBILITY CONTRACT (every condition must hold, else the overlay is
+ * hidden — granting Accessibility/monitoring permissions alone NEVER shows
+ * the HUD):
+ *
+ *   1. ShortsCap monitoring is switched on ([MonitoringService] enabled
+ *      flag — not just the accessibility service running).
+ *   2. The Accessibility / required monitoring service is actually active
+ *      in the OS ([AccessibilityServiceStatus] — the events that drive the
+ *      HUD only flow while it is).
+ *   3. The current foreground app is a SUPPORTED Shorts application
+ *      (pipeline detection — never the raw package list).
+ *   4. The detection result says `isShortForm == true`.
+ *   5. Detection confidence >= the existing detector policy threshold
+ *      ([ShortFormSurfaceState.CONFIDENCE_THRESHOLD]).
+ *
+ * Opening ShortsCap, Settings, the Permissions page, the Home screen,
+ * starting MonitoringService, granting the overlay permission, app/device
+ * restart or changing Shorts settings only PREPARE monitoring — they never
+ * trigger the overlay. Unknown / low-confidence content and normal
+ * long-form surfaces (YouTube video, Instagram feed, ...) keep the HUD
+ * hidden, and the overlay is removed the moment the short-form context
+ * ends.
+ *
+ * The overlay is additionally only shown when the HUD is enabled in
+ * settings AND the SYSTEM_ALERT_WINDOW permission is granted; otherwise it
+ * fails gracefully.
  */
 object ShortsHudController {
 
@@ -64,12 +90,23 @@ object ShortsHudController {
         ShortsHudOverlayManager.hide()
     }
 
+    /**
+     * The visibility PREREQUISITES (conditions 1–2 of the visibility
+     * contract): monitoring must be switched ON and the accessibility
+     * service must actually be active in the OS. These only ENABLE the HUD
+     * to appear — they never trigger it. The trigger remains a positive
+     * short-form detection broadcast from the pipeline.
+     */
+    private fun canShowHud(context: Context): Boolean =
+        MonitoringService.isMonitoringEnabled(context) &&
+            AccessibilityServiceStatus.isEnabled(context)
+
     /** Called by the settings screen after any HUD setting changes. */
     fun refresh() {
         refreshLimit()
         val ctx = context ?: return
         val store = ShortsHudSettingsStore(ctx)
-        if (!store.isEnabled()) {
+        if (!store.isEnabled() || !canShowHud(ctx)) {
             ShortsHudOverlayManager.hide()
             return
         }
@@ -92,7 +129,11 @@ object ShortsHudController {
         currentSurfaceState = state
         val ctx = context ?: return
         val store = ShortsHudSettingsStore(ctx)
-        if (state == null || !store.isEnabled()) {
+        // ALL visibility conditions must hold: a positive short-form
+        // detection AND the monitoring/accessibility prerequisites AND the
+        // HUD being enabled in settings. Granting Accessibility alone never
+        // shows the overlay.
+        if (state == null || !store.isEnabled() || !canShowHud(ctx)) {
             ShortsHudOverlayManager.hide()
             return
         }

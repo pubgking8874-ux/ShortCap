@@ -23,6 +23,13 @@ enum class ShortsLimitPageState {
     /** The setup form is on screen (first-time setup or after disable). */
     LIMIT_SETUP,
 
+    /**
+     * The limit is SAVED but the 24-hour cycle has NOT been activated yet —
+     * timer NOT started, limit NOT locked, editing available. The user must
+     * press ACTIVE to start the cycle.
+     */
+    READY_TO_ACTIVATE,
+
     /** An active 24-hour cycle is running under the limit. */
     ACTIVE,
 
@@ -32,7 +39,7 @@ enum class ShortsLimitPageState {
     /** currentCount >= limitCount — persists until the cycle expires. */
     LIMIT_REACHED,
 
-    /** The window passed cycleExpiresAt (the engine rolls a fresh cycle). */
+    /** The window passed cycleExpiresAt (no auto-roll — user re-activates). */
     EXPIRED,
 
     /** Shorts control is disabled — history kept, nothing counts. */
@@ -60,19 +67,21 @@ enum class ShortsSyncStatus {
 /**
  * Derives the page state from the authoritative engine state.
  *
- * The FINAL product rule: Shorts Limit is NOT optional — once a limit is
- * saved it becomes ACTIVE immediately and is locked for its 24-hour cycle.
- * There is no enable/disable toggle, so a missing cycle (or a DISABLED
- * status from a stale backend state) always means \"set a limit\" — the
- * first-time setup screen. Expiry is surfaced from the engine's own
- * transition (EXPIRED status); normally the engine rolls the next window
- * immediately, so the page shows the fresh ACTIVE window — the EXPIRED
- * state is rendered defensively.
+ * ACTIVATION FLOW: CONFIGURE → SAVE → READY_TO_ACTIVATE → user presses
+ * ACTIVE → 24-hour cycle starts → ACTIVE/LIMIT_REACHED → EXPIRED. A saved
+ * but not yet activated limit (status CONFIGURED) is READY_TO_ACTIVATE —
+ * the timer has NOT started, the limit is NOT locked and editing stays
+ * available. There is no enable/disable toggle, so a missing cycle (or a
+ * DISABLED status from a stale backend state) always means \"set a limit\"
+ * — the first-time setup screen. Expiry is surfaced from the engine's own
+ * transition (EXPIRED status); the engine does NOT auto-roll a new cycle —
+ * the user edits (if desired) and presses ACTIVE again.
  */
 fun deriveLimitPageState(state: ShortsControlState): ShortsLimitPageState {
     val cycle = state.cycle
     if (cycle == null) return ShortsLimitPageState.NO_LIMIT_CONFIGURED
     return when (state.status) {
+        ShortsLimitCycleStatus.CONFIGURED -> ShortsLimitPageState.READY_TO_ACTIVATE
         ShortsLimitCycleStatus.ACTIVE ->
             if (state.warningTriggered) ShortsLimitPageState.WARNING
             else ShortsLimitPageState.ACTIVE

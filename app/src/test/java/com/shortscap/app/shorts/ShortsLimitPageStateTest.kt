@@ -237,11 +237,12 @@ class ShortsLimitPageStateTest {
     ) = ShortsControlEngine(store = store, nowMillis = { clock.now }, allowEditWhileActive = allowEditWhileActive)
 
     @Test
-    fun `activate then reopen shows an active cycle with a fresh 24h window`() {
+    fun `save then activate then reopen shows an active cycle with a fresh 24h window`() {
         val store = InMemoryShortsLimitCycleStore()
         val clock = Clock()
         val e1 = engine(store = store, clock = clock)
         e1.setLimit(200)
+        e1.activate()
 
         // App restart: brand-new engine over the same store.
         val e2 = engine(store = store, clock = clock)
@@ -253,18 +254,28 @@ class ShortsLimitPageStateTest {
     }
 
     @Test
-    fun `first save activates immediately - no separate toggle`() {
+    fun `first save only CONFIGURES - timer does not start until ACTIVE`() {
         val clock = Clock()
         val e = engine(clock = clock)
-        // The page's Save Limit path is exactly engine.setLimit: the cycle
-        // becomes ACTIVE immediately (start = now, expires = +24h, count 0).
+        // The page's Save Limit path is exactly engine.setLimit: the limit is
+        // saved but the cycle is NOT active — no timer, no countdown, no lock.
         val state = e.setLimit(17)
-        assertEquals(ShortsLimitPageState.ACTIVE, deriveLimitPageState(state))
+        assertEquals(ShortsLimitPageState.READY_TO_ACTIVATE, deriveLimitPageState(state))
         assertEquals(0, state.currentCount)
         assertEquals(17, state.limitCount)
-        assertEquals(clock.now, state.cycleStartedAt)
-        assertEquals(clock.now + DAY, state.cycleExpiresAt)
+        assertEquals(null, state.cycleStartedAt)
+        assertEquals(null, state.cycleExpiresAt)
+        assertEquals(0L, state.remainingCycleMillis) // timer NOT started
         assertEquals(17, state.remainingCount)
+        assertFalse(e.isLimitLocked()) // editing still available
+
+        // Only the explicit ACTIVE press starts the 24-hour cycle.
+        val active = e.activate()
+        assertEquals(ShortsLimitPageState.ACTIVE, deriveLimitPageState(active))
+        assertEquals(0, active.currentCount)
+        assertEquals(17, active.limitCount)
+        assertEquals(clock.now, active.cycleStartedAt)
+        assertEquals(clock.now + DAY, active.cycleExpiresAt)
     }
 
     @Test
@@ -272,6 +283,7 @@ class ShortsLimitPageStateTest {
         val clock = Clock()
         val e = engine(store = InMemoryShortsLimitCycleStore(), clock = clock, allowEditWhileActive = true)
         e.setLimit(200)
+        e.activate()
         e.onShortCounted(candidateKey = "k1", occurredAt = 0L, durationMillis = 4_000L)
         e.onShortCounted(candidateKey = "k2", occurredAt = 1_000L, durationMillis = 4_000L)
         clock.advance(5 * HOUR)
@@ -294,6 +306,7 @@ class ShortsLimitPageStateTest {
         val clock = Clock()
         val e = engine(store = store, clock = clock, allowEditWhileActive = false)
         e.setLimit(200)
+        e.activate()
         e.onShortCounted(candidateKey = "k1", occurredAt = 0L, durationMillis = 4_000L)
         clock.advance(HOUR)
 
@@ -309,18 +322,25 @@ class ShortsLimitPageStateTest {
     }
 
     @Test
-    fun `production lock releases once the cycle expires`() {
+    fun `production lock releases once the cycle expires - no auto-roll`() {
+        val store = InMemoryShortsLimitCycleStore()
         val clock = Clock()
-        val e = engine(store = InMemoryShortsLimitCycleStore(), clock = clock, allowEditWhileActive = false)
+        val e = engine(store = store, clock = clock, allowEditWhileActive = false)
         e.setLimit(200)
+        assertFalse(e.isLimitLocked()) // CONFIGURED is never locked
+        e.activate()
         assertTrue(e.isLimitLocked())
 
         clock.advance(DAY + 1)
-        // After expiry the engine rolls a fresh window; the old one is history
-        // and the new active window is editable only via its own lifecycle.
+        // After expiry the engine marks the window EXPIRED and does NOT
+        // auto-roll — the page shows the EXPIRED state (notice + ACTIVE
+        // button). Editing is available again (no active cycle, no lock).
         val fresh = e.currentState()
-        assertEquals(ShortsLimitPageState.ACTIVE, deriveLimitPageState(fresh))
-        assertEquals(0, fresh.currentCount)
+        assertEquals(ShortsLimitPageState.EXPIRED, deriveLimitPageState(fresh))
+        assertFalse(e.isLimitLocked())
+        assertFalse(e.hasActiveCycle())
+        // The expired window is retained as history, never deleted.
+        assertEquals(1, store.history().size)
     }
 
     @Test
@@ -329,6 +349,7 @@ class ShortsLimitPageStateTest {
         val clock = Clock()
         val e1 = engine(store = store, clock = clock)
         e1.setLimit(10)
+        e1.activate()
         repeat(10) { e1.onShortCounted(candidateKey = "k$it", occurredAt = it * 1_000L, durationMillis = 4_000L) }
 
         val s1 = e1.currentState()
@@ -350,6 +371,7 @@ class ShortsLimitPageStateTest {
         val clock = Clock()
         val e = engine(store = store, clock = clock)
         e.setLimit(200)
+        e.activate()
         e.onShortCounted(candidateKey = "k1", occurredAt = 0L, durationMillis = 4_000L)
         e.disable()
 
@@ -362,22 +384,24 @@ class ShortsLimitPageStateTest {
     }
 
     @Test
-    fun `expired cycle rolls a fresh window - page returns to ACTIVE`() {
+    fun `expired cycle does not auto-roll - user re-activates`() {
         val store = InMemoryShortsLimitCycleStore()
         val clock = Clock()
         val e = engine(store = store, clock = clock)
         e.setLimit(10)
+        e.activate()
         repeat(10) { e.onShortCounted(candidateKey = "k$it", occurredAt = it * 1_000L, durationMillis = 4_000L) }
         assertEquals(ShortsLimitPageState.LIMIT_REACHED, deriveLimitPageState(e.currentState()))
 
-        // 24 hours pass -> the engine marks the old window EXPIRED and
-        // initializes the next one (same limit, fresh count).
+        // 24 hours pass -> the engine marks the old window EXPIRED. No next
+        // cycle is auto-created: the page shows EXPIRED; the user presses
+        // ACTIVE again for the next window.
         clock.advance(DAY + 1)
         val fresh = e.currentState()
-        assertEquals(ShortsLimitPageState.ACTIVE, deriveLimitPageState(fresh))
-        assertEquals(0, fresh.currentCount)
-        assertEquals(10, fresh.limitCount)
-        assertEquals(clock.now, fresh.cycleStartedAt)
+        assertEquals(ShortsLimitPageState.EXPIRED, deriveLimitPageState(fresh))
+        assertEquals(0, fresh.remainingCycleMillis)
+        assertFalse(e.hasActiveCycle())
+        assertEquals(1, store.history().size) // expired window kept as history
     }
 
     @Test
@@ -386,6 +410,7 @@ class ShortsLimitPageStateTest {
         val clock = Clock()
         val e = engine(store = store, clock = clock)
         e.setLimit(200)
+        e.activate()
         repeat(5) { e.onShortCounted(candidateKey = "k$it", occurredAt = it * 1_000L, durationMillis = 4_000L) }
 
         // Network is irrelevant to the durable local state: the engine still
