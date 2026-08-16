@@ -45,6 +45,10 @@ import com.shortscap.app.theme.ScTextStyles
  * can synchronize per-platform Shorts Monitoring settings behind the same
  * shape without any screen changes. Shorts Monitoring stays separate from
  * Device Monitoring: this screen only ever touches the platforms list.
+ *
+ * The Shorts HUD appearance settings live under Settings → Appearance →
+ * Shorts HUD (relocated here from Shorts Control when the HUD became an
+ * Appearance preference).
  */
 @Composable
 fun ShortsControlScreen(
@@ -53,12 +57,13 @@ fun ShortsControlScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
 
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
-        ScSubScreenTopBar(title = LocalAppStrings.current.monitoringShortsControl, onBack = onBack)
+        ScSubScreenTopBar(title = strings.monitoringShortsControl, onBack = onBack)
 
         // Clean options page (per the Settings design rule — no intro card):
-        // only the per-platform toggles, each with its real brand icon.
+        // per-platform toggles only (each with its real brand icon).
         Column(
             modifier = Modifier
                 .fillMaxSize()

@@ -102,6 +102,8 @@ object IconTheme {
         IconKey.ICONS -> Icons.Filled.AutoAwesome
         IconKey.CHART -> Icons.Filled.BarChart
         IconKey.FONT -> Icons.Filled.TextFields
+        // Shorts HUD — a small floating window over other apps (the HUD overlay).
+        IconKey.SHORTS_HUD -> Icons.Filled.PictureInPicture
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> Icons.Filled.Insights
@@ -268,6 +270,7 @@ private object VibrantPalette {
         IconKey.ICONS -> indigo
         IconKey.CHART -> cyan
         IconKey.FONT -> violet
+        IconKey.SHORTS_HUD -> teal
 
         // Monitoring
         IconKey.MONITORING_ENABLE -> blue

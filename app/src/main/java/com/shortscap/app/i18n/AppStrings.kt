@@ -584,6 +584,33 @@ interface AppStrings {
     val monitoringShortsSection: String
     val monitoringShortsControl: String
     val monitoringShortsControlDesc: String
+
+    // ---- Shorts HUD ----
+    val shortsHudTitle: String
+    val shortsHudDesc: String
+    val shortsHudEnabled: String
+    val shortsHudAppearance: String
+    val shortsHudAppearanceShortsCap: String
+    val shortsHudAppearanceBrain: String
+    /** "Counter" — the clean numeric HUD mode (display name, NOT "Live Counter"). */
+    val shortsHudAppearanceLiveCounter: String
+    /** The Counter mode's compact mock preview value, e.g. "127 / 200". */
+    val shortsHudPreviewCounterValue: String
+    /** Accessibility description of the Brain appearance preview. */
+    val shortsHudPreviewBrain: String
+    /** Accessibility description of the Counter appearance preview. */
+    val shortsHudPreviewCounter: String
+    /** Accessibility description of the ShortsCap appearance preview. */
+    val shortsHudPreviewShortsCap: String
+    /** Accessibility "selected" state read for the appearance radio options. */
+    val shortsHudSelected: String
+    /** Accessibility "not selected" state read for the appearance radio options. */
+    val shortsHudNotSelected: String
+    val shortsHudPermissionMissing: String
+    val shortsHudPermissionDesc: String
+    val shortsHudOpenSettings: String
+
+
     val monitoringSchedule: String
 
     // ---- Home Monitoring Paused section (priority page) + resume popup ----

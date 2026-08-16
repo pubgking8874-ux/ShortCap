@@ -2,6 +2,7 @@ package com.shortscap.app.shorts
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -190,5 +191,59 @@ class ShortsMonitoringPipelineTest {
 
         assertFalse(store.usageSnapshot().isNotEmpty())
         assertEquals(0, budget.totalShorts)
+    }
+
+    // 11. Shorts HUD surface-state broadcasts: positively detected
+    //     short-form surface -> non-null state; normal content -> null.
+    @Test
+    fun `surface listener reports active short-form surface`() {
+        val p = pipeline()
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        p.enter("com.google.android.youtube", youtubeShortsClass, 0L)
+        p.leaveToNeutral(1_000L)
+
+        assertEquals(2, states.size)
+        val active = states[0]
+        assertEquals(ShortPlatform.YOUTUBE, active?.platform)
+        assertEquals(ShortSurface.YOUTUBE_SHORTS, active?.surface)
+        assertEquals(0.85f, active?.confidence ?: 0f, 1e-6f)
+        // Leaving to the launcher -> not short-form -> null.
+        assertNull(states[1])
+    }
+
+    // 12. Normal (long-form) content -> null surface state (HUD must stay hidden).
+    @Test
+    fun `surface listener reports null for non-short content`() {
+        val p = pipeline()
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        p.enter("com.google.android.youtube", youtubeHomeClass, 0L)
+        p.leaveToNeutral(5_000L)
+
+        assertEquals(2, states.size)
+        assertNull(states[0])
+        assertNull(states[1])
+    }
+
+    // 13. Insufficient-confidence detections -> null surface state (HUD
+    //     must NOT guess).
+    @Test
+    fun `surface listener stays null on insufficient confidence`() {
+        val detect: (ShortDetectionSignals) -> ShortDetectionResult = {
+            ShortDetectionResult(
+                ShortPlatform.YOUTUBE, ShortSurface.YOUTUBE_SHORTS,
+                isShortForm = true, confidence = 0.2f, DetectionMethod.PLATFORM_ADAPTER,
+            )
+        }
+        val p = ShortsMonitoringPipeline(detect = detect, store = InMemoryShortsLocalStore(), nowMillis = clock)
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        p.enter("com.google.android.youtube", youtubeShortsClass, 0L)
+
+        assertNull(states.single())
     }
 }

@@ -14,6 +14,8 @@ import com.shortscap.app.notifications.NotificationRepository
 import com.shortscap.app.notifications.NotificationSetting
 import com.shortscap.app.sounds.SoundEffectsConfig
 import com.shortscap.app.sounds.SoundEffectsRepository
+import com.shortscap.app.hud.ShortsHudAppearance
+import com.shortscap.app.hud.ShortsHudSettingsStore
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
 
@@ -66,6 +68,9 @@ object SettingsManager {
     /** Sound & Effects default — master ON with the per-category sound library. */
     fun defaultSoundEffects(): SoundEffectsConfig = SoundEffectsRepository.defaults()
 
+    /** Shorts HUD default after reset — enabled with the branded appearance. */
+    fun defaultShortsHudAppearance(): ShortsHudAppearance = ShortsHudAppearance.SHORTSCAP
+
     /**
      * Restores every local preference store to its default value and persists
      * those defaults, so the app stays consistent across restarts. Add a new
@@ -80,6 +85,15 @@ object SettingsManager {
         IconRepository.saveIconStyle(context, defaultIconStyle())
         NotificationRepository.saveSettings(context, defaultNotificationSettings())
         SoundEffectsRepository.saveSettings(context, defaultSoundEffects())
+        // Shorts HUD: enabled, branded appearance, top-center position.
+        ShortsHudSettingsStore(context).apply {
+            setEnabled(true)
+            setAppearance(defaultShortsHudAppearance())
+            setPosition(
+                ShortsHudSettingsStore.DEFAULT_POS_X,
+                ShortsHudSettingsStore.DEFAULT_POS_Y,
+            )
+        }
     }
 
     /** FUTURE: restore backend / cloud preferences through the API. */

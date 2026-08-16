@@ -21,10 +21,11 @@ import com.shortscap.app.theme.LocalScColors
 /**
  * Appearance hub — premium rows (icon · title · chevron), each opening its
  * own dedicated page: Theme, Icons (the global icon style picker), Chart
- * (the global visualization style), Font (the global typography family) and
- * Text Size (global typography scale). The Chart and Font rows show a short
- * summary of the currently selected value. Consistent with the Settings
- * design rule: no intro cards, no expandable sections.
+ * (the global visualization style), Font (the global typography family),
+ * Text Size (global typography scale) and Shorts HUD (the floating counter
+ * overlay appearance — Brain / Counter / ShortsCap). The Chart and Font rows
+ * show a short summary of the currently selected value. Consistent with the
+ * Settings design rule: no intro cards, no expandable sections.
  */
 @Composable
 fun AppearanceScreen(
@@ -35,6 +36,7 @@ fun AppearanceScreen(
     onOpenChart: () -> Unit,
     onOpenFont: () -> Unit,
     onOpenTextSize: () -> Unit,
+    onOpenShortsHud: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalScColors.current
@@ -76,6 +78,11 @@ fun AppearanceScreen(
                 iconKey = IconKey.TEXT_SIZE,
                 title = strings.appearanceTextSize,
                 onClick = onOpenTextSize,
+            )
+            ScPremiumNavCard(
+                iconKey = IconKey.SHORTS_HUD,
+                title = strings.shortsHudTitle,
+                onClick = onOpenShortsHud,
             )
         }
     }

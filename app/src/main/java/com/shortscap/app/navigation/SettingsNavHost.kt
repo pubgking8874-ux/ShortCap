@@ -39,6 +39,7 @@ import com.shortscap.app.screens.settings.AddCustomSoundScreen
 import com.shortscap.app.screens.settings.PermissionDetailScreen
 import com.shortscap.app.screens.settings.PermissionsScreen
 import com.shortscap.app.screens.settings.ShortsControlScreen
+import com.shortscap.app.screens.settings.ShortsHudScreen
 import com.shortscap.app.screens.settings.SoundConfigScreen
 import com.shortscap.app.screens.settings.SoundEffectsScreen
 import com.shortscap.app.screens.settings.StudyAllowedItemsScreen
@@ -77,6 +78,7 @@ object SettingsDestinations {
     const val ALLOWED_APPS = "settings_allowed_apps"
     const val SCHEDULE = "settings_schedule"
     const val SHORTS_CONTROL = "settings_shorts_control"
+    const val SHORTS_HUD = "settings_shorts_hud"
     const val STUDY_MODE = "settings_study_mode"
     const val STUDY_BREAK_REMINDER = "settings_study_break_reminder"
     const val STUDY_ALLOWED = "settings_study_allowed"
@@ -298,6 +300,17 @@ fun SettingsNavHost(
             )
         }
 
+        composable(SettingsDestinations.SHORTS_HUD) {
+            // Shorts HUD — floating counter overlay appearance settings,
+            // opened from Settings → Appearance → Shorts HUD. All state lives
+            // in the local ShortsHudSettingsStore; the selected appearance is
+            // pushed live to the running controller so a visible overlay
+            // switches mode immediately.
+            ShortsHudScreen(
+                onBack = { navController.backOrClose(onClose) },
+            )
+        }
+
         composable(SettingsDestinations.PERMISSIONS) {
             PermissionsScreen(
                 permissions = state.permissions,
@@ -406,6 +419,7 @@ fun SettingsNavHost(
                 onOpenChart = { navController.navigate(SettingsDestinations.APPEARANCE_CHART) },
                 onOpenFont = { navController.navigate(SettingsDestinations.APPEARANCE_FONT) },
                 onOpenTextSize = { navController.navigate(SettingsDestinations.APPEARANCE_TEXT_SIZE) },
+                onOpenShortsHud = { navController.navigate(SettingsDestinations.SHORTS_HUD) },
                 onBack = { navController.backOrClose(onClose) },
             )
         }

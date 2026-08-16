@@ -3,9 +3,8 @@ package com.shortscap.app.accessibility
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
-import com.shortscap.app.monitoring.BrainOverlayManager
+import com.shortscap.app.hud.ShortsHudController
 import com.shortscap.app.monitoring.MonitoringEventHub
-import com.shortscap.app.monitoring.SupportedShortVideoPackages
 
 /**
  * ShortsCap's own Accessibility Service — a MONITORING component, not a UI
@@ -28,10 +27,9 @@ import com.shortscap.app.monitoring.SupportedShortVideoPackages
  *    database, no duplicate monitoring system.
  *
  * The service itself is deliberately UI-agnostic: it only knows the event
- * layer, never individual screens. It also drives the small Brain overlay:
- * when the foreground app is a supported short-video platform the Brain
- * appears (only with the Display Over Other Apps permission granted) and is
- * removed the moment the user leaves that context — never globally.
+ * layer, never individual screens. The Shorts HUD (a presentation layer) is
+ * driven by the existing detection pipeline's surface-state broadcasts — the
+ * service never shows/hides overlays itself.
  */
 class ShortsCapAccessibilityService :
     AccessibilityService(),
@@ -45,20 +43,19 @@ class ShortsCapAccessibilityService :
         // registry — the service itself stays a dumb, privacy-minimal
         // observer (package + window class metadata only).
         com.shortscap.app.shorts.ShortsMonitoringPipeline.start()
+        // The Shorts HUD consumes the detection pipeline's surface-state
+        // broadcasts (presentation only — never detects Shorts itself).
+        ShortsHudController.start(this)
     }
 
     /**
-     * Brain indicator visibility — tied strictly to the foreground context:
-     * shown only inside supported short-video apps, hidden everywhere else
-     * (including ShortsCap itself and any other app). Runs on the service's
-     * main thread, so WindowManager calls are safe.
+     * Foreground change — handled by the detection pipeline (which the HUD
+     * subscribes to). The service itself stays passive; it never decides
+     * overlay visibility from the raw package list (a package is NOT a
+     * short-form surface).
      */
     override fun onForegroundAppChanged(packageName: String, activityClassName: String?) {
-        if (packageName in SupportedShortVideoPackages) {
-            BrainOverlayManager.show(this)
-        } else {
-            BrainOverlayManager.hide()
-        }
+        // Detection + HUD presentation are handled by the subscribed pipeline.
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -85,13 +82,13 @@ class ShortsCapAccessibilityService :
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        BrainOverlayManager.hide()
+        ShortsHudController.stop()
         MonitoringEventHub.unsubscribe(this)
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
-        BrainOverlayManager.hide()
+        ShortsHudController.stop()
         MonitoringEventHub.unsubscribe(this)
         super.onDestroy()
     }

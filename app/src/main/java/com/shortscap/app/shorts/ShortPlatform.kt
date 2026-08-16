@@ -11,9 +11,9 @@ package com.shortscap.app.shorts
  * package-name checks never spread through the monitoring/accessibility code.
  *
  * Values cover the app's existing platform catalog (the
- * [com.shortscap.app.model.ShortVideoPlatform] list and the
- * `SupportedShortVideoPackages` overlay set) plus future-ready entries.
- * [UNKNOWN] is the conservative value for anything not yet recognized.
+ * [com.shortscap.app.model.ShortVideoPlatform] list) plus future-ready
+ * entries. [UNKNOWN] is the conservative value for anything not yet
+ * recognized.
  */
 enum class ShortPlatform {
     YOUTUBE,

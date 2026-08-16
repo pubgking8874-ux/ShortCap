@@ -77,6 +77,8 @@ enum class IconKey {
     ICONS,
     CHART,
     FONT,
+    // Shorts HUD (Appearance -> Shorts HUD) — floating counter overlay appearance.
+    SHORTS_HUD,
 
     // ---- Monitoring ----
     MONITORING_ENABLE,

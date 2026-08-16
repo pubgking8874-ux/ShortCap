@@ -33,7 +33,13 @@ Server backend for the ShortsCap app (Python + FastAPI + SQLAlchemy + MySQL).
 > retry/dedupe, settings/study/monitoring/shorts/web syncers, read-only
 > Reports/Score/Rank clients, temporary dev identity; Android remains the
 > real-time authority — study timer, monitoring, Shorts detection, web
-> blocking). Auth, OAuth, and the
+> blocking) + Shorts HUD (Android floating counter overlay — appears
+> automatically on positively-detected short-form content, global count /
+> daily limit, draggable with persisted position, three appearances incl.
+> animated Brain states, overlay permission handling, themed; presentation
+> only — consumes the existing detection pipeline, never detects/counts
+> itself; the superseded package-based Brain overlay was removed). Auth,
+> OAuth, and the
 > remaining routers are implemented in later phases, one at a time.
 
 ## Reserved technology stack
@@ -300,6 +306,25 @@ constraint. One Alembic migration: **`657ba9f4d4f8`** (applied, verified).
     `:app:testDebugUnitTest` 20/20. No backend schema change (Alembic still
     `657ba9f4d4f8 (head)`).
   - See the [Phase 16 — Android ↔ Backend Synchronization](#phase-16--android--backend-synchronization)
+    section below for the full detail.
+- **Shorts HUD — floating counter + animated appearance (implemented,
+  Android-only):**
+  - A small floating overlay that appears automatically while the existing
+    cross-platform Shorts detection identifies active short-form content —
+    presentation ONLY (consumes the detection pipeline's new
+    `ShortFormSurfaceState` broadcasts + the global budget; never detects
+    or counts Shorts itself, never calls the backend).
+  - Global `count / daily-limit` display across all platforms; exactly
+    three appearance modes (ShortsCap / Brain — the user's four final
+    brain videos — / Counter); draggable with normalized-position
+    persistence; overlay permission handling; theming; settings screen at
+    Settings → Appearance → Shorts HUD (three previewed radio options,
+    persisted via ShortsHudSettingsStore). The superseded package-based
+    Brain overlay was removed.
+  - Verification: `:app:compileDebugKotlin` clean, `:app:testDebugUnitTest`
+    38/38. Backend untouched (no schema change, Alembic still
+    `657ba9f4d4f8 (head)`; all 8 verify scripts still pass).
+  - See the [Shorts HUD — Floating Counter + Animated Appearance](#shorts-hud--floating-counter--animated-appearance)
     section below for the full detail.
 
 ## Connection status
@@ -1844,6 +1869,121 @@ Room/DataStore-based durable sync queue (the queue is in-memory for this
 phase; the sync layer is designed so a durable queue can replace it without
 changing the syncers), Android UI redesigns, backend schema changes (none —
 Alembic still `657ba9f4d4f8 (head)`).
+
+## Shorts HUD — Floating Counter + Animated Appearance
+
+**Status: implemented (Android-only).** The Shorts HUD is a small floating
+overlay that appears automatically while the existing cross-platform Shorts
+detection identifies active short-form content. It is a UI/presentation
+layer ONLY — it is not a new detection engine and not a new counting engine.
+
+### Flow
+
+```
+MonitoringEventHub
+  -> existing detection pipeline (registry + adapters)
+  -> ShortFormSurfaceState  (new listener seam on ShortsMonitoringPipeline)
+  -> ShortsHudController
+  -> floating overlay (ShortsHudOverlayManager)
+```
+
+The pipeline broadcasts a non-null `ShortFormSurfaceState` ONLY when the
+foreground context is positively detected as short-form (`isShortForm` AND
+confidence ≥ 0.5). Normal long-form video, home screens, chat and
+unknown/low-confidence content broadcast `null`, so the HUD stays hidden —
+it never guesses. The HUD consumes these results; it never detects Shorts
+itself and never talks to the backend (sync stays: Shorts local state →
+existing Sync Layer → FastAPI).
+
+### What it shows
+
+- **Global count:** `CURRENT / DAILY_LIMIT` (e.g. `4 / 200`) — ONE count
+  across ALL platforms (YouTube Shorts + Instagram Reels + TikTok +
+  Snapchat Spotlight all contribute to the same total; no per-platform HUD
+  counters). The daily limit defaults to the product default (200) and is
+  replaced by the backend `shorts_settings.daily_limit_count` value when
+  the settings sync provides one.
+- **Three appearance modes (exactly three, per the spec):** **ShortsCap**
+  (branded logo + count, primary accent), **Brain** (the user's four FINAL
+  brain videos — see below) and **Counter** (cleanest minimal
+  `127 / 200`; displayed as "Counter", internal key `LIVE_COUNTER`
+  unchanged). All three respect the global Dark / Light / System theme.
+- **Brain mode — the four final videos.** The supplied videos were copied
+  UNCHANGED (exact filenames preserved, double `.mp4.mp4` extension
+  included) into the project's existing asset convention at
+  **`app/src/main/assets/shorts_brain/`**: `brain_1_healthy.mp4.mp4` →
+  HEALTHY, `brain_2_tired.mp4.mp4` → TIRED,
+  `brain_3_near_limit.mp4.mp4` → NEAR_LIMIT,
+  `brain_4_limit_reached.mp4.mp4` → LIMIT_REACHED. Playback is a
+  lightweight `TextureView` + platform `MediaPlayer` (`BrainVideoView`,
+  the same Android media stack already used for local assets — no new
+  library): muted, looped, local-only (no network), aspect-ratio preserved
+  (center-crop), HUD-sized. Only the current state's video loads (one
+  player at a time) and it is released when the HUD hides or the mode
+  changes. State = `current_count / daily_limit` with the approved
+  thresholds (0–40% HEALTHY, 40–75% TIRED, 75–99% NEAR_LIMIT, ≥100%
+  LIMIT_REACHED) — ratio-based, so a changed daily limit adapts
+  automatically; limit 0 → safe healthy state (no divide-by-zero), count 0
+  → Healthy, count > limit → Limit Reached, missing limit → existing
+  default (200) fallback.
+- **Animations:** entry fade + scale-in (α 0→1, 0.92→1.00, ~220 ms), short
+  fade/scale-out (~150 ms), tiny count-change bump. After entry the HUD
+  settles STATIC — only count changes animate (battery friendly, no
+  continuous redraw loops). Brain video playback happens ONLY while the
+  Brain mode is visible; Counter/ShortsCap are essentially static.
+
+### Draggable + persistent position
+
+The chip is draggable within safe screen bounds (never fully off-screen);
+on release the position is persisted as NORMALIZED (0..1) X/Y fractions in
+SharedPreferences (`ShortsHudSettingsStore`, same storage architecture as
+the theme store), so it survives device size / orientation changes and is
+restored on restart. Default position: top-center.
+
+### Settings
+
+Settings → **Appearance → Shorts HUD** (`ShortsHudScreen`): a dedicated
+appearance-selection screen with exactly three options — **Brain**,
+**Counter**, **ShortsCap** — each with a small HUD-like visual preview
+(Brain = pulsing brain chip concept, Counter = mock `127 / 200`,
+ShortsCap = existing logo/branding), Material radio-row selection
+(name + selected state exposed to screen readers, never color only), and
+the choice persisted via `ShortsHudSettingsStore` (SharedPreferences, the
+same architecture as the theme/language stores) so it survives restarts and
+reboots. All strings are localized (EN / HI / UR / ZH / ES) and the screen
+follows the global Dark / Light / System theme. The settings screen itself
+is UI-only: the floating overlay, permission handling, live count and brain
+state playback are all driven by the runtime controller, never by this
+page. Overlay permission is checked before every show
+(`Settings.canDrawOverlays`) — missing/revoked permission fails gracefully,
+never crashes.
+
+### Replaces the old Brain overlay
+
+The previous package-based `BrainOverlayManager` (shown for any supported
+package — even YouTube Home) was superseded by the detection-based HUD and
+removed with its resources; the `ic_brain` drawable lives on only as the
+Brain mode's settings-preview icon (the runtime Brain mode plays the final
+brain videos instead). No new foreground service was added — the HUD rides
+the existing accessibility/monitoring pipeline.
+
+### Honest limitations
+
+With the current signal set only the YouTube Shorts surface is positively
+detected (window-class based); other platforms report UNKNOWN and never
+trigger the HUD. The HUD's count reflects the pipeline's counted total
+(session-level, per the existing 3–5 second rule — unchanged).
+
+### Verification
+
+- `:app:compileDebugKotlin` clean; `:app:testDebugUnitTest` 38/38 — 15 new
+  HUD tests (`ShortsHudLogicTest`: brain-state thresholds, appearance
+  parsing, position clamping) + 3 new pipeline surface-listener tests
+  (`ShortsMonitoringPipelineTest`).
+- Backend untouched — all 8 verify scripts still pass (Study 56/56,
+  Monitoring 55/55, Shorts 67/67, Web 72/72, Reports 61/61, Score 83/83,
+  Rank 47/47, Sync contracts 86/86). No schema change, Alembic still
+  `657ba9f4d4f8 (head)`.
 
 ## Cross-Platform Short-Form Content Architecture
 

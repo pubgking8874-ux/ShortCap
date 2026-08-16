@@ -50,6 +50,9 @@ class ShortsMonitoringPipeline(
 
     private var active: ActiveContext? = null
 
+    /** Surface-state listeners (e.g. the Shorts HUD — presentation only). */
+    private val surfaceListeners = mutableListOf<ShortFormSurfaceListener>()
+
     companion object {
         /**
          * The shared app-wide pipeline, subscribed to [MonitoringEventHub]
@@ -57,10 +60,33 @@ class ShortsMonitoringPipeline(
          */
         private val shared = ShortsMonitoringPipeline()
 
+        /**
+         * The shared app-wide pipeline instance — the Shorts HUD (and any
+         * other presentation layer) subscribes to its surface-state
+         * notifications so it consumes the EXISTING detection results and
+         * never detects Shorts itself.
+         */
+        val sharedInstance: ShortsMonitoringPipeline get() = shared
+
         /** Subscribe the shared pipeline to monitoring events (idempotent). */
         fun start() {
             MonitoringEventHub.subscribe(shared)
         }
+    }
+
+    /**
+     * Registers [listener] for active short-form surface changes.
+     * Notified with a [ShortFormSurfaceState] when the foreground context is
+     * positively detected as short-form, and with `null` whenever the
+     * foreground context is not (or no longer) short-form.
+     */
+    fun addSurfaceListener(listener: ShortFormSurfaceListener) {
+        if (!surfaceListeners.contains(listener)) surfaceListeners.add(listener)
+    }
+
+    /** Removes a previously registered [listener]. */
+    fun removeSurfaceListener(listener: ShortFormSurfaceListener) {
+        surfaceListeners.remove(listener)
     }
 
     override fun onForegroundAppChanged(packageName: String, activityClassName: String?) {
@@ -85,6 +111,35 @@ class ShortsMonitoringPipeline(
             activityClassName = activityClassName,
             startedAt = now,
         )
+        notifySurfaceState()
+    }
+
+    /**
+     * Broadcasts the CURRENT foreground context's short-form status to
+     * surface listeners. Detection only — the 3–5 second counting rule is
+     * applied separately by the aggregator on finalize; the HUD's visibility
+     * follows the detection result exactly (isShortForm with sufficient
+     * confidence), never the raw package list.
+     */
+    private fun notifySurfaceState() {
+        val context = active ?: return
+        val result = detect(
+            ShortDetectionSignals(
+                packageName = context.packageName,
+                activityClassName = context.activityClassName,
+                foregroundDurationMillis = 0L,
+            )
+        )
+        val state = if (result.isShortForm && result.confidence >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD) {
+            ShortFormSurfaceState(
+                platform = result.platform,
+                surface = result.surface,
+                confidence = result.confidence,
+            )
+        } else {
+            null
+        }
+        surfaceListeners.toList().forEach { it.onShortFormSurfaceChanged(state) }
     }
 
     /**
