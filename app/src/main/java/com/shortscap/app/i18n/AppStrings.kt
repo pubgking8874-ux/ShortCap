@@ -652,6 +652,10 @@ interface AppStrings {
     val shortsLimitTimerNotStarted: String
     /** "ACTIVE" — the button that starts the 24-hour cycle. */
     val shortsLimitActivateNow: String
+    /** ACTIVE confirmation title — "Start your Shorts limit for the next 24 hours?" */
+    val shortsLimitActivateConfirmTitle: String
+    /** "Activate" — confirms starting the 24-hour cycle. */
+    val shortsLimitActivateConfirmAction: String
     /** "Your Shorts limit is locked until the current 24-hour cycle ends." */
     val shortsLimitLockedMessage: String
     /** "Shorts Usage" — active-page section heading (count/limit). */

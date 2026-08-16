@@ -495,6 +495,8 @@ object HindiStrings : AppStrings {
     override val shortsLimitReadyToActivate = "सक्रिय करने के लिए तैयार"
     override val shortsLimitTimerNotStarted = "शुरू नहीं हुआ"
     override val shortsLimitActivateNow = "ACTIVE"
+    override val shortsLimitActivateConfirmTitle = "अगले 24 घंटों के लिए अपनी शॉर्ट्स सीमा शुरू करें?"
+    override val shortsLimitActivateConfirmAction = "सक्रिय करें"
     override val shortsLimitLockedMessage = "आपकी शॉर्ट्स सीमा वर्तमान 24 घंटे के चक्र के समाप्त होने तक लॉक है।"
     override val shortsLimitUsageSection = "शॉर्ट्स उपयोग"
     override val shortsLimitYourLimit = "आपकी सीमा"

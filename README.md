@@ -2904,9 +2904,21 @@ platforms), never as a single-app feature.
   large values are rejected with explicit messages, never silently
   converted). Tapping the primary CTA opens a confirmation dialog and `Save
   Limit` CONFIGURES the limit only — status **READY TO ACTIVATE**, timer
-  **NOT STARTED**, no cycle row, editing still available. The user must then
-  press the explicit **ACTIVE** button, which creates the 24-hour cycle:
-  count 0, start = now, expires = start + 24h, persisted immediately.
+  **NOT STARTED**, no cycle row, editing still available. Custom remains
+  available in the Edit Limit flow whenever the limit is editable.
+- **Bottom-anchored ACTIVE button (the primary CTA):** a full-width green
+  button pinned at the bottom of the page, always visible. Green + enabled
+  in READY / EXPIRED (something to start); grey + disabled while a cycle is
+  running (ACTIVE / WARNING / LIMIT REACHED) so it can never be re-pressed
+  to restart or duplicate the cycle — it stays visible so the active state
+  stays legible, and returns to green once the cycle expires. Pressing it
+  asks ONE confirmation ("Start your Shorts limit for the next 24 hours?" /
+  Cancel / Activate), then starts the existing cycle: count 0, start = now,
+  expires = start + 24h, persisted immediately.
+- **Compact layout:** the circular 24-hour clock was slimmed (148 dp ring,
+  tighter label spacing) and section spacing reduced so the whole page fits
+  with room for the bottom ACTIVE bar — no information removed (limit,
+  count, timer, remaining, state all preserved).
 - **Active page — TWO DISTINCT progress values (never combined):**
   - *TIME progress* — the circular 24-hour clock: a smooth ring whose sweep
     is remaining / 24h (full circle at cycle start, depleting to 0 at

@@ -495,6 +495,8 @@ object ChineseStrings : AppStrings {
     override val shortsLimitReadyToActivate = "准备激活"
     override val shortsLimitTimerNotStarted = "未开始"
     override val shortsLimitActivateNow = "ACTIVE"
+    override val shortsLimitActivateConfirmTitle = "在接下来的 24 小时内开启你的短视频限额？"
+    override val shortsLimitActivateConfirmAction = "激活"
     override val shortsLimitLockedMessage = "你的短视频限额在当前 24 小时周期结束前保持锁定。"
     override val shortsLimitUsageSection = "短视频用量"
     override val shortsLimitYourLimit = "你的限额"

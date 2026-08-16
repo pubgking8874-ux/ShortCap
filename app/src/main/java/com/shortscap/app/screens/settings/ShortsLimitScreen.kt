@@ -79,15 +79,22 @@ import kotlinx.coroutines.launch
  * Shorts Limit — the FINAL 24-hour limit control page (Settings → Short
  * Control → Shorts Limit).
  *
- * FINAL PRODUCT RULE: Shorts Limit is NOT an optional on/off feature. Once
- * the user saves a limit it becomes ACTIVE immediately, the 24-hour cycle
- * begins, the limit is enforced, and the limit is LOCKED until the cycle
- * expires. There is NO enable/disable toggle and NO password.
+ * FINAL PRODUCT RULE: Shorts Limit is NOT an optional on/off feature. The
+ * flow is explicit: CONFIGURE → SAVE → READY TO ACTIVATE → user presses the
+ * bottom-anchored ACTIVE button → 24-hour cycle starts → limit is LOCKED
+ * until the cycle expires. There is NO enable/disable toggle and NO password.
  *
  * The page never counts Shorts and never owns a cycle: it renders the
  * AUTHORITATIVE [ShortsControlState] from [ShortsControlEngine] and persists
  * every action through the engine's Room-backed store, so count / limit /
  * cycle survive app restart, process death and force-stop.
+ *
+ * The ACTIVE button is the primary CTA, anchored at the bottom of the page
+ * and always visible: green + enabled in READY / EXPIRED (something to
+ * start), grey + disabled while a cycle is running (ACTIVE / WARNING /
+ * LIMIT_REACHED) so it can never restart or duplicate the cycle. Pressing it
+ * asks one confirmation ("Start your Shorts limit for the next 24 hours?"),
+ * then starts the existing cycle through the engine.
  *
  * Two DISTINCT progress values (never combined):
  *  - TIME progress — the circular 24-hour clock: remaining / 24h, shown as a
@@ -128,6 +135,7 @@ fun ShortsLimitScreen(
     var confirmOpen by remember { mutableStateOf(false) }
     var pendingLimit by remember { mutableStateOf<Int?>(null) }
     var editOpen by remember { mutableStateOf(false) }
+    var activateConfirmOpen by remember { mutableStateOf(false) }
 
     fun pushSync(block: suspend ShortsControlSyncer.() -> ShortsSyncStatus) {
         val s = syncer ?: return
@@ -137,15 +145,28 @@ fun ShortsLimitScreen(
         }
     }
 
+    // ACTIVE is the single action that starts the 24-hour cycle. Enabled only
+    // when there is something to start (READY after saving, or EXPIRED for
+    // the next window); grey + disabled while a cycle is running (ACTIVE /
+    // WARNING / LIMIT_REACHED) so it can never be re-pressed to restart or
+    // duplicate the cycle. During first-time setup no limit is saved yet, so
+    // the button stays disabled until "Set Shorts Limit" confirms one.
+    val canActivate = when (pageState) {
+        ShortsLimitPageState.READY_TO_ACTIVATE,
+        ShortsLimitPageState.EXPIRED,
+        -> true
+        else -> false
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
         ScSubScreenTopBar(title = strings.shortsLimitTitle, onBack = onBack)
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when (pageState) {
                 ShortsLimitPageState.LOADING -> {
@@ -166,7 +187,7 @@ fun ShortsLimitScreen(
                 }
 
                 // Limit saved but NOT activated — READY state: timer not
-                // started, limit not locked, editing available, ACTIVE button.
+                // started, limit not locked, editing available.
                 ShortsLimitPageState.READY_TO_ACTIVATE,
                 ShortsLimitPageState.EXPIRED,
                 -> {
@@ -175,10 +196,6 @@ fun ShortsLimitScreen(
                     }
                     ReadyToActivateView(
                         state = state,
-                        onActivate = {
-                            engine.activate()
-                            pushSync { syncActivate(state.limitCount) }
-                        },
                         onEdit = { editOpen = true },
                     )
                 }
@@ -205,6 +222,14 @@ fun ShortsLimitScreen(
                 else -> Unit
             }
         }
+
+        // Bottom-anchored ACTIVE — the primary CTA, always visible so the
+        // cycle state stays legible (green + enabled to start, grey +
+        // disabled while the 24-hour cycle is running).
+        ActivateBar(
+            enabled = canActivate,
+            onClick = { activateConfirmOpen = true },
+        )
     }
 
     // First save: confirmation — the limit is CONFIGURED only; the 24-hour
@@ -217,6 +242,18 @@ fun ShortsLimitScreen(
                 pushSync { syncEditLimit(pendingLimit!!) }
             },
             onDismiss = { confirmOpen = false },
+        )
+    }
+
+    // ACTIVE confirmation — one dialog, then the existing cycle starts.
+    if (activateConfirmOpen) {
+        ActivateConfirmDialog(
+            onActivate = {
+                activateConfirmOpen = false
+                engine.activate()
+                pushSync { syncActivate(state.limitCount) }
+            },
+            onDismiss = { activateConfirmOpen = false },
         )
     }
 
@@ -330,6 +367,62 @@ private fun SetupView(
     )
 }
 
+/**
+ * The bottom-anchored ACTIVE bar — the primary CTA of the page. Always
+ * visible so the cycle state stays legible: green + enabled when there is
+ * something to start (READY / EXPIRED), grey + disabled while a 24-hour
+ * cycle is running (ACTIVE / WARNING / LIMIT_REACHED) so it can never be
+ * re-pressed to restart or duplicate the cycle.
+ */
+@Composable
+private fun ActivateBar(
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.Bg)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        PrimaryButton(
+            label = strings.shortsLimitActivateNow,
+            enabled = enabled,
+            onClick = onClick,
+        )
+    }
+}
+
+/** ACTIVE confirmation — one dialog, then the existing cycle starts. */
+@Composable
+private fun ActivateConfirmDialog(
+    onActivate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val strings = LocalAppStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.Card,
+        titleContentColor = colors.TextPrimary,
+        textContentColor = colors.TextPrimary,
+        title = { Text(strings.shortsLimitActivateConfirmTitle) },
+        confirmButton = {
+            TextButton(onClick = onActivate) {
+                Text(strings.shortsLimitActivateConfirmAction, color = colors.Accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(strings.cancel, color = colors.TextSecondary)
+            }
+        },
+    )
+}
+
 /** First-save confirmation — saving CONFIGURES the limit; ACTIVE starts the cycle. */
 @Composable
 private fun SaveLimitConfirmDialog(
@@ -367,13 +460,12 @@ private fun SaveLimitConfirmDialog(
 @Composable
 private fun ReadyToActivateView(
     state: ShortsControlState,
-    onActivate: () -> Unit,
     onEdit: () -> Unit,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
 
-    // The saved limit, clearly displayed.
+    // The saved limit, clearly displayed (the bottom ACTIVE bar starts it).
     SectionTitle(strings.shortsLimitYourLimit)
     LimitCard(
         state = state,
@@ -383,7 +475,7 @@ private fun ReadyToActivateView(
         colors = colors,
     )
 
-    // Status + timer: READY TO ACTIVATE / NOT STARTED.
+    // Status + timer: READY TO ACTIVATE / NOT STARTED (compact two-stat row).
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -391,13 +483,6 @@ private fun ReadyToActivateView(
         StatBlock(label = strings.shortsLimitState, value = strings.shortsLimitReadyToActivate, colors = colors)
         StatBlock(label = strings.shortsLimitCycle24Hour, value = strings.shortsLimitTimerNotStarted, colors = colors)
     }
-
-    // The explicit ACTIVE button — ONLY this starts the 24-hour cycle.
-    PrimaryButton(
-        label = strings.shortsLimitActivateNow,
-        enabled = true,
-        onClick = onActivate,
-    )
 }
 
 // ---------------------------------------------------------------------------
@@ -666,11 +751,11 @@ private fun CycleTimerRing(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            modifier = Modifier.size(190.dp),
+            modifier = Modifier.size(148.dp),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val strokeWidth = 14.dp.toPx()
+                val strokeWidth = 12.dp.toPx()
                 val diameter = size.minDimension - strokeWidth
                 val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
                 val arcSize = Size(diameter, diameter)
@@ -698,7 +783,7 @@ private fun CycleTimerRing(
             }
             Text(value, color = colors.TextPrimary, style = ScTextStyles.StatValue)
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(8.dp))
         Text(label, color = colors.TextSecondary, style = ScTextStyles.SectionTitle, textAlign = TextAlign.Center)
     }
 }

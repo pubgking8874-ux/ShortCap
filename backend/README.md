@@ -2422,11 +2422,18 @@ Android-side follow-up to the Shorts Control Backend (no backend changes):
   shows a `24:00:00` circular 24-hour clock + presets (50/100/150/200/300/
   500) + Custom, with a confirmation dialog; `Save Limit` only CONFIGURES
   the limit (status READY TO ACTIVATE, timer NOT STARTED, editing
-  available). The user then presses the explicit **ACTIVE** button to create
-  the 24-hour cycle (count 0, start = now, expires = +24h, persisted
-  immediately). The active page separates TIME progress (circular 24-hour
-  clock, HH:MM:SS countdown from `cycleExpiresAt - now`) from SHORTS USAGE
-  progress (`current / limit` + compact usage bar + remaining + status).
+  available; Custom also stays available in Edit Limit whenever editable).
+  A bottom-anchored full-width **ACTIVE** button is the primary CTA — green
+  + enabled in READY / EXPIRED, grey + disabled while a cycle runs (ACTIVE /
+  WARNING / LIMIT REACHED, never re-startable), always visible so the state
+  stays legible, green again after expiry. Pressing it asks ONE confirmation
+  ("Start your Shorts limit for the next 24 hours?" / Cancel / Activate),
+  then creates the 24-hour cycle (count 0, start = now, expires = +24h,
+  persisted immediately). The layout was compacted (148 dp ring, tighter
+  spacing) so the page fits with the bottom bar — no information removed.
+  The active page separates TIME progress (circular 24-hour clock, HH:MM:SS
+  countdown from `cycleExpiresAt - now`) from SHORTS USAGE progress
+  (`current / limit` + compact usage bar + remaining + status).
 - **24-hour edit lock:** Edit Limit keeps presets + Custom and is editable
   BEFORE activation; once ACTIVE is pressed production cannot change the
   limit until the cycle expires (lock message shown). A SAFE

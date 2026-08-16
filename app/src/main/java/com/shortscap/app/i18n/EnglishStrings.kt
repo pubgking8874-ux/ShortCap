@@ -498,6 +498,8 @@ object EnglishStrings : AppStrings {
     override val shortsLimitTimerNotStarted = "Not started"
     /** "ACTIVE" — the button that starts the 24-hour cycle. */
     override val shortsLimitActivateNow = "ACTIVE"
+    override val shortsLimitActivateConfirmTitle = "Start your Shorts limit for the next 24 hours?"
+    override val shortsLimitActivateConfirmAction = "Activate"
     override val shortsLimitLockedMessage = "Your Shorts limit is locked until the current 24-hour cycle ends."
     override val shortsLimitUsageSection = "Shorts Usage"
     override val shortsLimitYourLimit = "Your Limit"
