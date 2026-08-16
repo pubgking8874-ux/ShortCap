@@ -808,7 +808,7 @@ The Monitoring screen (`screens/settings/MonitoringScreen.kt`) is a full page wi
 
 | # | Section | Control |
 | --- | --- | --- |
-| 1 | Monitoring | **Device Monitoring** — master switch + **Enabled / Disabled** status (same vocabulary as the Permissions screen) + a small circular **info button** opening a dialog explaining what is monitored, why the required Android permissions matter, and what happens if one is disabled |
+| 1 | Monitoring | **Screen Activity** (renamed from "Device Monitoring") — master switch + **Enabled / Disabled** status (same vocabulary as the Permissions screen) + a small circular **info button** opening a dialog explaining what is monitored (general app usage — which app is active and for how long, never content), why the required Android permissions matter, and what happens if one is disabled |
 | 2 | Strict Mode | Switch ("Prevent bypassing restrictions.") |
 | 3 | Study Mode | **Study Mode** — the complete study-focus feature relocated from the General section (duration, break reminder, schedule, allowed apps/websites, summary, start session) |
 | 4 | Shorts | **Shorts Control** — opens the dedicated per-platform screen (YouTube Shorts / Instagram Reels / Facebook Reels / Snapchat Spotlight, each with its own real brand icon + independent switch) |
@@ -1750,6 +1750,104 @@ New implementation entry — a **simple touch-based visualizer** for the Graph/L
 **Verified:** `:app:compileDebugKotlin` and `:app:test` both pass; code review confirmed graph-only scoping, gesture coexistence (tap + drag), scroll compatibility and no regressions.
 
 *Slide-to-inspect Graph chart interaction completed August 8, 2026 · ShortsCap v1.1.1*
+
+---
+
+# Screen Activity — General App-Usage Collection (renamed from Device Monitoring)
+
+**Status: implemented (Android). Backend: contract reuse only — no changes.**
+
+## What it is
+
+The user-facing **"Device Monitoring"** feature is now named **Screen Activity**
+(settings label, section title, info/about dialog, status text — every visible
+string, all five languages). It is a SEPARATE activity-collection system: it
+records **which app was active and for how long** (general device/app usage).
+
+```
+Screen Activity  → general app/screen usage collection (package + duration)
+Short Control    → Shorts detection / counting / limit / enforcement / HUD
+```
+
+**Strict independence (mandatory):**
+
+- Screen Activity OFF → generic collection stops; Shorts is untouched.
+- Short Control OFF → Screen Activity keeps working.
+
+Neither engine depends on the other's enabled state. Both may observe the same
+foreground-window event source (`MonitoringEventHub`), but their business
+logic, state and sync records are completely separate.
+
+## Privacy boundary
+
+Screen Activity records **"which app was active and for how long"** — never
+message contents, typed text, passwords, screenshots, chat contents or page
+contents. Example: WhatsApp → usage duration, NOT "what the user said"; Chrome
+→ usage duration, NOT "the pages visited".
+
+## Engine architecture (`app/src/main/java/com/shortscap/app/screenactivity/`)
+
+| File | Responsibility |
+| --- | --- |
+| `ScreenActivityState.kt` | Pure value types: `ScreenActivitySession` (package + start/end) and `ScreenActivityAggregate` (per-day duration + launches) |
+| `ScreenActivityCollector.kt` | PURE session-tracking: foreground changes close/open sessions; repeated callbacks for the SAME package are never second sessions; sub-1s blips are dropped (no fake zero-duration rows) |
+| `ScreenActivityStore.kt` | Local persistence boundary (interface + in-memory default) |
+| `RoomScreenActivityStore.kt` | Durable Room-backed store (`screen_activity_usage` table) — survives process death / force stop / reboot |
+| `ScreenActivityRepository.kt` | Aggregates sessions per (package, UTC date) and drains through the EXISTING sync layer (`MonitoringSyncer.usage` → `POST /monitoring/app-usage/sync`); idempotent per-day upsert, offline-first (cleared only after confirmed sync) |
+| `ScreenActivityEngine.kt` | The engine boundary: subscribes to `MonitoringEventHub`, gates collection on the persisted Screen Activity toggle, owns collector + repository |
+
+## Wiring
+
+- **App start:** `ShortsCapApplication` installs the durable Room store
+  (`ScreenActivityEngine.installDurableStore`).
+- **Accessibility Service:** `onServiceConnected` starts the engine with the
+  persisted toggle gate (`MonitoringService.isMonitoringEnabled`); `onUnbind` /
+  `onDestroy` stop it (flushing the in-flight session).
+- **Settings:** `Settings → Monitoring → Screen Activity` — the master switch
+  (OFF → status Disabled / collection stops; ON → status Enabled / collection
+  runs) plus the privacy-friendly info dialog.
+- **Toggle sync:** the switch persists through the existing settings mechanism
+  (`SettingsSyncer.monitoringSettings` → `PUT /settings/monitoring`) and the
+  persisted `monitoring_enabled` flag is the engine's gate.
+
+## Backend / data flow (reused, not duplicated)
+
+```
+Screen Activity toggle
+  → ScreenActivityEngine
+  → ScreenActivityCollector (sessions)
+  → RoomScreenActivityStore (durable local)
+  → ScreenActivityRepository.drainToSync(deviceId)
+  → SyncCoordinator (existing queue + retry + dedupe)
+  → POST /monitoring/app-usage/sync
+  → backend AppUsageService → MySQL app_usage
+  → GET /monitoring/app-usage (history/read API — existing)
+```
+
+No new backend endpoints, no new database tables on the server, no schema
+changes — the existing Monitoring/App-Usage data layer is reused. The backend
+remains the durable sink; Android is the real-time collection authority.
+
+## Database (Android, Room)
+
+Room version 2 → 3 (`MIGRATION_2_3`) adds the **`screen_activity_usage`** table
+(one row per closed session: package, app name, UTC date, duration seconds,
+launch count, occurred-at). Pure additive — existing queues/stores/cycles are
+untouched. **MySQL / backend schema: NOT modified.**
+
+## Tests
+
+`ScreenActivityCollectorTest`, `ScreenActivityRepositoryTest` and
+`ScreenActivityEngineTest` cover: session open/close, duplicate-callback
+dedupe, minimum-duration floor, per-(package, date) aggregation, idempotent
+re-drain (never doubles), clear-after-confirmed-sync, the toggle gate
+(off → nothing recorded, in-flight session dropped) and Shorts independence.
+
+**Verified live (Aug 16, 2026):** a real round-trip against the running
+FastAPI server — `POST /monitoring/app-usage/sync` (200, row created with the
+dev user attached) → duplicate POST (same row id, idempotent) →
+`GET /monitoring/app-usage` (persisted values returned) → direct MySQL check
+(one row, 2520s / 3 launches) → cleanup. Full Android unit suite PASS.
 
 ---
 
@@ -2966,6 +3064,50 @@ platforms), never as a single-app feature.
   instructions) — the earlier verified baseline (119/119, lint `NewApi` = 0,
   P1-1/P1-2 fixed) is untouched by this behavior-only change. No backend,
   database or schema changes.
+
+### Shorts Limit page — Platform Usage section (Section E) *(Aug 16, 2026)*
+
+- **What:** the Shorts Limit page now renders the *Platform Usage* card
+  (Section E) inside the active-cycle view — REAL per-platform Shorts counts
+  within the current 24-hour window. No fabricated values ever: the section
+  is drawn ONLY from the backend's `GET /shorts/control` aggregation of the
+  user's synchronized `shorts_usage` rows (grouped by `platform`/`surface`
+  for the active cycle window), and it is hidden entirely when the fetch is
+  unavailable/offline.
+- **Backend (smallest change, no new tables/columns):**
+  - `ShortsLimitCycleService.platform_usage(user_id)` — SUM(`shorts_count` +
+    `duration_seconds`) grouped by (`platform`, `surface`) with the SAME
+    window predicate as the reconciled cycle count
+    (`usage_date >= cycle_started_at.date()`; empty `[]` when no active
+    cycle). Invariant: per-platform counts always sum to the cycle's
+    reconciled `current_count`. No second counter, no new API.
+  - `GET/PUT /shorts/control` response schema now carries
+    `platform_usage: [{platform, surface, shorts_count, duration_seconds}]`
+    (ordered by count desc).
+  - `scripts/verify_short_control.py` extended (59 → 62 checks): empty
+    before activation, real per-platform aggregation within an active cycle,
+    and `sum(platform_usage) == current_count`.
+- **Android (page only):** `ShortsControlDto` + `HttpBackendApi.parseControl`
+  parse `platform_usage`; `ShortsControlSyncer.fetchControl()` is a read-only
+  fetch of the combined control state; the page fetches on open and renders
+  the compact Platform Usage card (platform label + count, header +
+  honest "No Shorts counted yet in this cycle." empty state when the real
+  data is empty). The local `ShortsControlEngine` remains authoritative for
+  count / timer / lock; platform usage is backend-data-only. New i18n strings
+  added in all 5 languages.
+- **Already satisfied (verified, no change needed):** Short Applications is
+  locked during an active cycle via `ShortsControlEngine.hasActiveCycle()`
+  read-only toggles, and the HUD shares the same engine state
+  (`ShortsHudController` consumes `ShortsControlEngine.shared`).
+- **Verification:** backend `py_compile` clean; live end-to-end checks (temp
+  server on :8001 carrying the new code) PASS for empty → active →
+  per-platform sums; Android `compileDebugKotlin` PASS and Shorts unit test
+  suite **93/93** PASS (`:app:testDebugUnitTest --tests "com.shortscap.app.shorts.*"`).
+  Database migration: **NO** (aggregation only).
+- **Caveat:** the long-running dev server on port `8000` was started before
+  these edits and still serves the pre-change response (no `platform_usage`);
+  restart it to serve the new field (`verify_short_control.py` will then pass
+  its 3 new checks against it).
 
 ### Short Control frontend ↔ backend link sanity check *(Aug 16, 2026)*
 

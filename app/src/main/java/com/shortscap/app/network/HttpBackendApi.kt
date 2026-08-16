@@ -635,10 +635,22 @@ class HttpBackendApi(
         val platforms = (applications?.get("platforms") as? List<*>)
             ?.mapNotNull { it as? Map<String, Any?> }
             ?: emptyList()
+        val platformUsage = (m["platform_usage"] as? List<*>)
+            ?.mapNotNull { it as? Map<String, Any?> }
+            ?.mapNotNull { u ->
+                ShortsPlatformUsageDto(
+                    platform = u["platform"] as? String,
+                    surface = u["surface"] as? String,
+                    shortsCount = (u["shorts_count"] as? Number)?.toInt() ?: 0,
+                    durationSeconds = (u["duration_seconds"] as? Number)?.toInt() ?: 0,
+                )
+            }
+            ?: emptyList()
         return ShortsControlDto(
             limitCycle = cycleMap?.let { parseCycle(it) },
             hudAppearance = hud?.get("appearance") as? String,
             platforms = platforms,
+            platformUsage = platformUsage,
             raw = m,
         )
     }

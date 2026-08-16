@@ -231,6 +231,19 @@ class ShortsInsights(BaseModel):
     this_month: ShortsInsightsPeriod
 
 
+class ShortPlatformUsage(BaseModel):
+    """One platform's Shorts usage within the CURRENT 24-hour limit-cycle
+    window, aggregated from real stored `shorts_usage` rows (usage_date >= the
+    active cycle's start date). The per-platform counts always sum to the
+    cycle's reconciled `current_count` — a missing platform is never
+    fabricated."""
+
+    platform: str
+    surface: str
+    shorts_count: int
+    duration_seconds: int
+
+
 class ShortControlHud(BaseModel):
     """The HUD block — the persisted HUD appearance preference."""
 
@@ -248,6 +261,7 @@ class ShortControlResponse(BaseModel):
     limit_cycle: ShortControlLimitCycle | None = None
     hud: ShortControlHud
     insights: ShortsInsights
+    platform_usage: list[ShortPlatformUsage] = Field(default_factory=list)
 
 
 class ShortsControlUpdate(BaseModel):

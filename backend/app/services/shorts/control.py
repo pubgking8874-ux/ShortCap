@@ -13,6 +13,8 @@ ShortsControlService — assembles the combined Shorts Control response for
                     summaries aggregated from REAL stored `shorts_usage` rows
                     (reusing the existing ReportingRepository — no new report
                     tables, no fabricated platforms)
+  * platform_usage — per-platform usage within the CURRENT 24-hour limit-
+                    cycle window (sums to the cycle's reconciled count)
 
 The Android app remains the real-time enforcement authority. This service
 only orchestrates synchronized configuration + state; it performs no
@@ -146,6 +148,7 @@ class ShortsControlService:
             "limit_cycle": self.limit_cycle_block(user_id),
             "hud": {"appearance": settings.hud_appearance or "BRAIN"},
             "insights": self.insights(user_id),
+            "platform_usage": self.cycle_service.platform_usage(user_id),
         }
 
     def update_control(self, user_id: int, data: dict) -> dict:

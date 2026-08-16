@@ -52,9 +52,12 @@ import com.shortscap.app.theme.ScTextStyles
  * The page is a clean configuration hub (no statistics — Home holds the quick
  * summary, Activity the detailed reports):
  *
- *   MONITORING       → Device Monitoring (master switch + Enabled/Disabled
- *                      status + small circular info button that explains what
- *                      is monitored and why permissions matter)
+ *   MONITORING       → Screen Activity (renamed from "Device Monitoring" —
+ *                      master switch + Enabled/Disabled status + small
+ *                      circular info button that explains what is monitored:
+ *                      GENERAL app usage — which app is active and for how
+ *                      long — never Shorts-specific detection — and why
+ *                      permissions matter)
  *   STRICT MODE      → Strict Mode switch
  *   STUDY MODE       → Study Mode (relocated from the General section; kept
  *                      exactly as it was — same card, same design)
@@ -73,7 +76,7 @@ import com.shortscap.app.theme.ScTextStyles
  * All state is driven by [MonitoringSettings] passed from the ViewModel; the
  * screen never hardcodes business logic or text (all labels come from the
  * active language catalog), so GET / UPDATE Monitoring Settings backend APIs
- * and new languages plug in without UI changes. Device Monitoring uses the
+ * and new languages plug in without UI changes. Screen Activity uses the
  * app-wide permission terminology — Enabled / Disabled — exactly like the
  * Permissions screen.
  */
@@ -81,7 +84,7 @@ import com.shortscap.app.theme.ScTextStyles
 fun MonitoringScreen(
     settings: MonitoringSettings,
     // Centralized paused state (derived from the live permission list in
-    // AppUiState) — Device Monitoring shows Disabled whenever a required
+    // AppUiState) — Screen Activity shows Disabled whenever a required
     // permission is missing, even if the master switch is on.
     monitoringPaused: Boolean = false,
     onToggleMonitoring: (Boolean) -> Unit,
@@ -94,7 +97,7 @@ fun MonitoringScreen(
     val strings = LocalAppStrings.current
     var deviceInfoDialogOpen by remember { mutableStateOf(false) }
 
-    // Device Monitoring state — the app-wide Enabled/Disabled vocabulary.
+    // Screen Activity state — the app-wide Enabled/Disabled vocabulary.
     val deviceMonitoringEnabled = settings.enabled && !monitoringPaused
 
     Column(modifier = Modifier.fillMaxSize().background(colors.Bg)) {
@@ -107,7 +110,7 @@ fun MonitoringScreen(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // ---- Section 1 — Device Monitoring (master switch + status) ----
+            // ---- Section 1 — Screen Activity (master switch + status) ----
             SectionTitle(strings.monitoringSection)
             DeviceMonitoringCard(
                 iconKey = IconKey.MONITORING_ENABLE,
@@ -155,7 +158,7 @@ fun MonitoringScreen(
         }
     }
 
-    // ---- Device Monitoring information dialog ----
+    // ---- Screen Activity information dialog ----
     if (deviceInfoDialogOpen) {
         AlertDialog(
             onDismissRequest = { deviceInfoDialogOpen = false },
@@ -181,7 +184,7 @@ fun MonitoringScreen(
 }
 
 /**
- * Device Monitoring card — icon tile + title + small circular info button +
+ * Screen Activity card — icon tile + title + small circular info button +
  * one-line description + Enabled/Disabled status + master switch. The card
  * body toggles monitoring; the info circle opens the information dialog.
  */

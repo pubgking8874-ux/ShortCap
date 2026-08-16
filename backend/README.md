@@ -2362,8 +2362,9 @@ the backend is a data / synchronization API only.
   LIMIT_REACHED, persisted. Changing the limit updates ONLY the threshold
   (count + 24-hour timer preserved), then status re-evaluates.
 - **API endpoints:** `GET/PUT /shorts/control` (combined state:
-  applications catalog, limit_cycle, hud.appearance, insights),
-  `GET /shorts/limit-cycle`, `POST /shorts/limit-cycle/activate`,
+  applications catalog, limit_cycle, hud.appearance, insights,
+  platform_usage), `GET /shorts/limit-cycle`,
+  `POST /shorts/limit-cycle/activate`,
   `POST /shorts/limit-cycle/disable`. `remaining_seconds` / `usage_ratio`
   are derived at response time (never persisted as decreasing values).
   Timestamps are naive-UTC ISO-8601 per the backend convention.
@@ -2375,6 +2376,14 @@ the backend is a data / synchronization API only.
   from REAL `shorts_usage` rows through the existing ReportingRepository
   (count, duration, warning/limit day counts, platform breakdown) — no new
   report tables, no fabricated platforms.
+- **`platform_usage` (current-cycle per-platform block):** `GET/PUT
+  /shorts/control` also returns `platform_usage: [{platform, surface,
+  shorts_count, duration_seconds}]` — SUM over the user's `shorts_usage` rows
+  grouped by (`platform`, `surface`) with the SAME window predicate as the
+  reconciled cycle count (`usage_date >= cycle_started_at.date()`), ordered by
+  count desc; empty `[]` when no active cycle. Invariant: the per-platform
+  counts always sum to the cycle's `current_count` (no second counter, no new
+  table, no migration).
 - **Ownership / isolation:** every query scoped to the caller's user;
   `device_id` validated against the current user (cross-user → 404); the
   development identity (`X-Dev-User-Id`) is unchanged and remains the
@@ -2388,6 +2397,28 @@ the backend is a data / synchronization API only.
   PASS; alembic head = current = `fd8a365d772d`; `/health/db`, `/docs`,
   `GET /shorts/control` verified live. Score / Rank / Reports / Web / Study /
   Monitoring logic unchanged; no AWS / Cognito work.
+
+### Short Control `platform_usage` — per-platform usage block *(Aug 16, 2026)*
+
+- **What:** `GET/PUT /shorts/control` now includes
+  `platform_usage: [{platform, surface, shorts_count, duration_seconds}]` —
+  real per-platform Shorts usage within the CURRENT 24-hour limit-cycle
+  window (see the section above). Ready for the Shorts Limit page's Platform
+  Usage card; a missing platform is never fabricated and an unavailable
+  fetch renders nothing on the client.
+- **Changes (smallest, no migration):** `ShortsLimitCycleService.platform_usage`
+  (grouped SUM with the same window predicate as the reconciled count),
+  `ShortsControlService.control()` wiring, `shorts.py` schema
+  (`ShortPlatformUsage` + `platform_usage` on `ShortControlResponse`), and
+  `scripts/verify_short_control.py` extended from 59 → 62 checks (empty
+  before activation, real per-platform aggregation inside an active cycle,
+  `sum(platform_usage) == current_count`).
+- **Verification:** `py_compile` clean + live end-to-end against a temp
+  server (port 8001 carrying the new code): PASS empty → active →
+  per-platform sums equal the reconciled count (YOUTUBE=4 + INSTAGRAM=2 = 6).
+- **Caveat:** the long-running dev server on port `8000` predates these edits
+  and still serves the old response (no `platform_usage`); restart it to
+  serve the field — `verify_short_control.py` then passes all 62 checks.
 
 ### Short Control frontend ↔ backend link sanity check *(Aug 16, 2026)*
 
@@ -2481,6 +2512,34 @@ Android-side follow-up to the Shorts Control Backend (no backend changes):
 - **Verification:** Android unit tests **129/129**, compile + release build
   PASS, lint `NewApi` = 0 (P1-1 fixed), P1-2 durable queue intact; backend
   untouched and still 10/10 verify scripts green.
+
+### Screen Activity — general app-usage collection (Aug 16, 2026)
+
+**Status: completed (Android). Backend-side no-op — contract reuse only.**
+
+- The user-facing **"Device Monitoring"** feature is renamed **Screen
+  Activity** — a SEPARATE activity-collection system that records which app
+  was active and for how long (general device/app usage). It is STRICTLY
+  INDEPENDENT of Short Control: Screen Activity OFF stops generic collection
+  without touching Shorts detection/counting/limit/HUD, and Short Control
+  OFF does not stop Screen Activity.
+- **Android engine:** `screenactivity/` package — `ScreenActivityCollector`
+  (pure session tracking, duplicate-callback dedupe, sub-1s blip drop),
+  `ScreenActivityStore` + `RoomScreenActivityStore` (durable local,
+  Room `screen_activity_usage` table, v2→v3 migration), `ScreenActivityRepository`
+  (aggregates per package + UTC date), `ScreenActivityEngine` (subscribes to
+  `MonitoringEventHub`, gated on the persisted Screen Activity toggle).
+- **Backend:** NO new endpoints, NO new server tables, NO schema or
+  migration changes — Screen Activity reuses the existing Monitoring /
+  App-Usage data layer exactly (`POST /monitoring/app-usage/sync` idempotent
+  per-day upsert, `GET /monitoring/app-usage` history). Android remains the
+  real-time collection authority; the backend persists the durable summaries
+  (user-attached, device-ownership validated).
+- **Live verification (Aug 16, 2026):** a real round-trip against the
+  running server — `POST /monitoring/app-usage/sync` (200, row created with
+  the dev user) → duplicate POST (same row id — idempotent) →
+  `GET /monitoring/app-usage` (persisted) → direct MySQL row check →
+  cleanup. Android unit suite PASS.
 
 ## Planned / next (NOT implemented yet)
 

@@ -5,6 +5,8 @@ import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.shortscap.app.hud.ShortsHudController
 import com.shortscap.app.monitoring.MonitoringEventHub
+import com.shortscap.app.monitoring.MonitoringService
+import com.shortscap.app.screenactivity.ScreenActivityEngine
 
 /**
  * ShortsCap's own Accessibility Service — a MONITORING component, not a UI
@@ -43,6 +45,13 @@ class ShortsCapAccessibilityService :
         // registry — the service itself stays a dumb, privacy-minimal
         // observer (package + window class metadata only).
         com.shortscap.app.shorts.ShortsMonitoringPipeline.start()
+        // Screen Activity — GENERAL app/screen usage collection (which app is
+        // active and for how long). STRICTLY INDEPENDENT of Shorts Control:
+        // it runs only while the persisted Screen Activity toggle is ON, and
+        // turning it off never stops Shorts detection/counting (and vice
+        // versa). The gate reads the same persisted monitoring toggle the
+        // Settings screen writes.
+        ScreenActivityEngine.start { MonitoringService.isMonitoringEnabled(this@ShortsCapAccessibilityService) }
         // The Shorts HUD consumes the detection pipeline's surface-state
         // broadcasts (presentation only — never detects Shorts itself).
         ShortsHudController.start(this)
@@ -83,12 +92,14 @@ class ShortsCapAccessibilityService :
 
     override fun onUnbind(intent: Intent?): Boolean {
         ShortsHudController.stop()
+        ScreenActivityEngine.stop()
         MonitoringEventHub.unsubscribe(this)
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         ShortsHudController.stop()
+        ScreenActivityEngine.stop()
         MonitoringEventHub.unsubscribe(this)
         super.onDestroy()
     }

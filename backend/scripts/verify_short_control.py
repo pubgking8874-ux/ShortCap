@@ -184,6 +184,11 @@ def main() -> None:
         ),
         str(list(control.get("insights", {}).keys())),
     )
+    record(
+        "control: platform_usage empty before any cycle",
+        isinstance(control, dict) and control.get("platform_usage") == [],
+        str(control.get("platform_usage")),
+    )
 
     # ------------------------------------------------------------------
     # 2. Activate a 24-hour cycle (limit 200)
@@ -481,6 +486,29 @@ def main() -> None:
         "warning flag persisted in insights (yesterday warning_count=1)",
         status == 200 and ins.get("yesterday", {}).get("warning_count") == 1,
         str(ins.get("yesterday", {}).get("warning_count")),
+    )
+
+    # ------------------------------------------------------------------
+    # 10b. platform_usage — real per-platform data within the active cycle
+    #      window; the per-platform counts must sum to the reconciled count.
+    # ------------------------------------------------------------------
+    status, control = request("GET", "/shorts/control")
+    pu = control.get("platform_usage", []) if isinstance(control, dict) else []
+    pu_by_platform = {row["platform"]: row["shorts_count"] for row in pu if isinstance(row, dict)}
+    status_c, cycle = request("GET", "/shorts/limit-cycle")
+    record(
+        "control: platform_usage aggregates YOUTUBE=4 within the active window",
+        status == 200
+        and isinstance(pu, list)
+        and pu_by_platform.get("YOUTUBE") == 4,
+        f"platform_usage={pu}",
+    )
+    record(
+        "control: platform_usage sums to the reconciled cycle count",
+        status_c == 200
+        and isinstance(cycle, dict)
+        and sum(pu_by_platform.values()) == cycle.get("current_count"),
+        f"platform_sum={sum(pu_by_platform.values())} current_count={cycle.get('current_count') if isinstance(cycle, dict) else None}",
     )
 
     # ------------------------------------------------------------------

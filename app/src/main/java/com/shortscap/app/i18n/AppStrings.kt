@@ -568,12 +568,16 @@ interface AppStrings {
     /** "Demo code: 123456" — development-only line for the LOCAL mock OTP. */
     fun focusPasscodeOtpDemo(code: String): String
 
-    // ---- Monitoring ----
+    // ---- Monitoring (user-facing feature: Screen Activity) ----
     val monitoringTitle: String
     val monitoringSection: String
+    /** "Screen Activity" — the general app-usage collection feature label. */
     val monitoringDevice: String
+    /** Short one-line description of Screen Activity. */
     val monitoringDeviceDesc: String
+    /** "About Screen Activity" — information dialog title. */
     val monitoringDeviceInfoTitle: String
+    /** Privacy-friendly explanation: which app, how long, sessions, history. */
     val monitoringDeviceInfoMessage: String
     val monitoringDeviceInfoPermission: String
     val monitoringDeviceInfoDisabled: String
@@ -660,6 +664,12 @@ interface AppStrings {
     val shortsLimitLockedMessage: String
     /** "Shorts Usage" — active-page section heading (count/limit). */
     val shortsLimitUsageSection: String
+    /** "Platform Usage" — active-page section heading (per-platform counts). */
+    val shortsLimitPlatformSection: String
+    /** Per-platform usage row, e.g. "YouTube Shorts — 45" (%s name, %d count). */
+    fun shortsLimitPlatformRowFormat(name: String, count: Int): String
+    /** "No Shorts counted yet in this cycle." — honest empty state (real data). */
+    val shortsLimitPlatformEmpty: String
     /** "Your Limit" — active-page section heading (saved limit + edit). */
     val shortsLimitYourLimit: String
     /** "Edit Limit" — opens the limit editor on the active page. */

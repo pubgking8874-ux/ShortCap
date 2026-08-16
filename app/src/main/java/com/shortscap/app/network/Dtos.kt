@@ -173,12 +173,23 @@ data class ShortsLimitCycleDto(
 
 /** The combined Shorts Control state — GET/PUT /shorts/control. Only the
  * fields Android consumes are parsed (`limit_cycle`, `hud.appearance`,
- * `applications.platforms`); the rest stays as raw maps. */
+ * `applications.platforms`, `platform_usage`); the rest stays as raw maps. */
 data class ShortsControlDto(
     val limitCycle: ShortsLimitCycleDto? = null,
     val hudAppearance: String? = null,
     val platforms: List<Map<String, Any?>> = emptyList(),
+    /** Real per-platform usage within the active 24-hour cycle window
+     * (from backend `shorts_usage` aggregation) — empty/offline = no data. */
+    val platformUsage: List<ShortsPlatformUsageDto> = emptyList(),
     val raw: Map<String, Any?> = emptyMap(),
+)
+
+/** One platform's Shorts usage within the active cycle window. */
+data class ShortsPlatformUsageDto(
+    val platform: String? = null,
+    val surface: String? = null,
+    val shortsCount: Int = 0,
+    val durationSeconds: Int = 0,
 )
 
 // ---------------------------------------------------------------------------

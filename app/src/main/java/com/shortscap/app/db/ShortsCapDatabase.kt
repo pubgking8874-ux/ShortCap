@@ -17,6 +17,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *
  * Version 1: P1-2 tables (sync_queue, shorts_usage, shorts_events).
  * Version 2: P1-5 adds shorts_limit_cycle (the authoritative 24-hour window).
+ * Version 3: Screen Activity adds screen_activity_usage (generic app-usage
+ * sessions — independent of the Shorts domain).
  */
 @Database(
     entities = [
@@ -24,8 +26,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ShortsUsageEntity::class,
         ShortsEventEntity::class,
         ShortsLimitCycleEntity::class,
+        ScreenActivityUsageEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class ShortsCapDatabase : RoomDatabase() {
@@ -35,6 +38,8 @@ abstract class ShortsCapDatabase : RoomDatabase() {
     abstract fun shortsStoreDao(): ShortsStoreDao
 
     abstract fun shortsLimitCycleDao(): ShortsLimitCycleDao
+
+    abstract fun screenActivityDao(): ScreenActivityDao
 
     companion object {
         private const val DB_NAME = "shortscap.db"
@@ -63,6 +68,28 @@ abstract class ShortsCapDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Screen Activity: adds the screen_activity_usage table (generic
+         * app-usage sessions, independent of the Shorts domain). Pure
+         * additive — existing queues/stores/cycles are untouched.
+         * Column names must match the entity exactly (Room validates).
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `screen_activity_usage` (
+                        `usageId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `packageName` TEXT NOT NULL,
+                        `appName` TEXT,
+                        `usageDate` TEXT NOT NULL,
+                        `durationSeconds` INTEGER NOT NULL,
+                        `launchCount` INTEGER NOT NULL,
+                        `occurredAt` INTEGER NOT NULL
+                    )""".trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var instance: ShortsCapDatabase? = null
 
@@ -73,7 +100,7 @@ abstract class ShortsCapDatabase : RoomDatabase() {
                     context.applicationContext,
                     ShortsCapDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
             }
     }
 }

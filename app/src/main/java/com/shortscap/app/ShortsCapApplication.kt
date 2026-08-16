@@ -2,6 +2,8 @@ package com.shortscap.app
 
 import android.app.Application
 import com.shortscap.app.db.ShortsCapDatabase
+import com.shortscap.app.screenactivity.RoomScreenActivityStore
+import com.shortscap.app.screenactivity.ScreenActivityEngine
 import com.shortscap.app.shorts.RoomShortsLimitCycleStore
 import com.shortscap.app.shorts.RoomShortsLocalStore
 import com.shortscap.app.shorts.ShortsControlEngine
@@ -36,6 +38,11 @@ class ShortsCapApplication : Application() {
         val database = ShortsCapDatabase.getInstance(this)
         SyncCoordinator.installDurableQueue(RoomSyncQueue(database.syncQueueDao()))
         ShortsMonitoringPipeline.installDurableStore(RoomShortsLocalStore(database.shortsStoreDao()))
+        // Screen Activity: the durable Room-backed store for generic
+        // app-usage sessions (independent of the Shorts domain). The engine
+        // itself is started/stopped by the Accessibility Service (it only
+        // runs while the monitoring service is connected).
+        ScreenActivityEngine.installDurableStore(RoomScreenActivityStore(database.screenActivityDao()))
         // P1-5: the authoritative 24-hour cycle state machine.
         ShortsControlEngine.install(
             ShortsControlEngine(store = RoomShortsLimitCycleStore(database.shortsLimitCycleDao()))

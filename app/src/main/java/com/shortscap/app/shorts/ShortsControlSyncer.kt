@@ -2,6 +2,7 @@ package com.shortscap.app.shorts
 
 import com.shortscap.app.network.ApiResult
 import com.shortscap.app.network.BackendApi
+import com.shortscap.app.network.ShortsControlDto
 
 /**
  * Best-effort backend sync for the Shorts Control state (24-hour limit
@@ -22,6 +23,14 @@ import com.shortscap.app.network.BackendApi
 class ShortsControlSyncer(
     private val api: BackendApi,
 ) {
+
+    /**
+     * Read-only fetch of the combined Shorts Control state (GET
+     * /shorts/control). Used by the Shorts Limit page to render the real
+     * per-platform usage section. Never overwrites local state — the local
+     * engine remains authoritative.
+     */
+    suspend fun fetchControl(): ApiResult<ShortsControlDto> = api.getShortsControl()
 
     /** Pushes an activation (or returns the existing cycle). */
     suspend fun syncActivate(limitCount: Int): ShortsSyncStatus =

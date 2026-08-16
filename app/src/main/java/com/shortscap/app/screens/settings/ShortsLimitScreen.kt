@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.AppStrings
 import com.shortscap.app.i18n.LocalAppStrings
+import com.shortscap.app.network.ApiResult
+import com.shortscap.app.network.ShortsPlatformUsageDto
 import com.shortscap.app.shorts.DEFAULT_LIMIT_UPPER_BOUND
 import com.shortscap.app.shorts.LimitInputError
 import com.shortscap.app.shorts.LimitInputResult
@@ -137,6 +139,24 @@ fun ShortsLimitScreen(
     var editOpen by remember { mutableStateOf(false) }
     var activateConfirmOpen by remember { mutableStateOf(false) }
 
+    // Section E — PLATFORM USAGE within the current cycle. Read-only fetch of
+    // the combined Shorts Control state (real `shorts_usage` aggregation);
+    // the backend response is the ONLY source here — a missing/offline fetch
+    // renders nothing, never fabricated numbers. The local engine remains
+    // authoritative for count/timer/lock.
+    var platformUsage by remember { mutableStateOf<List<ShortsPlatformUsageDto>>(emptyList()) }
+    var platformUsageLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val s = syncer ?: return@LaunchedEffect
+        when (val result = s.fetchControl()) {
+            is ApiResult.Success -> {
+                platformUsage = result.data.platformUsage
+                platformUsageLoaded = true
+            }
+            else -> platformUsageLoaded = false
+        }
+    }
+
     fun pushSync(block: suspend ShortsControlSyncer.() -> ShortsSyncStatus) {
         val s = syncer ?: return
         scope.launch {
@@ -210,6 +230,8 @@ fun ShortsLimitScreen(
                         pageState = pageState,
                         isLocked = engine.isLimitLocked(),
                         onEdit = { editOpen = true },
+                        platformUsage = platformUsage,
+                        platformUsageLoaded = platformUsageLoaded,
                     )
                 }
             }
@@ -475,6 +497,9 @@ private fun ReadyToActivateView(
         colors = colors,
     )
 
+    // Limit summary: Set Limit / Current Used / Remaining (one compact card).
+    LimitSummary(state = state, strings = strings, colors = colors)
+
     // Status + timer: READY TO ACTIVATE / NOT STARTED (compact two-stat row).
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -495,6 +520,8 @@ private fun ActiveView(
     pageState: ShortsLimitPageState,
     isLocked: Boolean,
     onEdit: () -> Unit,
+    platformUsage: List<ShortsPlatformUsageDto>,
+    platformUsageLoaded: Boolean,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
@@ -523,9 +550,24 @@ private fun ActiveView(
         textAlign = TextAlign.Center,
     )
 
+    // Limit summary: Set Limit / Current Used / Remaining (one compact card).
+    LimitSummary(state = state, strings = strings, colors = colors)
+
     // ---- SHORTS USAGE — the count progress (current / limit). ----
     SectionTitle(strings.shortsLimitUsageSection)
     UsageCard(state = state, strings = strings, colors = colors)
+
+    // ---- PLATFORM USAGE — real per-platform counts within this cycle. ----
+    // Only rendered from the backend aggregation; offline/unloaded renders
+    // nothing (never fabricated data).
+    if (platformUsageLoaded) {
+        SectionTitle(strings.shortsLimitPlatformSection)
+        PlatformUsageCard(
+            usages = platformUsage,
+            strings = strings,
+            colors = colors,
+        )
+    }
 
     // ---- YOUR LIMIT — saved limit + edit (locked while the cycle runs). ----
     SectionTitle(strings.shortsLimitYourLimit)
@@ -584,6 +626,108 @@ private fun UsageCard(
             StatBlock(label = strings.shortsLimitState, value = statusLabel(state, strings), colors = colors)
         }
     }
+}
+
+/** Limit summary card — Set Limit / Current Used / Remaining in one compact,
+ * evenly-spaced row (e.g. Limit: 200 · Used: 127 · Remaining: 73). Rendered
+ * from the authoritative engine state on both the ready and active pages. */
+@Composable
+private fun LimitSummary(
+    state: ShortsControlState,
+    strings: AppStrings,
+    colors: ScColors,
+) {
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.Card, shape)
+            .border(1.dp, colors.Divider, shape)
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        SummaryStat(label = strings.shortsLimitSet, value = "${state.limitCount}", colors = colors)
+        SummaryStat(label = strings.shortsLimitCurrentCount, value = "${state.currentCount}", colors = colors)
+        SummaryStat(label = strings.shortsLimitRemaining, value = "${state.remainingCount}", colors = colors)
+    }
+}
+
+@Composable
+private fun SummaryStat(label: String, value: String, colors: ScColors) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(label, color = colors.TextSecondary, style = ScTextStyles.Label)
+        Text(value, color = colors.TextPrimary, style = ScTextStyles.BigStat)
+    }
+}
+
+/** The platform-usage card — REAL per-platform counts within the current
+ * 24-hour cycle (Section E). The list comes only from the backend's
+ * `shorts_usage` aggregation; an empty list shows the honest empty state and
+ * an unavailable fetch renders the section entirely hidden (never fabricated
+ * values). The per-platform counts always sum to [ShortsControlState.currentCount]. */
+@Composable
+private fun PlatformUsageCard(
+    usages: List<ShortsPlatformUsageDto>,
+    strings: AppStrings,
+    colors: ScColors,
+) {
+    val shape = RoundedCornerShape(22.dp)
+    val rows = usages.sortedByDescending { it.shortsCount }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.Card, shape)
+            .border(1.dp, colors.Divider, shape)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (rows.isEmpty()) {
+            Text(strings.shortsLimitPlatformEmpty, color = colors.TextSecondary, style = ScTextStyles.Body)
+        } else {
+            rows.forEach { usage ->
+                val name = platformDisplayName(usage.platform)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = strings.shortsLimitPlatformRowFormat(name, usage.shortsCount)
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = name,
+                        color = colors.TextPrimary,
+                        style = ScTextStyles.BodySemiBold.copy(fontSize = 14.sp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "${usage.shortsCount} ${strings.shortsLimitUnit}",
+                        color = colors.TextSecondary,
+                        style = ScTextStyles.Body,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Friendly display label for a backend `platform` literal (ShortPlatform
+ * enum name). Falls back to the raw literal — never a fabricated platform. */
+private fun platformDisplayName(platform: String?): String = when (platform) {
+    "YOUTUBE" -> "YouTube Shorts"
+    "INSTAGRAM" -> "Instagram Reels"
+    "TIKTOK" -> "TikTok"
+    "SNAPCHAT" -> "Snapchat Spotlight"
+    "FACEBOOK" -> "Facebook Reels"
+    "MOJ" -> "Moj"
+    "X" -> "X"
+    "LINKEDIN" -> "LinkedIn"
+    else -> platform ?: "Shorts"
 }
 
 /** The saved-limit card: \"200 Shorts\" + Edit Limit (locked message shown). */
@@ -751,7 +895,7 @@ private fun CycleTimerRing(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            modifier = Modifier.size(148.dp),
+            modifier = Modifier.size(120.dp),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {

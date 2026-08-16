@@ -213,6 +213,53 @@ class ShortsLimitCycleService:
         return self.repository.update(cycle, data)
 
     # ------------------------------------------------------------------
+    # Platform usage (within the current cycle window)
+    # ------------------------------------------------------------------
+
+    def platform_usage(self, user_id: int, now: datetime | None = None) -> list[dict]:
+        """Per-platform usage within the CURRENT 24-hour window, aggregated
+        from the user's synchronized `shorts_usage` rows.
+
+        The window predicate is EXACTLY the one used by
+        [reconcile_from_usage] (`usage_date >= cycle_started_at.date()`), so
+        the per-platform counts always sum to the reconciled `current_count`.
+        Returns an empty list when no active cycle exists — a missing
+        platform is never fabricated.
+        """
+        cycle = self.repository.get_active(user_id)
+        if cycle is None:
+            return []
+        now = now or utcnow()
+        if now >= cycle.cycle_expires_at:
+            self._mark_expired(cycle, now)
+            return []
+
+        rows = (
+            self.db.query(
+                ShortsUsage.platform,
+                ShortsUsage.surface,
+                func.coalesce(func.sum(ShortsUsage.shorts_count), 0),
+                func.coalesce(func.sum(ShortsUsage.duration_seconds), 0),
+            )
+            .filter(
+                ShortsUsage.user_id == user_id,
+                ShortsUsage.usage_date >= cycle.cycle_started_at.date(),
+            )
+            .group_by(ShortsUsage.platform, ShortsUsage.surface)
+            .order_by(func.sum(ShortsUsage.shorts_count).desc())
+            .all()
+        )
+        return [
+            {
+                "platform": platform,
+                "surface": surface,
+                "shorts_count": int(count),
+                "duration_seconds": int(duration),
+            }
+            for platform, surface, count, duration in rows
+        ]
+
+    # ------------------------------------------------------------------
     # Limit change (threshold only — count + timer preserved)
     # ------------------------------------------------------------------
 
