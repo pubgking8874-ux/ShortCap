@@ -19,6 +19,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * Version 2: P1-5 adds shorts_limit_cycle (the authoritative 24-hour window).
  * Version 3: Screen Activity adds screen_activity_usage (generic app-usage
  * sessions — independent of the Shorts domain).
+ * Version 4: Domain Blocking Foundation adds blocked_domains (the durable
+ * blocked-domain list the future Local VPN/DNS filtering engine consumes).
  */
 @Database(
     entities = [
@@ -27,8 +29,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ShortsEventEntity::class,
         ShortsLimitCycleEntity::class,
         ScreenActivityUsageEntity::class,
+        BlockedDomainEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class ShortsCapDatabase : RoomDatabase() {
@@ -40,6 +43,8 @@ abstract class ShortsCapDatabase : RoomDatabase() {
     abstract fun shortsLimitCycleDao(): ShortsLimitCycleDao
 
     abstract fun screenActivityDao(): ScreenActivityDao
+
+    abstract fun blockedDomainDao(): BlockedDomainDao
 
     companion object {
         private const val DB_NAME = "shortscap.db"
@@ -90,6 +95,26 @@ abstract class ShortsCapDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Domain Blocking Foundation: adds the blocked_domains table (the
+         * durable blocked-domain list consumed by the future Local VPN/DNS
+         * filtering engine). The canonical normalized domain is the primary
+         * key, so duplicates are impossible. Pure additive — existing
+         * queues/stores/cycles/screen-activity rows are untouched.
+         * Column names must match the entity exactly (Room validates).
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `blocked_domains` (
+                        `domain` TEXT NOT NULL PRIMARY KEY,
+                        `createdAt` INTEGER NOT NULL,
+                        `enabled` INTEGER NOT NULL
+                    )""".trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var instance: ShortsCapDatabase? = null
 
@@ -100,7 +125,7 @@ abstract class ShortsCapDatabase : RoomDatabase() {
                     context.applicationContext,
                     ShortsCapDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
             }
     }
 }

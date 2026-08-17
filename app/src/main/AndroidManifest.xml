@@ -157,6 +157,38 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="continuous_usage_monitoring" />
         </service>
+
+        <!--
+            Local VPN + DNS Filtering Engine (Web Blocking Engine). A
+            VpnService that routes ONLY the DNS servers into the tunnel and
+            drops DNS answers for domains in BlockedDomainRepository, so
+            blocked websites cannot resolve/load while every other website
+            and all other traffic continues normally. exported=false: only
+            ShortsCap can start it (via VpnStateManager / the test activity).
+            BIND_VPN_SERVICE is a signature-level permission only the system
+            can hold, so binding is always safe.
+        -->
+        <service
+            android:name=".web.vpn.LocalVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
+        <!--
+            Minimal no-UI entry point that requests the one-time Android VPN
+            consent and starts/stops the LocalVpnService. Exported so the
+            functional verification can drive it via adb (am start with an
+            ez extra start=true|false); it has no layout and shows only the
+            system VPN consent dialog when permission is missing.
+        -->
+        <activity
+            android:name=".web.vpn.VpnPermissionActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoDisplay" />
     </application>
 
 </manifest>

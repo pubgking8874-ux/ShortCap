@@ -1548,6 +1548,103 @@ The main Web screen's **Block Website** action is now gated by a **local, on-dev
 
 *Website domain verification completed August 11, 2026*
 
+## Domain Blocking Foundation — durable blocked-domain list for the future Local VPN/DNS engine (NEW)
+
+A separate, durable domain layer that the future **Local VPN/DNS filtering engine** will consume. This phase only persists the normalized blocked-domain list — **no VPN, no DNS interception, no network filtering, no Chrome modification** — and it does NOT touch the existing domain availability → Block flow.
+
+### What exists already and is REUSED (no duplicates)
+
+- **`web/DomainNormalizer.kt`** (existing) — already performs every required normalization: strips `http://`/`https://`, removes unnecessary trailing `/` (and path/query/fragment), lowercases, safely strips repeated `www.`, drops trailing FQDN dots, and rejects e-mails / unsupported schemes. `https://www.example.com/` → `example.com`. The new layer consumes it — **no second normalizer was created**.
+- **`web/DomainValidator.kt`** (existing) — format validation reused by the repository as a defensive guard.
+- **The existing availability pipeline** (`DomainVerifier` DNS + reachability check → Block button enabled) is **unchanged** — see *Website Domain Verification before Blocking* above.
+
+### New files
+
+| File | Purpose |
+| --- | --- |
+| `web/domain/BlockedDomain.kt` | Minimal model — `domain` (canonical), `createdAt` (epoch millis), `enabled` (default true). Nothing extra. |
+| `web/domain/BlockedDomainRepository.kt` | Single repository — `add` (normalize + validate + insert), `remove`, `isBlocked`, `getAll`; **duplicate-safe** (the normalized domain is the primary key, so a re-block is a no-op, never a second row). |
+| `db/BlockedDomainDao.kt` | Room entity (`blocked_domains` table) + DAO (`INSERT IGNORE`, `DELETE`, `SELECT EXISTS`, `SELECT *`) inside the **existing** `ShortsCapDatabase` — no separate database. |
+
+### Database
+
+- `ShortsCapDatabase` bumped **v3 → v4** with a pure-additive `MIGRATION_3_4` creating `blocked_domains` (`domain` TEXT PRIMARY KEY, `createdAt` INTEGER, `enabled` INTEGER). Existing tables/data untouched.
+
+### UI integration (existing flow preserved exactly)
+
+```
+User enters domain → existing availability check → Domain available → Block option appears
+      → User clicks Block → normalized domain saved (BlockedDomainRepository.add)
+```
+
+- The Block action (`AppViewModel.pushRuleToEngine`, the single funnel for every Block/Unblock/status toggle) now **also persists the normalized domain** to `BlockedDomainRepository`; unblocking removes it. `WebBlockingScreen`, the availability check, the disabled-until-verified button, Screen Activity, Shorts Control and Chrome are all untouched.
+- Seed/demo rules (TikTok, Instagram, …) are UI demo data and are **not** written to the durable blocked-domain list.
+
+*Domain Blocking Foundation completed August 17, 2026 — the future Local VPN/DNS engine consumes `BlockedDomainRepository.getAll()`.*
+
+## Phase 2 — Local VPN + DNS Filtering Engine (NEW, August 17, 2026)
+
+The **Web Blocking Engine**: a local Android `VpnService` that connects `BlockedDomainRepository` to real device-level blocking. A DNS-only VPN — **no VPN, no DNS interception of anything except the domain needed for blocking; no browsing history is read or stored; no private content is inspected.**
+
+### Core flow
+
+```
+Chrome / System Browser → DNS request → LocalVpnService → DnsRequestParser
+      → DnsFilter → BlockedDomainRepository
+            ├─ Blocked? YES → drop the DNS answer → website cannot resolve/load (BLOCK)
+            └─ Blocked? NO  → forward query → answer relayed back → website loads (ALLOW)
+```
+
+### Architecture (`web/vpn/` package)
+
+| File | Purpose |
+| --- | --- |
+| `LocalVpnService.kt` | Android `VpnService` — routes ONLY the DNS servers into the tunnel (no `0.0.0.0/0` route, so normal traffic is never touched), drops DNS answers for blocked domains, relays allowed queries through a protected socket. `START_STICKY` restart-safe; clean teardown in `onDestroy`. |
+| `DnsRequestParser.kt` | Bounds-checked DNS query parser — extracts only the queried domain (QNAME) from UDP port-53 packets; malformed packets are ignored. |
+| `DnsFilter.kt` | Subdomain-aware exact matching: blocking `example.com` also blocks `www.example.com` / `sub.example.com`, never `notexample.com` or `example.com.evil.com`. |
+| `VpnStateManager.kt` | Lifecycle + permission seam: start / stop / already-running / permission state / restart. Never re-prompts for permission once granted; persists the VPN intent in SharedPreferences (existing app pattern). |
+| `VpnPermissionActivity.kt` | Minimal no-UI entry (no layout): requests the one-time Android VPN consent, then starts/stops the VPN via `am start ... --ez start true|false` — the functional-test harness / future UI wiring point. |
+
+### How the engine is connected to `BlockedDomainRepository`
+
+- On VPN start (and on every restart/start-command) the service loads the full blocked-domain list from `BlockedDomainRepository` (the Phase 1 durable store) into the in-memory filter.
+- `AppViewModel.pushRuleToEngine` — the single funnel for every Block/Unblock — now also calls `VpnStateManager.refreshBlockedDomains()` after each repository write, so a block/unblock takes effect in the **running** VPN immediately (when the VPN is off, the rules are simply reloaded at the next start).
+- Matching is done against the canonical normalized domain, so `https://www.example.com/` stored as `example.com` also blocks `www.example.com`.
+
+### Lifecycle / safety
+
+- **Permission:** `VpnService.prepare()` — returns null once granted; the consent dialog is shown at most once, never re-requested.
+- **Already running:** starting again is a no-op (`ALREADY_RUNNING`) and simply reloads the rules.
+- **Restart:** `START_STICKY` + re-establish + reload rules; `establish()` returning null (permission revoked) stops the service instead of crashing.
+- **Clean shutdown:** closing the tun fd unblocks the reader; executor threads are shut down; no crash paths on stop.
+- **Scope separation:** this engine touches **only** the Web Blocking domain — it is not connected to Shorts Control, Shorts Detection, the HUD, Screen Activity, app detection, or the Accessibility service.
+
+### Strengthened enforcement (Audit 2 fixes, August 17, 2026)
+
+The engine now filters at the **DNS AND IP layer**, closing the previously documented bypasses where technically possible:
+
+- **IPv6 DNS:** the tunnel now routes the network's IPv6 DNS servers (`/128`) alongside IPv4, parses IPv6 UDP packets (extension headers handled) and relays IPv6 DNS answers back with a correct IPv6 UDP checksum — fresh IPv6 lookups can no longer bypass.
+- **Direct-IP / DNS-cache / QUIC:** at rule-refresh time the engine resolves each blocked domain (apex + `www.`, A + AAAA) through a *protected* socket and routes those IPs (`/32`/`/128`) into the tunnel; **any** packet to a known blocked-domain IP (TCP, UDP, QUIC) is dropped — a previously resolved or cached IP cannot load the site.
+- The tunnel remains **selective** (only DNS servers + blocked-domain IPs are routed) — no full-tunnel capture, no TCP relay, so allowed websites are never interfered with.
+- Live rule refresh (`AppViewModel.pushRuleToEngine` → `VpnStateManager.refreshBlockedDomains`) now also re-resolves IPs for the running VPN.
+
+**Remaining Android limitations (documented, not hidden):**
+
+- **DoH / DoT / Android Private DNS / alternate resolvers** send DNS outside the tunnel and cannot be intercepted without routing ALL traffic + running a full TCP relay (out of scope). On some Android versions Private DNS can bypass `VpnService` entirely.
+- **Blocked-IP table is best-effort:** it covers IPs resolvable at refresh time; IP changes between refreshes and exotic subdomains may slip until the next refresh (fresh lookups are always blocked via DNS).
+- **DNS caches are not purged** (no public API); the IP table mitigates cached IPs by dropping their connections.
+
+### Testing (minimal)
+
+- **Unit (JVM, verified):** `DnsRequestParserTest`, `DnsFilterTest`, `PacketCodecTest`, `DnsAnswerParserTest` — IPv4/IPv6 UDP parse + build + checksum validation, A/AAAA answer extraction, and the existing parser/filter suites (`:app:testDebugUnitTest`).
+- **On-device functional test** (requires a device/emulator with the app installed):
+  1. Block a known reachable domain (e.g. `example.com`) in the Web tab → stored in `BlockedDomainRepository`.
+  2. Start the VPN: `adb shell am start -n com.shortscap.app/.web.vpn.VpnPermissionActivity --ez start true` (grant the consent once).
+  3. Open `example.com` in Chrome → should fail to resolve (blocked); open an unrelated domain → loads normally.
+  4. Remove the block → the domain resolves again; stop the VPN (`--ez start false`) → no crash.
+
+*Phase 2 — Local VPN + DNS Filtering Engine (strengthened) completed August 17, 2026. Existing domain availability validation, Block button behavior, Web UI, blocked-domain storage and Settings navigation are untouched.*
+
 ## Global Chart Style System (`Settings → Appearance → Chart`) — New
 
 A single, app-wide Chart Style preference controls how every supported analytics chart in ShortsCap visualizes data. This is a **presentation-only** preference: the underlying usage data is never recalculated, filtered, or changed by the selected style (DATA ≠ VISUALIZATION).

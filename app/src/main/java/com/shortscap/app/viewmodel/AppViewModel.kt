@@ -12,6 +12,7 @@ import com.shortscap.app.appearance.AppearanceRepository
 import com.shortscap.app.appearance.FontMode
 import com.shortscap.app.appearance.TextSizeMode
 import com.shortscap.app.charts.ChartStyle
+import com.shortscap.app.db.ShortsCapDatabase
 import com.shortscap.app.theme.ScFonts
 import com.shortscap.app.theme.ThemeMode
 import com.shortscap.app.theme.ThemePreferenceStore
@@ -70,6 +71,8 @@ import com.shortscap.app.web.WebRuleStatus
 import com.shortscap.app.web.WebsiteBlockingEngine
 import com.shortscap.app.web.PlaceholderBlockingEngine
 import com.shortscap.app.web.WebUsageRecord
+import com.shortscap.app.web.domain.BlockedDomainRepository
+import com.shortscap.app.web.vpn.VpnStateManager
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -511,14 +514,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // and WebRule data model do not change.
     private val blockingEngine: WebsiteBlockingEngine = PlaceholderBlockingEngine()
 
+    // Domain Blocking Foundation — the durable blocked-domain list the future
+    // Local VPN/DNS filtering engine consumes (web/domain/BlockedDomainRepository
+    // over the existing Room database). Lazily created: the database is only
+    // touched when the user actually blocks/unblocks a domain.
+    private val blockedDomainRepository: BlockedDomainRepository by lazy {
+        BlockedDomainRepository(ShortsCapDatabase.getInstance(getApplication()).blockedDomainDao())
+    }
+
     /**
-     * Propagates a rule change to the blocking engine. No-op with the
-     * placeholder engine (no fake blocking) — a real engine's apply/remove
+     * Propagates a rule change to the blocking foundation + engine.
+     *
+     * The BLOCKED/ALLOWED transition is persisted to [blockedDomainRepository]
+     * (normalized, duplicate-safe — the data the future VPN/DNS engine reads),
+     * and mirrored to the blocking engine. With the placeholder engine the
+     * engine call is a no-op (no fake blocking); a real engine's apply/remove
      * is async, so this is fire-and-forget; failures are non-fatal because
      * the local rule list remains the source of truth for the UI.
      */
     private fun pushRuleToEngine(domain: String, status: WebRuleStatus) {
         viewModelScope.launch {
+            when (status) {
+                WebRuleStatus.BLOCKED -> blockedDomainRepository.add(domain)
+                WebRuleStatus.ALLOWED -> blockedDomainRepository.remove(domain)
+            }
+            // Push the latest rules into the running Local VPN filter engine
+            // (Phase 2) so a block/unblock takes effect immediately; when the
+            // VPN is off the rules are simply reloaded at the next start.
+            VpnStateManager.refreshBlockedDomains(getApplication())
             val result = when (status) {
                 WebRuleStatus.BLOCKED -> blockingEngine.applyBlock(domain)
                 WebRuleStatus.ALLOWED -> blockingEngine.removeBlock(domain)
