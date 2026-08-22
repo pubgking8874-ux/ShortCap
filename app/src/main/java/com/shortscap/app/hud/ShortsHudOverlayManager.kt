@@ -2,10 +2,22 @@ package com.shortscap.app.hud
 
 import android.content.Context
 import android.graphics.PixelFormat
+import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.shortscap.app.theme.ThemePreferenceStore
 
 /**
@@ -53,6 +65,16 @@ object ShortsHudOverlayManager {
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
 
         val view = ComposeView(context).apply {
+            // System overlays have no Activity in the view tree, so ComposeView
+            // cannot find ViewTreeLifecycleOwner. Supply one explicitly.
+            val overlayLifecycle = OverlayLifecycleOwner()
+            setViewTreeLifecycleOwner(overlayLifecycle)
+            setViewTreeViewModelStoreOwner(overlayLifecycle)
+            setViewTreeSavedStateRegistryOwner(overlayLifecycle)
+            overlayLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            overlayLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            overlayLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+
             setContent {
                 // The HUD respects the global ShortsCap theme (dark / light /
                 // system) — read from the same store the app uses.
@@ -130,6 +152,26 @@ object ShortsHudOverlayManager {
         uiState?.let { it.visible = false }
         uiState = null
         if (wm != null) runCatching { wm.removeView(view) }
+    }
+
+    /**
+     * Minimal lifecycle owner for ComposeView in system overlay windows.
+     * Overlays have no Activity in the view tree, so ComposeView cannot find
+     * ViewTreeLifecycleOwner. This provides the three owners Compose needs.
+     */    private class OverlayLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+        private val lifecycleRegistry = LifecycleRegistry(this)
+        private val vmStore = ViewModelStore()
+        private val savedStateRegistryController = SavedStateRegistryController.create(this)
+
+        init { savedStateRegistryController.performRestore(null) }
+
+        override val lifecycle: Lifecycle get() = lifecycleRegistry
+        override val viewModelStore: ViewModelStore get() = vmStore
+        override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+
+        fun handleLifecycleEvent(event: Lifecycle.Event) {
+            lifecycleRegistry.handleLifecycleEvent(event)
+        }
     }
 
     /**

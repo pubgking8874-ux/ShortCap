@@ -1018,10 +1018,12 @@ APIs (which now accept `platform` / `surface` per Phase 11A).
   Moj, X, LinkedIn (+ UNKNOWN). **Surfaces:** YouTube Shorts, Instagram
   Reels, Facebook Reels, TikTok short feed, Snapchat Spotlight, X short
   video, LinkedIn short video, Moj short video (+ UNKNOWN).
-- **Honest detection status:** with the current signal set, only the YouTube
-  Shorts surface is positively detected (via its window class). All other
-  platforms report UNKNOWN/low confidence and are NEVER counted — no
-  fabricated detections.
+- **Honest detection status:** YouTube Shorts is positively detected via its
+  window class (with a safe class-name fallback for version/device currency
+  gaps). All other platforms are countable only with observed scroll
+  interaction (`TYPE_VIEW_SCROLLED`) + the ≥3s engagement rule — no
+  fabricated detections, and watching a single video without browsing the
+  feed is not counted on those platforms.
 - **Counting granularity:** each continuous foreground session on a
   short-form surface counts as ONE Short (window-state events cannot see
   individual swipes), so duration-based usage stays accurate while per-short
@@ -1988,10 +1990,12 @@ the existing accessibility/monitoring pipeline.
 
 ### Honest limitations
 
-With the current signal set only the YouTube Shorts surface is positively
-detected (window-class based); other platforms report UNKNOWN and never
-trigger the HUD. The HUD's count reflects the pipeline's counted total
-(session-level, per the existing 3–5 second rule — unchanged).
+YouTube Shorts is positively detected via its window class (with a safe
+class-name fallback); other platforms trigger the HUD only with observed
+scroll interaction + the ≥3s engagement rule (watching a single video
+without browsing the feed does not). The HUD's count reflects the
+pipeline's counted total (session-level, per the existing 3–5 second rule —
+unchanged).
 
 ### Verification
 
@@ -2083,13 +2087,16 @@ retained after counting so future reports can break usage down per platform.
 ### Current detection capability (honest)
 
 - **Fully reliable today:** nothing is claimed as 100% accurate.
-- **Surface-positive only for YouTube Shorts** (activity-class signal).
-- **All other platforms:** platform identity is known (package-based), the
-  surface is UNKNOWN and nothing is counted — until future interaction/UI
-  signal sources raise confidence.
+- **Surface-positive for YouTube Shorts** (activity-class signal, with a
+  safe class-name fallback).
+- **All other platforms:** platform identity is known (package-based); the
+  surface becomes countable only with scroll-interaction evidence
+  (`TYPE_VIEW_SCROLLED`) combined with the ≥3s engagement rule — confidence
+  0.55–0.75 by scroll count.
 - The accessibility service remains privacy-minimal: it observes only
-  `TYPE_WINDOW_STATE_CHANGED` (foreground package), never window content,
-  and performs no synthetic interaction.
+  `TYPE_WINDOW_STATE_CHANGED` (foreground package) and `TYPE_VIEW_SCROLLED`
+  (package metadata only), never window content, and performs no synthetic
+  interaction.
 
 ### Backend as persistence / synchronization layer
 

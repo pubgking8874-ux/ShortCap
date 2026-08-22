@@ -1,47 +1,26 @@
 package com.shortscap.app.shorts
 
+import android.util.Log
 import com.shortscap.app.monitoring.MonitoringEventHub
+import com.shortscap.app.monitoring.WindowContentEvidence
 
 /**
- * Connects the existing Android monitoring pipeline to the cross-platform
- * Shorts detection architecture (Phase 11B).
+ * Shorts monitoring pipeline with a simplified per-Short session state machine.
  *
- * Flow:
+ * States:
+ *   NO_SESSION → WATCHING → QUALIFIED → (counted on scroll) → NO_SESSION
+ *                                 ↑
+ *                          (scroll before qualify → discard → NO_SESSION)
  *
- *   MonitoringEventHub
- *     -> ShortPlatformRegistry (package -> adapter)
- *     -> ShortPlatformAdapter.detect()
- *     -> ShortDetectionResult
- *     -> ShortUsageAggregator (3–5 second rule)
- *     -> ShortsBudgetTracker (ONE global budget across platforms)
- *     -> ShortsLocalStore (local usage/event records -> future sync layer)
- *
- * It is a PASSIVE subscriber: the accessibility service keeps observing
- * window-state events (package + window-class metadata only, no content) and
- * this pipeline classifies them. Monitoring, detection and aggregation stay
- * separate responsibilities — MonitoringService never owns Shorts counting,
- * and the detector never owns the counter.
- *
- * Honest limitations: with the current signal set, only the YouTube Shorts
- * surface is positively detected (via its window class); all other platforms
- * report UNKNOWN and are never counted. Each continuous foreground session
- * on a short-form surface counts as ONE Short (window-state events cannot
- * see individual swipes), so duration-based usage stays accurate while
- * per-short counts are session-level. The 3–5 second rule still applies:
- * a context left before ~2s is never counted.
+ * The fundamental unit is ONE INDIVIDUAL SHORT/REEL.
+ * The timer belongs to the individual Short, not the application session.
+ * One scroll = one Short boundary. Content changes are harmless.
  */
 class ShortsMonitoringPipeline(
     private val registry: ShortPlatformRegistry = ShortPlatformRegistry,
     private val aggregator: ShortUsageAggregator = DefaultShortUsageAggregator(),
     private val budget: ShortsBudgetTracker = ShortsBudgetTracker(),
     private val store: ShortsLocalStore = InMemoryShortsLocalStore(),
-    /**
-     * P1-5: the authoritative control engine fed with every VALID Short
-     * (the aggregator already applied the 3–5 second rule). The engine owns
-     * the 24-hour count/limit/warning/expiry lifecycle and persists it;
-     * detection and counting stay separate. Null keeps the pipeline
-     * standalone for tests.
-     */
     private val controlEngine: ShortsControlEngine? = null,
     private val detect: (ShortDetectionSignals) -> ShortDetectionResult = { signals ->
         registry.detect(signals)
@@ -49,101 +28,126 @@ class ShortsMonitoringPipeline(
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : MonitoringEventHub.MonitoringEventListener {
 
-    /** The window context currently in the foreground (surface-level). */
+    private enum class SessionState {
+        NO_SESSION,
+        WATCHING,
+        QUALIFIED,
+    }
+
     private data class ActiveContext(
         val packageName: String,
         val activityClassName: String?,
         val startedAt: Long,
+        val interactionCount: Int = 0,
+        val contentEvidence: WindowContentEvidence = WindowContentEvidence(),
+        val lastDetectionResult: ShortDetectionResult = ShortDetectionResult.UNKNOWN,
+        val sessionState: SessionState = SessionState.NO_SESSION,
+        val shortStartedAt: Long = 0L,
+        val lastScrollAt: Long = 0L,
     )
 
     private var active: ActiveContext? = null
 
-    /** Surface-state listeners (e.g. the Shorts HUD — presentation only). */
     private val surfaceListeners = mutableListOf<ShortFormSurfaceListener>()
+    private var lastBroadcastKey: String? = null
+    private var lastBroadcastState: ShortFormSurfaceState? = null
 
     companion object {
-        /**
-         * The store the shared pipeline records into. P1-2: defaults to the
-         * in-memory store; [ShortsCapApp] installs the durable Room-backed
-         * store at app start so pending Shorts usage/events survive process
-         * death and are drained after restart.
-         */
         @Volatile
         private var sharedStore: ShortsLocalStore = InMemoryShortsLocalStore()
-
-        /**
-         * P1-5: the app-wide control engine installed at startup. The shared
-         * pipeline feeds every valid Short to it so the 24-hour cycle is the
-         * authoritative count for the HUD and Short Control page.
-         */
         @Volatile
         private var sharedControlEngine: ShortsControlEngine? = null
 
-        /** Installs the durable store before the shared pipeline is first used. */
-        fun installDurableStore(store: ShortsLocalStore) {
-            sharedStore = store
-        }
+        fun installDurableStore(store: ShortsLocalStore) { sharedStore = store }
+        fun installControlEngine(engine: ShortsControlEngine) { sharedControlEngine = engine }
 
-        /** P1-5: installs the authoritative control engine at app start. */
-        fun installControlEngine(engine: ShortsControlEngine) {
-            sharedControlEngine = engine
-        }
-
-        /**
-         * The shared app-wide pipeline, subscribed to [MonitoringEventHub]
-         * exactly once. Idempotent. Created lazily so the durable store
-         * installed at app start is picked up.
-         */
         private val shared by lazy {
             ShortsMonitoringPipeline(store = sharedStore, controlEngine = sharedControlEngine)
         }
-
-        /**
-         * The shared app-wide pipeline instance — the Shorts HUD (and any
-         * other presentation layer) subscribes to its surface-state
-         * notifications so it consumes the EXISTING detection results and
-         * never detects Shorts itself.
-         */
         val sharedInstance: ShortsMonitoringPipeline get() = shared
+        fun start() { MonitoringEventHub.subscribe(shared) }
 
-        /** Subscribe the shared pipeline to monitoring events (idempotent). */
-        fun start() {
-            MonitoringEventHub.subscribe(shared)
-        }
+        private const val SCROLL_DEBOUNCE_MILLIS = 500L
+
+        /** Our own package — overlay foreground events from this package are ignored. */
+        private const val OUR_PACKAGE_NAME = "com.shortscap.app"
     }
 
-    /**
-     * Registers [listener] for active short-form surface changes.
-     * Notified with a [ShortFormSurfaceState] when the foreground context is
-     * positively detected as short-form, and with `null` whenever the
-     * foreground context is not (or no longer) short-form.
-     */
     fun addSurfaceListener(listener: ShortFormSurfaceListener) {
         if (!surfaceListeners.contains(listener)) surfaceListeners.add(listener)
     }
-
-    /** Removes a previously registered [listener]. */
     fun removeSurfaceListener(listener: ShortFormSurfaceListener) {
         surfaceListeners.remove(listener)
     }
+
+    // =========================================================================
+    // Foreground app change
+    // =========================================================================
 
     override fun onForegroundAppChanged(packageName: String, activityClassName: String?) {
         val now = nowMillis()
         val previous = active
 
-        // Same surface still in the foreground (e.g. a repeated window-state
-        // event): extend the context WITHOUT re-evaluating — each context is
-        // finalized exactly once, preventing duplicate counting.
+        Log.i("SC_SHORT",
+            "SC_SHORT onForegroundAppChanged pkg=$packageName cls=$activityClassName " +
+                "prevPkg=${previous?.packageName} prevCls=${previous?.activityClassName} " +
+                "prevSession=${previous?.sessionState} prevShortStarted=${previous?.shortStartedAt}",
+        )
+
         if (previous != null &&
             previous.packageName == packageName &&
             previous.activityClassName == activityClassName
         ) {
+            Log.i("SC_SHORT", "SC_SHORT onForegroundAppChanged SAME_SURFACE_RETURN")
             return
         }
 
         if (previous != null) {
-            finalize(previous, now)
+            val samePackage = previous.packageName == packageName
+            val isShortsPlatform = registry.adapterFor(packageName).platform != ShortPlatform.UNKNOWN
+            val sessionInProgress = previous.sessionState == SessionState.WATCHING ||
+                previous.sessionState == SessionState.QUALIFIED
+
+            Log.i("SC_SHORT",
+                "SC_SHORT onForegroundAppChanged samePkg=$samePackage " +
+                    "isShortsPlatform=$isShortsPlatform sessionInProgress=$sessionInProgress " +
+                    "prevSession=${previous.sessionState}",
+            )
+
+            // Our own HUD overlay (TYPE_APPLICATION_OVERLAY) causes the accessibility
+            // service to report com.shortscap.app as the foreground package. This must
+            // NOT be treated as the user leaving the Shorts platform.
+            val isOurOverlay = packageName == OUR_PACKAGE_NAME &&
+                activityClassName?.contains("ComposeView") == true
+
+            if (sessionInProgress && (samePackage && isShortsPlatform || isOurOverlay)) {
+                Log.i("SC_SHORT",
+                    "SC_SHORT onForegroundAppChanged CARRY_FORWARD pkg=$packageName " +
+                        "cls=$activityClassName isOurOverlay=$isOurOverlay " +
+                        "sessionState=${previous.sessionState} shortStartedAt=${previous.shortStartedAt}",
+                )
+                active = previous.copy(activityClassName = activityClassName)
+                // Skip detect() for our own overlay — re-running detection with
+                // "ComposeView" as the activity class would lose the Shorts
+                // classification and trigger EVIDENCE_LOST. Content evidence
+                // events will continue to call notifySurfaceState() normally.
+                if (!isOurOverlay) {
+                    notifySurfaceState()
+                }
+                return
+            }
+
+            if (previous.sessionState != SessionState.NO_SESSION) {
+                Log.i("SC_SHORT",
+                    "SC_SHORT DISCARDED pkg=${previous.packageName} " +
+                        "reason=LEFT_PLATFORM sessionState=${previous.sessionState}",
+                )
+            }
         }
+
+        Log.i("SC_SHORT",
+            "SC_SHORT onForegroundAppChanged NEW_CONTEXT pkg=$packageName cls=$activityClassName",
+        )
         active = ActiveContext(
             packageName = packageName,
             activityClassName = activityClassName,
@@ -152,97 +156,296 @@ class ShortsMonitoringPipeline(
         notifySurfaceState()
     }
 
-    /**
-     * Broadcasts the CURRENT foreground context's short-form status to
-     * surface listeners. Detection only — the 3–5 second counting rule is
-     * applied separately by the aggregator on finalize; the HUD's visibility
-     * follows the detection result exactly (isShortForm with sufficient
-     * confidence), never the raw package list.
-     */
+    // =========================================================================
+    // Scroll
+    // =========================================================================
+
+    override fun onForegroundScrolled(packageName: String) {
+        val context = active ?: return
+        if (context.packageName != packageName) return
+
+        val now = nowMillis()
+        val timeSinceLastScroll = now - context.lastScrollAt
+
+        Log.i("SC_SHORT",
+            "SC_SHORT SCROLL_CHECK pkg=$packageName sessionState=${context.sessionState} " +
+                "shortStartedAt=${context.shortStartedAt} lastScrollAt=${context.lastScrollAt} " +
+                "timeSinceLastScroll=${timeSinceLastScroll}ms",
+        )
+
+        if (context.lastScrollAt > 0 && timeSinceLastScroll < SCROLL_DEBOUNCE_MILLIS) {
+            Log.i("SC_SHORT",
+                "SC_SHORT SCROLL_DEBOUNCED elapsed=${timeSinceLastScroll}ms " +
+                    "sessionState=${context.sessionState} pkg=$packageName",
+            )
+            active = context.copy(interactionCount = context.interactionCount + 1)
+            return
+        }
+
+        Log.i("SC_SHORT",
+            "SC_SHORT SCROLL pkg=$packageName sessionState=${context.sessionState} " +
+                "interactionCount=${context.interactionCount + 1}",
+        )
+
+        // Qualification check on scroll
+        var effectiveState = context.sessionState
+        if (effectiveState == SessionState.WATCHING && context.shortStartedAt > 0) {
+            val elapsed = now - context.shortStartedAt
+            Log.i("SC_SHORT",
+                "SC_SHORT ELAPSED elapsed=${elapsed}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
+                    "pkg=$packageName shortStartedAt=${context.shortStartedAt} now=$now",
+            )
+            if (elapsed >= SHORT_MIN_ENGAGEMENT_MILLIS) {
+                effectiveState = SessionState.QUALIFIED
+                Log.i("SC_SHORT",
+                    "SC_SHORT QUALIFIED pkg=$packageName " +
+                        "shortStartedAt=${context.shortStartedAt} elapsed=$elapsed " +
+                        "source=SCROLL_CHECK",
+                )
+            } else {
+                Log.i("SC_SHORT",
+                    "SC_SHORT QUALIFICATION_CHECK result=NOT_QUALIFIED elapsed=$elapsed " +
+                        "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} pkg=$packageName",
+                )
+            }
+        } else {
+            Log.i("SC_SHORT",
+                "SC_SHORT QUALIFICATION_CHECK result=SKIPPED state=$effectiveState " +
+                    "shortStartedAt=${context.shortStartedAt} pkg=$packageName",
+            )
+        }
+
+        when (effectiveState) {
+            SessionState.QUALIFIED -> {
+                val elapsed = now - context.shortStartedAt
+                Log.i("SC_SHORT",
+                    "SC_COUNT COUNTING pkg=$packageName shortStartedAt=${context.shortStartedAt} elapsed=$elapsed",
+                )
+                countShort(context, now)
+            }
+            SessionState.WATCHING -> {
+                val elapsed = now - context.shortStartedAt
+                Log.i("SC_SHORT",
+                    "SC_SHORT DISCARDED pkg=$packageName " +
+                        "reason=BELOW_MIN_TIME elapsed=$elapsed",
+                )
+            }
+            SessionState.NO_SESSION -> { /* nothing */ }
+        }
+
+        active = context.copy(
+            interactionCount = context.interactionCount + 1,
+            sessionState = SessionState.NO_SESSION,
+            shortStartedAt = 0L,
+            lastScrollAt = now,
+        )
+    }
+
+    // =========================================================================
+    // Content evidence
+    // =========================================================================
+
+    override fun onForegroundContentObserved(packageName: String, evidence: WindowContentEvidence) {
+        val context = active ?: return
+        if (context.packageName == packageName) {
+            Log.i("SC_SHORT",
+                "SC_SHORT onForegroundContentObserved pkg=$packageName " +
+                    "sessionState=${context.sessionState} shortStartedAt=${context.shortStartedAt} " +
+                    "classes=${evidence.nodeClasses.size} ids=${evidence.nodeViewIds.size}",
+            )
+            active = context.copy(contentEvidence = evidence)
+            notifySurfaceState()
+        }
+    }
+
+    // =========================================================================
+    // Detection + state machine
+    // =========================================================================
+
     private fun notifySurfaceState() {
         val context = active ?: return
+
+        Log.i("SC_SHORT",
+            "SC_SHORT notifySurfaceState pkg=${context.packageName} " +
+                "sessionState=${context.sessionState} shortStartedAt=${context.shortStartedAt} " +
+                "evidenceClasses=${context.contentEvidence.nodeClasses.size} " +
+                "evidenceIds=${context.contentEvidence.nodeViewIds.size}",
+        )
+
         val result = detect(
             ShortDetectionSignals(
                 packageName = context.packageName,
                 activityClassName = context.activityClassName,
                 foregroundDurationMillis = 0L,
+                interactionCount = context.interactionCount,
+                contentEvidence = context.contentEvidence,
             )
         )
-        val state = if (result.isShortForm && result.confidence >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD) {
+
+        val shortsDetected = result.isShortForm &&
+            result.confidence >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD
+
+        val now = nowMillis()
+        var newState = context.sessionState
+        var newShortStartedAt = context.shortStartedAt
+
+        if (shortsDetected) {
+            when (context.sessionState) {
+                SessionState.NO_SESSION -> {
+                    newShortStartedAt = now
+                    newState = SessionState.WATCHING
+                    Log.i("SC_SHORT",
+                        "SC_SHORT DETECTED pkg=${context.packageName} " +
+                            "platform=${result.platform} surface=${result.surface}",
+                    )
+                    Log.i("SC_SHORT",
+                        "SC_SHORT TIMER_STARTED pkg=${context.packageName} " +
+                            "shortStartedAt=$now",
+                    )
+                }
+                SessionState.WATCHING -> {
+                    val elapsed = now - context.shortStartedAt
+                    Log.i("SC_SHORT",
+                        "SC_SHORT notifySurfaceState WATCHING_CHECK elapsed=$elapsed " +
+                            "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} pkg=${context.packageName}",
+                    )
+                    if (elapsed >= SHORT_MIN_ENGAGEMENT_MILLIS &&
+                        newState != SessionState.QUALIFIED
+                    ) {
+                        newState = SessionState.QUALIFIED
+                        Log.i("SC_SHORT",
+                            "SC_SHORT QUALIFIED pkg=${context.packageName} " +
+                                "shortStartedAt=${context.shortStartedAt} elapsed=$elapsed " +
+                                "source=NOTIFY_CHECK",
+                        )
+                    }
+                }
+                SessionState.QUALIFIED -> { /* no-op */ }
+            }
+        } else {
+            when (context.sessionState) {
+                SessionState.WATCHING -> {
+                    val elapsed = now - context.shortStartedAt
+                    Log.i("SC_SHORT",
+                        "SC_SHORT DISCARDED pkg=${context.packageName} " +
+                            "reason=EVIDENCE_LOST elapsed=$elapsed",
+                    )
+                    newState = SessionState.NO_SESSION
+                    newShortStartedAt = 0L
+                }
+                SessionState.QUALIFIED -> {
+                    Log.i("SC_SHORT",
+                        "SC_SHORT SCROLL pkg=${context.packageName} " +
+                            "sessionState=QUALIFIED reason=EVIDENCE_LOST",
+                    )
+                    countShort(context, now)
+                    newState = SessionState.NO_SESSION
+                    newShortStartedAt = 0L
+                }
+                else -> { /* NO_SESSION */ }
+            }
+        }
+
+        val broadcastState = if (shortsDetected) {
             ShortFormSurfaceState(
                 platform = result.platform,
                 surface = result.surface,
                 confidence = result.confidence,
             )
-        } else {
-            null
-        }
-        surfaceListeners.toList().forEach { it.onShortFormSurfaceChanged(state) }
-    }
+        } else null
 
-    /**
-     * Classify the context that just ended: detect -> aggregate -> budget ->
-     * local record. Called exactly once per context (on transition).
-     */
-    private fun finalize(context: ActiveContext, now: Long) {
-        val elapsed = (now - context.startedAt).coerceAtLeast(0L)
-        val signals = ShortDetectionSignals(
-            packageName = context.packageName,
-            activityClassName = context.activityClassName,
-            foregroundDurationMillis = elapsed,
+        active = context.copy(
+            lastDetectionResult = result,
+            sessionState = newState,
+            shortStartedAt = newShortStartedAt,
         )
-        val result = detect(signals)
-        val update = aggregator.evaluate(result, signals)
-        budget.apply(update)
-        if (update.counted) {
-            // P1-5: the authoritative cycle consumes every valid Short. The
-            // candidate key is the context identity (package+class+start) so
-            // the engine can dedupe repeated callbacks; the 3–5s rule was
-            // already applied by the aggregator above.
-            controlEngine?.onShortCounted(
-                candidateKey = "${result.platform.name}:${result.surface.name}:${context.startedAt}",
-                occurredAt = context.startedAt,
-                durationMillis = update.durationMillis,
-                now = now,
-            )
-            store.recordUsage(
-                LocalShortsUsage(
-                    platform = update.platform,
-                    surface = update.surface,
-                    detectionMethod = update.detectionMethod,
-                    confidence = result.confidence,
-                    occurredAt = context.startedAt,
-                    durationMillis = update.durationMillis,
-                    countDelta = update.countDelta,
-                ),
-            )
-            store.recordEvent(
-                LocalShortsEvent(
-                    eventType = "SHORT_COUNTED",
-                    platform = update.platform,
-                    surface = update.surface,
-                    detectionMethod = update.detectionMethod,
-                    confidence = result.confidence,
-                    occurredAt = context.startedAt,
-                    durationMillis = update.durationMillis,
+
+        val key = "${context.packageName}|${context.activityClassName}|${context.startedAt}"
+        if (broadcastState == lastBroadcastState && key == lastBroadcastKey) return
+        lastBroadcastKey = key
+        lastBroadcastState = broadcastState
+        surfaceListeners.toList().forEach { it.onShortFormSurfaceChanged(broadcastState) }
+    }
+
+    // =========================================================================
+    // Count
+    // =========================================================================
+
+    private fun countShort(context: ActiveContext, now: Long) {
+        val sessionStart = if (context.shortStartedAt > 0) context.shortStartedAt else context.startedAt
+        val elapsed = (now - sessionStart).coerceAtLeast(0L)
+
+        // Use the already-confirmed detection result from the active session.
+        // Re-running detect() at count time can return UNKNOWN / low confidence
+        // if content evidence is stale or temporarily missing (e.g. during scroll
+        // transition). The session was already confirmed as Shorts when it
+        // transitioned to WATCHING — preserve that metadata.
+        val result = if (context.lastDetectionResult.isShortForm &&
+            context.lastDetectionResult.confidence >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD
+        ) {
+            context.lastDetectionResult
+        } else {
+            // Fallback: only re-detect if no confirmed result was ever stored
+            detect(
+                ShortDetectionSignals(
+                    packageName = context.packageName,
+                    activityClassName = context.activityClassName,
+                    foregroundDurationMillis = elapsed,
+                    interactionCount = context.interactionCount,
+                    contentEvidence = context.contentEvidence,
                 ),
             )
         }
+
+        Log.i("SC_SHORT",
+            "SC_SHORT COUNTED pkg=${context.packageName} " +
+                "platform=${result.platform} surface=${result.surface} " +
+                "duration=${elapsed}ms confidence=${result.confidence}",
+        )
+
+        controlEngine?.onShortCounted(
+            candidateKey = "${result.platform.name}:${result.surface.name}:${sessionStart}",
+            occurredAt = sessionStart,
+            durationMillis = elapsed,
+            now = now,
+        )
+
+        val engineState = controlEngine?.currentState()
+        if (engineState != null) {
+            Log.i("SC_SHORT",
+                "SC_SHORT LIMIT_CHECK count=${engineState.currentCount} " +
+                    "limit=${engineState.limitCount} reached=${engineState.limitReached} " +
+                    "remaining=${engineState.remainingCount}",
+            )
+        }
+
+        store.recordUsage(
+            LocalShortsUsage(
+                platform = result.platform,
+                surface = result.surface,
+                detectionMethod = result.detectionMethod,
+                confidence = result.confidence,
+                occurredAt = sessionStart,
+                durationMillis = elapsed,
+                countDelta = 1,
+            ),
+        )
+        store.recordEvent(
+            LocalShortsEvent(
+                eventType = "SHORT_COUNTED",
+                platform = result.platform,
+                surface = result.surface,
+                detectionMethod = result.detectionMethod,
+                confidence = result.confidence,
+                occurredAt = sessionStart,
+                durationMillis = elapsed,
+            ),
+        )
     }
 
-    /** Current global budget totals (read-only view for the UI/debugging). */
     fun currentBudget(): ShortsBudgetTracker = budget
-
-    /** Local records pending sync (read-only view). */
     fun localStore(): ShortsLocalStore = store
 
-    /**
-     * Phase 16 — drains the local Shorts store into the backend sync queue
-     * (POST /shorts/usage/sync + /shorts/events) and returns the number of
-     * records enqueued. Called by the app when the network is available; the
-     * local records stay until a sync is confirmed (offline-first — nothing
-     * is discarded). [deviceId] must reference the user's backend device.
-     */
     fun drainToSync(deviceId: Int): Int =
         com.shortscap.app.sync.SyncCoordinator.drainShortsLocalStore(store, deviceId)
 }

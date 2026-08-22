@@ -45,6 +45,26 @@ object MonitoringEventHub {
          * thread.
          */
         fun onForegroundAppChanged(packageName: String, activityClassName: String?)
+
+        /**
+         * An interaction was observed in the foreground app: the user scrolled
+         * a view (from a TYPE_VIEW_SCROLLED accessibility event). Package-only
+         * metadata, never content. Default no-op — only listeners that need
+         * the interaction signal (e.g. the Shorts detector, to distinguish
+         * a short-form feed from a static screen) override it.
+         */
+        fun onForegroundScrolled(packageName: String) {}
+
+        /**
+         * Structural content evidence was observed in [packageName]'s ACTIVE
+         * window (see [WindowContentEvidence] — node class names and resource
+         * ids only, deduplicated and bounded, never user content). Default
+         * no-op — only listeners that need window-structure signals (e.g. the
+         * Shorts detector, to tell the Shorts player apart from Home / Watch /
+         * Live / Search inside a shared YouTube activity) override it.
+         * Called on the accessibility service's thread.
+         */
+        fun onForegroundContentObserved(packageName: String, evidence: WindowContentEvidence) {}
     }
 
     // Copy-on-write: safe for concurrent reads while the service dispatches.
@@ -66,5 +86,22 @@ object MonitoringEventHub {
      */
     fun dispatchForegroundAppChanged(packageName: String, activityClassName: String?) {
         listeners.forEach { it.onForegroundAppChanged(packageName, activityClassName) }
+    }
+
+    /**
+     * Dispatches a scroll interaction in [packageName] to every subscriber.
+     * Called by the Accessibility Service; safe to call from any thread.
+     */
+    fun dispatchForegroundScrolled(packageName: String) {
+        listeners.forEach { it.onForegroundScrolled(packageName) }
+    }
+
+    /**
+     * Dispatches structural window evidence for [packageName] to every
+     * subscriber. Called by the Accessibility Service; safe to call from any
+     * thread.
+     */
+    fun dispatchForegroundContentObserved(packageName: String, evidence: WindowContentEvidence) {
+        listeners.forEach { it.onForegroundContentObserved(packageName, evidence) }
     }
 }

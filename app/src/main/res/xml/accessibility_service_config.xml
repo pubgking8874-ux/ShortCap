@@ -1,17 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    ShortsCap Accessibility Service configuration — MINIMUM capabilities only.
+    ShortsCap Accessibility Service configuration — minimum capabilities only.
 
-    The service is a monitoring component: it only needs TYPE_WINDOW_STATE_CHANGED
-    events to know which app is currently in the foreground. It deliberately
-    does NOT request:
-      - window content retrieval (canRetrieveWindowContent = false)
-      - touch exploration / gestures / key filtering / magnification
-    → no UI automation, no reading or collecting content from other apps.
+    The service is a monitoring component. It needs TYPE_WINDOW_STATE_CHANGED
+    events to know which app is currently in the foreground, plus
+    TYPE_VIEW_SCROLLED as an ADDITIONAL interaction signal so the Shorts
+    detector can tell a scrolling short-form feed apart from a static screen.
+
+    Phase 13.2 (on-device evidence): the vivo device runs YouTube Shorts
+    inside the generic `watchwhile.MainActivity` window — the SAME window as
+    Home / Watch / Live / Search — and delivers NO TYPE_VIEW_SCROLLED events,
+    so window-level metadata alone cannot identify the Shorts surface.
+    canRetrieveWindowContent is therefore enabled (the ONLY content-related
+    capability requested): it lets the service read the ACTIVE WINDOW'S
+    STRUCTURE (node class names + view resource ids) for the YouTube package
+    only, in a bounded + throttled walk. It is still NOT a UI-automation
+    service: no touch exploration, gestures, key filtering, magnification, and
+    it never clicks/taps/swipes/scrolls in any app.
+
+    The extra event types (viewClicked / viewSelected / viewTextChanged /
+    touchInteractionStart / touchInteractionEnd / windowContentChanged) are
+    registered so the Phase A SC_YT_DIAG diagnostics can observe which events
+    YouTube actually delivers while a Short is playing; only
+    windowStateChanged + viewScrolled + windowContentChanged (YouTube only)
+    feed detection.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeViewScrolled|typeViewClicked|typeViewSelected|typeViewTextChanged|typeWindowContentChanged|typeTouchInteractionStart|typeTouchInteractionEnd"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"
-    android:canRetrieveWindowContent="false"
+    android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description" />

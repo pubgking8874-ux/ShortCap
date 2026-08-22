@@ -5,12 +5,10 @@ package com.shortscap.app.shorts
  *
  * ShareChat (package `com.sharechat.android`) is a predominantly short-form
  * app, but it also hosts live streams, chats and other long-form content, so
- * even here "app is open" is not proof of a Short. Mirroring [MojAdapter],
- * the adapter identifies the platform with medium confidence and keeps the
- * surface UNKNOWN; a future interaction/UI signal source can confirm
- * SHARE_CHAT short video without changing the aggregator. Conservative by
- * design — the platform is recognized (so it appears in Short Applications
- * discovery), but no Short is ever counted from package identity alone.
+ * even here "app is open" is not proof of a Short. The adapter combines the
+ * signals now available: recognized platform (package) + scroll interaction
+ * in the foreground context (TYPE_VIEW_SCROLLED) + the existing ≥3 second
+ * engagement rule (aggregator). No scroll evidence → UNKNOWN, never counted.
  */
 object ShareChatShortsAdapter : ShortPlatformAdapter {
 
@@ -18,11 +16,9 @@ object ShareChatShortsAdapter : ShortPlatformAdapter {
     override val packageNames: Set<String> = setOf("com.sharechat.android")
 
     override fun detect(signals: ShortDetectionSignals): ShortDetectionResult =
-        ShortDetectionResult(
-            platform = ShortPlatform.SHARE_CHAT,
-            surface = ShortSurface.UNKNOWN,
-            isShortForm = false,
-            confidence = 0.3f,
-            detectionMethod = DetectionMethod.PLATFORM_ADAPTER,
-        )
+        if (scrollInteractionConfidence(signals.interactionCount) >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD) {
+            scrollDetectedResult(ShortPlatform.SHARE_CHAT, ShortSurface.SHARE_CHAT_SHORT_VIDEO, signals.interactionCount)
+        } else {
+            unconfirmedResult(ShortPlatform.SHARE_CHAT, 0.3f)
+        }
 }

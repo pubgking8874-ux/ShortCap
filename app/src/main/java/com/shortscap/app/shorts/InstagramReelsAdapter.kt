@@ -3,12 +3,17 @@ package com.shortscap.app.shorts
 /**
  * Instagram Reels adapter.
  *
- * Reels is ONE surface inside the main Instagram app, alongside Feed,
- * Stories, DM, Explore and Live. With the current package-only signals the
- * surface cannot be separated, so the adapter is conservative: platform is
- * identified, surface stays UNKNOWN and nothing is classified as short-form
- * yet. A future interaction/UI signal source can raise this confidence
- * without changing the aggregator.
+ * Reels is ONE surface inside the main Instagram app (Feed, Stories, DM,
+ * Explore, Live), so package identity alone never proves a Reel is being
+ * watched. The adapter combines the signals now available:
+ *
+ *  - recognized platform (package, always true here);
+ *  - scroll interaction observed in the foreground context
+ *    (TYPE_VIEW_SCROLLED — the Reels feed is a vertical scroll surface);
+ *  - the existing ≥3 second engagement rule (applied by the aggregator).
+ *
+ * No scroll evidence → UNKNOWN, never counted (watching a single video
+ * without browsing the feed is not counted — documented limitation).
  */
 object InstagramReelsAdapter : ShortPlatformAdapter {
 
@@ -16,11 +21,9 @@ object InstagramReelsAdapter : ShortPlatformAdapter {
     override val packageNames: Set<String> = setOf("com.instagram.android")
 
     override fun detect(signals: ShortDetectionSignals): ShortDetectionResult =
-        ShortDetectionResult(
-            platform = ShortPlatform.INSTAGRAM,
-            surface = ShortSurface.UNKNOWN,
-            isShortForm = false,
-            confidence = 0.15f,
-            detectionMethod = DetectionMethod.PLATFORM_ADAPTER,
-        )
+        if (scrollInteractionConfidence(signals.interactionCount) >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD) {
+            scrollDetectedResult(ShortPlatform.INSTAGRAM, ShortSurface.INSTAGRAM_REELS, signals.interactionCount)
+        } else {
+            unconfirmedResult(ShortPlatform.INSTAGRAM, 0.15f)
+        }
 }

@@ -19,5 +19,6 @@ enum class ShortSurface {
     X_SHORT_VIDEO,
     LINKEDIN_SHORT_VIDEO,
     MOJ_SHORT_VIDEO,
+    SHARE_CHAT_SHORT_VIDEO,
     UNKNOWN,
 }

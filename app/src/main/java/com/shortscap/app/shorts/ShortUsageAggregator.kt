@@ -12,7 +12,7 @@ package com.shortscap.app.shorts
  * configurable without touching call sites.
  */
 const val SHORT_SWIPE_RULE_MILLIS = 2_000L
-const val SHORT_MIN_ENGAGEMENT_MILLIS = 3_000L
+const val SHORT_MIN_ENGAGEMENT_MILLIS = 2_000L
 const val SHORT_MAX_ENGAGEMENT_WINDOW_MILLIS = 5_000L
 
 /** One accumulation decision for a single detection. */

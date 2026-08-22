@@ -7,8 +7,10 @@ package com.shortscap.app.shorts
  * ([com.shortscap.app.model.ShortVideoPlatform] `facebook_reels`), so it
  * gets a first-class adapter rather than falling through to the generic
  * fallback. Reels is one surface inside the main Facebook app (Feed,
- * Stories, Watch, Groups, …), so detection is conservative: platform
- * identified, surface UNKNOWN, nothing counted as short-form yet.
+ * Stories, Watch, Groups, …). The adapter combines the signals now
+ * available: recognized platform (package) + scroll interaction in the
+ * foreground context (TYPE_VIEW_SCROLLED) + the existing ≥3 second
+ * engagement rule (aggregator). No scroll evidence → UNKNOWN, never counted.
  */
 object FacebookReelsAdapter : ShortPlatformAdapter {
 
@@ -16,11 +18,9 @@ object FacebookReelsAdapter : ShortPlatformAdapter {
     override val packageNames: Set<String> = setOf("com.facebook.katana")
 
     override fun detect(signals: ShortDetectionSignals): ShortDetectionResult =
-        ShortDetectionResult(
-            platform = ShortPlatform.FACEBOOK,
-            surface = ShortSurface.UNKNOWN,
-            isShortForm = false,
-            confidence = 0.15f,
-            detectionMethod = DetectionMethod.PLATFORM_ADAPTER,
-        )
+        if (scrollInteractionConfidence(signals.interactionCount) >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD) {
+            scrollDetectedResult(ShortPlatform.FACEBOOK, ShortSurface.FACEBOOK_REELS, signals.interactionCount)
+        } else {
+            unconfirmedResult(ShortPlatform.FACEBOOK, 0.15f)
+        }
 }

@@ -55,6 +55,10 @@ android {
             // Robolectric needs the merged manifest/resources for Room tests
             // (P1-2 durable sync queue persistence/reload coverage).
             isIncludeAndroidResources = true
+            // TEMP-DIAG: the Shorts pipeline diagnostic logs use
+            // android.util.Log; local JVM tests must return defaults instead
+            // of throwing on android.* calls (Log is mocked to a no-op).
+            isReturnDefaultValues = true
         }
     }
 }

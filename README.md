@@ -305,6 +305,95 @@ All work below was performed on **July 31, 2026** in the `ShortCap` working copy
 - **"#" removed** from the user's rank — the status card now reads **Your Rank / 12** (no prefix). "Your Rank" and "Your Score" labels are unchanged.
 - **Subtle one-shot trophy animation** on the Rank screen header: soft scale-in with a gentle bounce/settle (0.85 → 1.08 → 1.00) plus a faint glow pulse. It plays **once per Rank screen entry** (not on recomposition, never loops, no per-frame work) using lightweight native Compose animation — works offline, respects the existing theme colors.
 
+### Phase 9 — Accessibility throttle fix for Shorts detection *(Aug 22, 2026)*
+**Files:** `ShortsCapAccessibilityService.kt`
+
+- **Root cause:** The YouTube `WINDOW_CONTENT_CHANGED` structural-walk throttle (`YOUTUBE_WALK_THROTTLE_MILLIS`) was set to **500 ms**. Because `WINDOW_CONTENT_CHANGED` events arrive at ~30 Hz (~33 ms apart), roughly 15 out of every 16 events were skipped. The `WINDOW_STATE_CHANGED` initial walk dispatched evidence once, but if the Shorts player had not loaded yet (common on slower devices), that evidence lacked Shorts signals. The next evidence update was delayed until the next walk after 500 ms. On devices where the Shorts player loads quickly but the `WINDOW_STATE_CHANGED` event fires early, the 500 ms gap meant `finalize()` used stale or empty evidence — Shorts detection returned `isShortForm = false` or low confidence, so the aggregator never counted them.
+- **Fix:** Reduced `YOUTUBE_WALK_THROTTLE_MILLIS` from **500 ms → 150 ms**. Walks now happen roughly every 150 ms instead of every 500 ms, so fresh Shorts player evidence reaches the pipeline within ~150 ms of the player loading. The throttle is preserved (not removed) to prevent unbounded tree walks at full 30 Hz, keeping the accessibility event chain responsive.
+- **Impact:** Shorts detection and counting should now reliably trigger for YouTube Shorts sessions on all devices, including the vivo device that delivers no scroll events and relies entirely on structural window evidence.
+
+### Phase 10 — Shorts context carry-forward for late content evidence *(Aug 22, 2026)*
+**Files:** `ShortsMonitoringPipeline.kt`
+
+- **Root cause:** When YouTube transitions between internal activities (same package, different `activityClassName`), `onForegroundAppChanged` finalizes the previous context immediately. If the Shorts player evidence hasn't loaded into the accessibility tree yet at that moment (asynchronous YouTube Shorts player loading), `finalize()` runs `detect()` with stale/empty `contentEvidence` → `isShortForm=false, surface=UNKNOWN, confidence=0.2` → aggregator does not count. The Shorts player content evidence arrives *after* finalize for the new context, but the original context (with accumulated scrolls and elapsed time) is already lost.
+- **Fix:** Added `lastDetectionResult` field to `ActiveContext` so the pipeline tracks the latest surface classification. In `onForegroundAppChanged`, when the previous and new contexts are the same Shorts-platform package (e.g. YouTube) and the previous context's surface is still `UNKNOWN` (not yet classified), the context is **carried forward** — the `activityClassName` is updated but `startedAt`, `interactionCount`, `contentEvidence`, and all accumulated state are preserved. The context is only finalized when: (a) the user leaves the package entirely, (b) the surface is confirmed as `YOUTUBE_SHORTS` (Shorts → Home transition correctly finalizes the Shorts session), or (c) a non-UNKNOWN classification is reached.
+- **Why this fixes the log sequence:** The YouTube context with 8 scrolls and 5176 ms elapsed was finalized as `isShortForm=false` because the Shorts player hadn't loaded yet. With carry-forward, that context stays alive through internal YouTube transitions. When content evidence arrives with Shorts player classes (`classes=14`), `notifySurfaceState()` detects `isShortForm=true, surface=YOUTUBE_SHORTS`. When the user eventually leaves YouTube, `finalize()` runs with the latest classification → Shorts is counted with the original elapsed time and interaction count preserved.
+- **Impact:** Late-arriving Shorts content evidence now updates the active context before aggregation. Existing 2–5 second qualification rules, 24-hour enforcement architecture, and all other logic are unchanged. No duplicate counting — the existing dedup logic (same package + class early return, key-scoped broadcast dedup) still applies.
+
+### Phase 11 — Deterministic Shorts session state machine *(Aug 22, 2026)*
+**Files:** `ShortsMonitoringPipeline.kt`
+
+- **Problem:** The pipeline had no explicit session state. Each `WINDOW_CONTENT_CHANGED` / `CONTENT_EVIDENCE` / `SURFACE` event could trigger re-detection without session tracking. Scrolls didn't create new sessions (multiple Shorts in one YouTube session shared one `ActiveContext`). `finalize()` used `context.startedAt` (when YouTube opened) instead of when the Short actually started — giving wrong durations for multi-Short sessions. Rapid consecutive scroll events had no debounce, risking duplicate session transitions.
+
+- **State machine added:** A `SessionState` enum (`NO_SESSION → DETECTED → ACTIVE → QUALIFIED`) is now tracked per `ActiveContext` with explicit transitions:
+  - `NO_SESSION → DETECTED`: YouTube opened, waiting for Shorts evidence
+  - `DETECTED → ACTIVE`: Shorts player confirmed via content evidence, timer starts
+  - `ACTIVE → QUALIFIED`: Timer reached `SHORT_MIN_ENGAGEMENT_MILLIS` (3s, same constant as aggregator)
+  - `QUALIFIED → count + NO_SESSION`: User scrolls or leaves → counted (+1)
+  - `ACTIVE → NO_SESSION`: User scrolls or leaves before qualification → discarded
+
+- **Scroll as session boundary:** `onForegroundScrolled()` now closes the current session on scroll. QUALIFIED sessions are counted; ACTIVE sessions are discarded. The session resets to `NO_SESSION` so the next Shorts evidence starts a fresh session. This means multiple Shorts in one YouTube session are counted independently.
+
+- **Scroll debounce (500ms):** Consecutive `TYPE_VIEW_SCROLLED` events within 500ms are treated as a single swipe/transition. This prevents one physical swipe (which fires multiple scroll events) from creating duplicate sessions.
+
+- **Session-scoped timing:** `finalize()` now uses `sessionStartedAt` (when Shorts was detected) instead of `startedAt` (when YouTube was opened) for the engagement duration. Each Short in a multi-Short session gets its own independent duration measurement.
+
+- **Duplicate counting prevention:** `finalize()` checks `sessionState != NO_SESSION` before processing — if the session was already counted (e.g., by a scroll), the call is a no-op. The aggregator's existing 3–5s rule remains the authoritative qualification gate.
+
+- **State machine diagnostics:** New `SC_STATE` and `SC_COUNT` log tags provide clear visibility into state transitions:
+  - `SC_STATE state=SHORT_ACTIVE` — session started
+  - `SC_STATE state=QUALIFIED` — timer threshold reached
+  - `SC_STATE event=SCROLL` — scroll received with current state
+  - `SC_STATE state=COUNTING` — qualified session being counted
+  - `SC_STATE state=DISCARDED` — session discarded (reason: `SCROLL_BEFORE_QUALIFY` or `EVIDENCE_LOST`)
+  - `SC_STATE action=SCROLL_DEBOUNDED` — rapid scroll suppressed
+  - `SC_COUNT action=COUNTED` — Short successfully counted with platform/surface/duration
+  - `SC_COUNT action=DISCARDED` — Short not counted (reason: `NOT_SHORTS` or `UNDER_DURATION`)
+
+- **What was NOT changed:** Detection heuristics (`YouTubeShortsAdapter`), aggregator rules (`DefaultShortUsageAggregator`), 24-hour enforcement (`ShortsControlEngine`), UI, permissions, authentication, navigation, database structure, or any unrelated monitoring features.
+
+### Phase 12 — Shorts session state machine fixes: DETECTED state, finalization, carry-forward *(Aug 22, 2026)*
+**Files:** `ShortsMonitoringPipeline.kt`
+
+Five bugs found by tracing the exact test sequence (Open Home → Enter Shorts → wait 4s → scroll → wait 1s → scroll → wait 4s → scroll → count=2) through the Phase 11 code:
+
+1. **DETECTED state was skipped:** `notifySurfaceState()` transitioned `NO_SESSION → ACTIVE` in one step. The user's state machine requires `NO_SESSION → DETECTED → ACTIVE` (DETECTED = Shorts first detected; ACTIVE = Shorts content confirmed, timer running). Fixed: `NO_SESSION` now transitions to `DETECTED` (sets `sessionStartedAt`); the next `notifySurfaceState()` call transitions `DETECTED → ACTIVE`.
+
+2. **DETECTED not handled on scroll:** `onForegroundScrolled()` only handled `QUALIFIED` and `ACTIVE`. If the user scrolled during `DETECTED`, it fell to the `else` branch and did nothing. Fixed: `DETECTED` is now grouped with `ACTIVE` in the discard case.
+
+3. **`finalize()` re-ran the aggregator instead of trusting the state machine:** The state machine already confirmed qualification (`QUALIFIED`), but `finalize()` re-detected and re-evaluated via the aggregator — which could return `not counted` if the content evidence changed between qualification and finalization. Fixed: `finalize()` now counts unconditionally when `sessionState == QUALIFIED` and discards unconditionally when `sessionState` is `ACTIVE` or `DETECTED`.
+
+4. **YouTube internal `WINDOW_STATE_CHANGED` killed active sessions:** When YouTube fires a `WINDOW_STATE_CHANGED` with a different activity class (still on Shorts), `onForegroundAppChanged()` finalized the previous context — ending an in-progress session prematurely. Fixed: carry-forward now also applies when `sessionState` is `DETECTED`, `ACTIVE`, or `QUALIFIED` (not just when surface is UNKNOWN).
+
+5. **QUALIFIED sessions stuck forever on evidence loss:** When Shorts evidence was lost (e.g. YouTube navigated to Home) while the session was `QUALIFIED`, the session stayed at `QUALIFIED` with no path to finalization. Fixed: `notifySurfaceState()` now detects `QUALIFIED + !shortsDetected` and immediately finalizes the session (counting it) before resetting to `NO_SESSION`.
+
+### Phase 13 — Scroll discard reason string fix *(Aug 22, 2026)*
+**Files:** `ShortsMonitoringPipeline.kt`
+
+- **Fix:** Changed the DETECTED-state scroll discard reason from `SCROLL_DURING_DETECT` to `SCROLL_BEFORE_ACTIVE` to match the required logging specification. The state machine behavior was already correct; only the diagnostic log string was wrong.
+
+### Phase 14 — Simplified per-Short session state machine *(Aug 22, 2026)*
+**Files:** `ShortsMonitoringPipeline.kt`, `ShortUsageAggregator.kt`
+
+Complete rewrite of the Shorts monitoring pipeline to implement a simplified, deterministic per-Short session state machine:
+
+- **3-state model** (replaced the previous 4-state `NO_SESSION → DETECTED → ACTIVE → QUALIFIED`):
+  - `NO_SESSION` — no Short is being observed
+  - `WATCHING` — a Short is being watched, timer is running
+  - `QUALIFIED` — timer reached 2 seconds, eligible to count on scroll
+
+- **Qualification threshold changed to 2 seconds** (`SHORT_MIN_ENGAGEMENT_MILLIS = 2000L`, was 3000L). The timer belongs to the individual Short, not the application session.
+
+- **Scroll is the ONLY Short boundary.** `WINDOW_CONTENT_CHANGED` events are harmless — they update detection evidence but never create sessions, finalize, or count. `WINDOW_STATE_CHANGED` YouTube-internal transitions carry the session forward without finalization.
+
+- **`finalize()` removed** — the pipeline no longer has a separate finalization path. Counting happens directly in `countShort()` which is called only from `onForegroundScrolled()` (for QUALIFIED sessions) or from `notifySurfaceState()` (when Shorts evidence is lost while QUALIFIED). The aggregator is not re-evaluated — the state machine is authoritative.
+
+- **Logging matches specification:** `SC_SHORT DETECTED`, `SC_SHORT TIMER_STARTED`, `SC_SHORT QUALIFIED`, `SC_SHORT SCROLL`, `SC_SHORT DISCARDED`, `SC_COUNT COUNTED`, `SC_LIMIT CHECK`, `SC_SCROLL DEBOUNCED`.
+
+- **Persistence unchanged:** The existing `ShortsControlEngine` (24-hour cycle, limit enforcement), `ShortsLocalStore` (Room-backed usage/events), and all user settings, limits, and historical data are untouched. No new database, no duplicate counters.
+
+- **Process restart safe:** In-memory `active` context is lost on restart → starts from `NO_SESSION`. Persisted daily count, limit, and cycle survive.
+
 ### Phase 8 — Shorts Limit screen: unified compact page *(Aug 16, 2026)*
 **Files:** `screens/settings/ShortsLimitScreen.kt` (rewritten single screen — old wizard composables removed), `i18n/AppStrings.kt` + all five catalogs (`EnglishStrings.kt` / `HindiStrings.kt` / `UrduStrings.kt` / `ChineseStrings.kt` / `SpanishStrings.kt`), and this `README.md`
 
@@ -1645,6 +1734,80 @@ The engine now filters at the **DNS AND IP layer**, closing the previously docum
 
 *Phase 2 — Local VPN + DNS Filtering Engine (strengthened) completed August 17, 2026. Existing domain availability validation, Block button behavior, Web UI, blocked-domain storage and Settings navigation are untouched.*
 
+## Phase 13 — Shorts Counting Fixes: detection-signal expansion (NEW, August 17, 2026)
+
+Minimum fixes from the Shorts Counting Audit — **no new Accessibility Service, no new detection engine, no new counting engine, no new UI.** The existing pipeline (MonitoringEventHub → registry/adapters → aggregator → budget → control engine) is unchanged in structure; only the signals it consumes and the adapters' rules were extended.
+
+### 1. YouTube Shorts detection (`shorts/YouTubeShortsAdapter.kt`)
+
+- **Primary (unchanged):** the canonical `Shell$ShortsActivity` window class → confidence 0.85.
+- **Safe fallback (new):** any window class whose name contains `Shorts` (case-insensitive) → confidence 0.7. Fixes the documented on-device currency gap (e.g. SH01: Shorts running in a differently-named activity) while still never counting YouTube Home / Watch / Live / Search — package or scroll signals alone never prove Shorts on YouTube.
+
+### 2. Scroll-interaction signal (`TYPE_VIEW_SCROLLED`)
+
+- **Accessibility service** (`accessibility/ShortsCapAccessibilityService.kt`) now also dispatches `TYPE_VIEW_SCROLLED` events (package metadata only, never content) to `MonitoringEventHub`; `accessibility_service_config.xml` adds `typeViewScrolled`. `MonitoringEventHub` gained a default no-op `onForegroundScrolled` listener + dispatcher (the `fun interface` contract is unchanged for existing listeners).
+- **Pipeline** (`shorts/ShortsMonitoringPipeline.kt`) tracks scrolls per active context (same-package scrolls only) and passes `interactionCount` into `ShortDetectionSignals` for detection.
+
+### 3. Reels/Shorts detection on other platforms (`shorts/*Adapter.kt`)
+
+All eight platform adapters (Instagram, TikTok, Snapchat, Facebook, Moj, X, LinkedIn, ShareChat) now consider a Short/Reel **countable** using the combination of: recognized platform/package + scroll interaction + the existing ≥3s engagement rule (`DefaultShortUsageAggregator` — unchanged). Shared helpers (`scrollInteractionConfidence`, `unconfirmedResult`, `scrollDetectedResult`) keep the confidence system intact (0.55 / 0.65 / 0.75 by scroll evidence, all ≥ the 0.5 threshold). New surface value `SHARE_CHAT_SHORT_VIDEO` added to `ShortSurface` (ShareChat previously had no surface).
+
+### Rules preserved (unchanged)
+
+- `<2s` → never count; engagement ≥3s → eligible (aggregator untouched).
+- One context/session → one Short; duplicate window events never double count.
+- `ShortPlatformRegistry` and all 9 adapters kept — no platform removed; `GenericShortVideoAdapter` still never guesses.
+- Shorts are **not** counted into the ACTIVE 24h `currentCount` before a limit is activated — `ShortsControlEngine`, `RoomShortsLimitCycleStore`, the Shorts Limit UI and all cycle/activation logic are untouched.
+- Web Blocking/VPN/DNS, Screen Activity, Authentication and Automatic Application Detection untouched.
+
+### Verification
+
+- `:app:compileDebugKotlin` clean; `:app:testDebugUnitTest` shorts suite green (pipeline tests extended: scroll-evidence Reels/TikTok counting, scroll-without-engagement NOT counted, no-scroll sessions NOT counted, cross-package scrolls ignored, YouTube fallback class counted).
+
+### Remaining platform-specific limitation
+
+- Watching a single video without scrolling the feed is **not** counted on non-YouTube platforms (scroll evidence is required to distinguish a short-form feed from a static screen); YouTube relies on its window class instead.
+- Surface confidence on non-YouTube platforms is scroll-derived (0.55–0.75), so a scrolling non-short-form surface (e.g. a long-form feed in Instagram/Facebook) can be miscounted — the inherent limit of the available signal set, documented rather than hidden.
+
+*Phase 13 — Shorts Counting Fixes completed August 17, 2026.*
+
+## Phase 13.1 — Shorts Restriction Engine: the missing enforcement consumer (NEW, August 17, 2026)
+
+The enforcement layer the `ShortsControlEngine` reserves ("The engine decides STATE. The Android enforcement layer decides how to react") — a full-screen, **touch-blocking** restriction overlay shown when the user's active 24-hour Shorts limit is reached.
+
+### Flow
+
+```
+ShortsControlEngine (LIMIT_REACHED, 24h-cycle derived, untouched)
+        ↓
+ShortsMonitoringPipeline surface listener (EXISTING detection, untouched)
+        ↓
+ShortsRestrictionEngine  (new consumer — re-reads currentState() on every surface change, no timer)
+        ↓
+Full-screen touch-blocking overlay (SYSTEM_ALERT_WINDOW, consumes all touches)
+```
+
+### Rules (exactly as required)
+
+- **Show** only when a short-form surface is active **and** `ShortsControlEngine.shared.currentState().limitReached == true`.
+- **Hide** when the user leaves the short-form surface (surface listener fires `null`).
+- **Auto-remove on EXPIRED/ALLOW**: the engine never caches a blocked flag — every surface callback re-reads the authoritative state, and an expired/disabled window reports `limitReached == false`, so the next evaluation hides the overlay. **No second timer**, no second cycle — expiry stays entirely in the existing `ShortsControlEngine`.
+- Touch-blocking by construction (full-screen overlay, no `FLAG_NOT_TOUCH_MODAL`); system navigation (Home/Back/Recents) still works and lifts the view.
+
+### Files
+
+- **New:** `shorts/ShortsRestrictionEngine.kt` (engine + `ShortsRestrictionOverlayManager` + overlay composable using existing strings `shortsLimitStateLimitReached` / `shortsLimitReachedDesc` and the existing theme — no new i18n keys, no new UI system); `shorts/ShortsRestrictionEngineTest.kt` (5 unit tests on the pure `shouldRestrict` rule).
+- **Modified:** `accessibility/ShortsCapAccessibilityService.kt` — start/stop hooks only (`onServiceConnected` / `onUnbind` / `onDestroy`), no detection behavior change.
+- **Untouched:** `ShortsControlEngine`, counting/detection/aggregator, Shorts Limit UI, 24-hour cycle/activation, VPN/DNS/Web Blocking, Screen Activity, App Detection, HUD.
+
+### Android limitation (documented, not hidden)
+
+- Requires `SYSTEM_ALERT_WINDOW` overlay permission (checked via `Settings.canDrawOverlays` — fails gracefully when missing/revoked).
+- No-timer design: if the cycle expires while the user is idle under the overlay, it lifts on their next navigation interaction (window transition → re-evaluation → EXPIRED ⇒ hidden).
+- Enforcement inherits detection coverage (YouTube class-based; other platforms require scroll evidence).
+
+*Phase 13.1 — Shorts Restriction Engine completed August 17, 2026.*
+
 ## Global Chart Style System (`Settings → Appearance → Chart`) — New
 
 A single, app-wide Chart Style preference controls how every supported analytics chart in ShortsCap visualizes data. This is a **presentation-only** preference: the underlying usage data is never recalculated, filtered, or changed by the selected style (DATA ≠ VISUALIZATION).
@@ -2286,10 +2449,12 @@ platforms), never as a single-app feature.
   Instagram = 8s global).
 - **Local vs backend:** detector → aggregator → local store → future sync
   layer; the detector never talks to FastAPI directly.
-- **Honest limitations:** only YouTube Shorts is positively detected today
-  (window class); all other platforms report UNKNOWN and are never counted;
-  per-short counts are session-level (window events cannot see individual
-  swipes).
+- **Honest limitations:** YouTube Shorts is detected via its window class
+  (with a safe class-name fallback for version/device currency gaps); every
+  other platform is countable only with observed scroll interaction
+  (TYPE_VIEW_SCROLLED) + the ≥3s engagement rule — watching a single video
+  without browsing the feed is not counted; per-short counts are
+  session-level (one context/session = one Short).
 - **Verification:** `./gradlew :app:compileDebugKotlin` clean;
   `./gradlew :app:testDebugUnitTest` 10/10 PASS; backend regression
   (Settings / Study / Monitoring / Shorts verify scripts, `/health/db`,
@@ -2615,11 +2780,12 @@ platforms), never as a single-app feature.
   its resources; the `ic_brain` drawable lives on as the Brain mode's
   icon. No new foreground service was added — the HUD rides the existing
   accessibility/monitoring pipeline.
-- **Honest limitations:** with the current signal set only the YouTube
-  Shorts surface is positively detected (window-class based); other
-  platforms report UNKNOWN and never trigger the HUD. The HUD's count
-  reflects the pipeline's counted total (session-level, per the existing
-  3–5 second rule — unchanged).
+- **Honest limitations:** YouTube Shorts is detected via its window class
+  (with a safe class-name fallback); other platforms trigger the HUD only
+  with observed scroll interaction + the ≥3s engagement rule (watching a
+  single video without browsing the feed does not). The HUD's count reflects
+  the pipeline's counted total (session-level, per the existing 3–5 second
+  rule — unchanged).
 - **Verification:** `:app:compileDebugKotlin` clean;
   `:app:testDebugUnitTest` 38/38 (15 new HUD logic tests: brain-state
   thresholds, appearance parsing, position clamping + 3 new pipeline
@@ -3364,6 +3530,51 @@ Android system Accessibility Settings shows the ShortsCap service **ON**.
   short form, other-package exclusion, empty/missing). No permission-system
   redesign; no Shorts Control / Limit / Screen Activity / HUD / backend
   changes.
+
+### Phase 21 — Shorts session state machine + ComposeView overlay lifecycle + detection fidelity *(Aug 22, 2026)*
+
+- **Accessibility throttle fix:** reduced `YOUTUBE_WALK_THROTTLE_MILLIS` from
+  500 ms → 150 ms so evidence refreshes fast enough for Shorts player nodes
+  to arrive before `finalize()` runs. (Phase 9)
+- **Carry-forward for UNKNOWN surface:** YouTube contexts with
+  `surface=UNKNOWN` are no longer immediately finalized — they stay alive so
+  late content evidence (Shorts player classes) can upgrade the classification
+  before aggregation. Added `lastDetectionResult` to `ActiveContext`.
+  (Phase 10)
+- **Per-Short session state machine:** replaced the single-context-per-app
+  model with a 3-state machine (`NO_SESSION → WATCHING → QUALIFIED`).
+  Each individual Short/Reel gets its own session with its own `shortStartedAt`
+  timer. Scroll is the ONLY Short boundary. `WINDOW_CONTENT_CHANGED` is
+  harmless. `WINDOW_STATE_CHANGED` YouTube-internal transitions carry the
+  session forward. (Phases 11–13)
+- **Inline qualification on scroll:** added `elapsed >= 2000ms` check inside
+  `onForegroundScrolled()` so qualification is always evaluated at the scroll
+  moment — fixes the case where content events stop before the timer fires.
+  (Phase 14)
+- **ComposeView overlay lifecycle fix:** added `OverlayLifecycleOwner`
+  (LifecycleOwner + ViewModelStoreOwner + SavedStateRegistryOwner) to
+  `ShortsHudOverlayManager` so the system-overlay `ComposeView` has a valid
+  view tree lifecycle and no longer crashes with
+  `ViewTreeLifecycleOwner not found`. (Phase 15)
+- **isOurOverlay CARRY_FORWARD:** when the foreground changes to
+  `com.shortscap.app / ComposeView` (our own HUD overlay), the active Shorts
+  session is preserved instead of being discarded as `LEFT_PLATFORM`.
+  `notifySurfaceState()` is skipped for overlay events to avoid re-detecting
+  with the wrong class name. (Phase 16)
+- **Preserved detection metadata in COUNTED:** `countShort()` now uses the
+  already-confirmed `lastDetectionResult` from the active session instead of
+  re-running `detect()` with potentially stale content evidence. This
+  preserves `surface=YOUTUBE_SHORTS` and `confidence=0.75` in the final
+  COUNTED record instead of degrading to `UNKNOWN / 0.2`. (Phase 17)
+- **Qualification threshold:** `SHORT_MIN_ENGAGEMENT_MILLIS` set to 2000 ms
+  in `ShortUsageAggregator.kt`.
+- **Files changed:** `ShortsMonitoringPipeline.kt` (state machine, countShort,
+  carry-forward, overlay handling), `ShortUsageAggregator.kt` (threshold),
+  `ShortsHudOverlayManager.kt` (OverlayLifecycleOwner),
+  `ShortsCapAccessibilityService.kt` (throttle).
+- **NOT changed:** YouTube detection heuristics, database schema, UI,
+  permissions, navigation, backend, enforcement architecture, existing
+  SC_DIAG logging.
 
 ## Database connection status
 
