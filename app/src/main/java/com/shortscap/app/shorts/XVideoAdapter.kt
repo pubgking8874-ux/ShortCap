@@ -1,13 +1,21 @@
 package com.shortscap.app.shorts
 
+import android.util.Log
+import com.shortscap.app.monitoring.WindowContentEvidence
+
 /**
  * X (Twitter) short-video adapter.
  *
  * X hosts short-form video surfaces inside a very broad app (timeline,
- * trending, live, Spaces, search). The adapter combines the signals now
- * available: recognized platform (package) + scroll interaction in the
- * foreground context (TYPE_VIEW_SCROLLED) + the existing ≥3 second
- * engagement rule (aggregator). No scroll evidence → UNKNOWN, never counted.
+ * trending, live, Spaces, search). Detection tiers:
+ *
+ *  1. Activity class match — video-specific activity, confidence 0.80.
+ *  2. Activity class keyword — "video", "feed", "player" in class name, confidence 0.65.
+ *  3. Structural content evidence — video node classes/IDs, confidence 0.70.
+ *  4. Content description text signals — video-unique labels, confidence 0.60.
+ *  5. Scroll interaction fallback — confidence from scrollInteractionConfidence().
+ *
+ * Without any of these signals → UNKNOWN / low confidence (never counted).
  * Both known package aliases are covered.
  */
 object XVideoAdapter : ShortPlatformAdapter {
@@ -18,10 +26,128 @@ object XVideoAdapter : ShortPlatformAdapter {
         "com.twitter.android.lite",
     )
 
-    override fun detect(signals: ShortDetectionSignals): ShortDetectionResult =
-        if (scrollInteractionConfidence(signals.interactionCount) >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD) {
-            scrollDetectedResult(ShortPlatform.X, ShortSurface.X_SHORT_VIDEO, signals.interactionCount)
-        } else {
-            unconfirmedResult(ShortPlatform.X, 0.1f)
+    override fun detect(signals: ShortDetectionSignals): ShortDetectionResult {
+        val className = signals.activityClassName
+
+        Log.i("SC_PLATFORM_OBS",
+            "SC_PLATFORM_OBS ADAPTER_INPUT pkg=${signals.packageName} cls=$className " +
+                "interactionCount=${signals.interactionCount} " +
+                "evidenceClasses=${signals.contentEvidence.nodeClasses.size} " +
+                "evidenceIds=${signals.contentEvidence.nodeViewIds.size} " +
+                "descs=${signals.contentEvidence.nodeContentDescriptions.size}"
+        )
+
+        // Tier 1: video-specific activity class
+        if (className != null && className.lowercase().let {
+                it.contains("video") || it.contains("player") || it.contains("reel")
+            }) {
+            Log.i("SC_PLATFORM_OBS",
+                "SC_PLATFORM_OBS ADAPTER_OUTPUT pkg=${signals.packageName} " +
+                    "method=ACTIVITY_CLASS surface=X_SHORT_VIDEO confidence=0.80"
+            )
+            return shortsResult(confidence = 0.80f, surfaceSignal = "activity_class")
         }
+
+        // Tier 2: hosting class — need content evidence
+        if (className != null && className.lowercase().let {
+                it.contains("feed") || it.contains("main") || it.contains("timeline")
+            }) {
+            Log.i("SC_PLATFORM_OBS",
+                "SC_PLATFORM_OBS ADAPTER_CHECK pkg=${signals.packageName} " +
+                    "method=HOSTING_CLASS cls=$className checking=content_evidence"
+            )
+        }
+
+        // Tier 3: structural content evidence
+        val result = evaluateContentEvidence(signals.contentEvidence)
+        if (result != null) {
+            Log.i("SC_PLATFORM_OBS",
+                "SC_PLATFORM_OBS ADAPTER_OUTPUT pkg=${signals.packageName} " +
+                    "method=CONTENT_EVIDENCE surface=X_SHORT_VIDEO confidence=${result.confidence}"
+            )
+            return result
+        }
+
+        // Tier 4: content description text signals
+        val textResult = evaluateTextEvidence(signals.contentEvidence)
+        if (textResult != null) {
+            Log.i("SC_PLATFORM_OBS",
+                "SC_PLATFORM_OBS ADAPTER_OUTPUT pkg=${signals.packageName} " +
+                    "method=TEXT_EVIDENCE surface=X_SHORT_VIDEO confidence=${textResult.confidence}"
+            )
+            return textResult
+        }
+
+        // Tier 5: scroll interaction fallback
+        val scrollConf = scrollInteractionConfidence(signals.interactionCount)
+        if (scrollConf >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD) {
+            Log.i("SC_PLATFORM_OBS",
+                "SC_PLATFORM_OBS ADAPTER_OUTPUT pkg=${signals.packageName} " +
+                    "method=SCROLL_FALLBACK surface=X_SHORT_VIDEO confidence=$scrollConf"
+            )
+            return scrollDetectedResult(ShortPlatform.X, ShortSurface.X_SHORT_VIDEO, signals.interactionCount)
+        }
+
+        Log.i("SC_PLATFORM_OBS",
+            "SC_PLATFORM_OBS ADAPTER_OUTPUT pkg=${signals.packageName} " +
+                "result=UNCONFIRMED isShortForm=false confidence=0.10 reason=NO_VIDEO_SIGNALS"
+        )
+        return unconfirmedResult(ShortPlatform.X, 0.10f)
+    }
+
+    private fun shortsResult(confidence: Float, surfaceSignal: String): ShortDetectionResult =
+        ShortDetectionResult(
+            platform = ShortPlatform.X,
+            surface = ShortSurface.X_SHORT_VIDEO,
+            isShortForm = true,
+            confidence = confidence,
+            detectionMethod = DetectionMethod.PLATFORM_ADAPTER,
+            metadata = mapOf("surfaceSignal" to surfaceSignal),
+        )
+
+    /** Structural evidence: video node classes/IDs. */
+    private fun evaluateContentEvidence(evidence: WindowContentEvidence): ShortDetectionResult? {
+        val classHits = evidence.nodeClasses.count { it.lowercase().let {
+            it.contains("video") || it.contains("reel") || it.contains("player")
+        }}
+        val idHits = evidence.nodeViewIds.count { it.lowercase().let {
+            it.contains("video") || it.contains("reel") || it.contains("player")
+        }}
+        if (classHits == 0 && idHits == 0) return null
+        return ShortDetectionResult(
+            platform = ShortPlatform.X,
+            surface = ShortSurface.X_SHORT_VIDEO,
+            isShortForm = true,
+            confidence = 0.70f,
+            detectionMethod = DetectionMethod.PLATFORM_ADAPTER,
+            metadata = mapOf(
+                "surfaceSignal" to "content_evidence",
+                "playerClassHits" to classHits,
+                "playerIdHits" to idHits,
+            ),
+        )
+    }
+
+    /** Text signals unique to X short video. */
+    private fun evaluateTextEvidence(evidence: WindowContentEvidence): ShortDetectionResult? {
+        val textHit = evidence.nodeContentDescriptions.any { desc ->
+            val lower = desc.lowercase()
+            X_UNIQUE_DESCRIPTIONS.any { lower.contains(it) }
+        }
+        if (!textHit) return null
+        return ShortDetectionResult(
+            platform = ShortPlatform.X,
+            surface = ShortSurface.X_SHORT_VIDEO,
+            isShortForm = true,
+            confidence = 0.60f,
+            detectionMethod = DetectionMethod.PLATFORM_ADAPTER,
+            metadata = mapOf("surfaceSignal" to "text_evidence"),
+        )
+    }
+
+    /** Content descriptions unique to X short video. */
+    private val X_UNIQUE_DESCRIPTIONS = setOf(
+        "share video",
+        "like this video",
+    )
 }

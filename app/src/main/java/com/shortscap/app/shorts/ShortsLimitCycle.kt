@@ -21,7 +21,7 @@ data class ShortsLimitCycle(
     val localId: Long = 0L,
     /** Configured maximum number of Shorts for this window. */
     val limitCount: Int,
-    /** Valid Shorts counted so far in this window. */
+    /** Valid Shorts counted so far in this 24-hour enforcement window. */
     val currentCount: Int = 0,
     /** Counted Shorts duration accumulated in this window (ms) — used by time-based warnings. */
     val cycleDurationMillis: Long = 0L,
@@ -35,6 +35,16 @@ data class ShortsLimitCycle(
     val limitReached: Boolean = false,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
+
+    // --- Daily Monitoring Count (independent of limit cycle) ---
+    /** Shorts watched today (calendar day based). Always increments regardless of limit status. */
+    val dailyShortsCount: Int = 0,
+    /** ISO date string ("yyyy-MM-dd") of the last daily count update. Used to reset on day change. */
+    val dailyShortsDate: String = "",
+
+    // --- Auto Restart setting ---
+    /** When true, a new 24h cycle is automatically created when the current one expires. */
+    val autoRestartEnabled: Boolean = false,
 ) {
     /** Whether the window is still the enforceable one (ACTIVE or LIMIT_REACHED). */
     val isActive: Boolean get() = status == ShortsLimitCycleStatus.ACTIVE || status == ShortsLimitCycleStatus.LIMIT_REACHED
@@ -85,8 +95,11 @@ data class ShortsControlState(
     /** The active cycle, or null when Shorts control is disabled/no cycle exists. */
     val cycle: ShortsLimitCycle?,
     val status: ShortsLimitCycleStatus,
+    /** Shorts in the current 24h enforcement cycle (0 when no cycle is active). */
     val currentCount: Int,
     val limitCount: Int,
+    /** Shorts watched today (calendar day). Always available regardless of limit status. */
+    val dailyShortsCount: Int = 0,
     /** currentCount / limitCount, safe for limitCount <= 0 (returns 0f). */
     val usageRatio: Float,
     /** limitCount - currentCount, never negative. */
@@ -129,6 +142,18 @@ interface ShortsLimitCycleStore {
 
     /** Drops the current active cycle (used when disabling control). */
     fun markDisabled(): ShortsLimitCycle?
+
+    // --- Daily Monitoring Count (independent of limit cycle) ---
+
+    /**
+     * Atomically increments the daily Shorts count for the given calendar date.
+     * If [todayDate] differs from the stored date, the count resets to 1.
+     * Returns the new daily count after the operation.
+     */
+    fun incrementDailyCount(todayDate: String): Int
+
+    /** Returns the current daily Shorts count (0 if never set or date mismatch). */
+    fun getDailyCount(): Int
 }
 
 /** In-memory store — tests only. The app uses the Room-backed store. */
@@ -136,6 +161,8 @@ class InMemoryShortsLimitCycleStore : ShortsLimitCycleStore {
 
     private var nextId = 1L
     private val rows = mutableListOf<ShortsLimitCycle>()
+    private var dailyCount = 0
+    private var dailyDate = ""
 
     override fun currentCycle(): ShortsLimitCycle? =
         rows.filter { it.isActive }.maxByOrNull { it.cycleStartedAt }
@@ -158,4 +185,20 @@ class InMemoryShortsLimitCycleStore : ShortsLimitCycleStore {
         save(disabled)
         return disabled
     }
+
+    override fun incrementDailyCount(todayDate: String): Int {
+        dailyCount = if (dailyDate == todayDate) dailyCount + 1 else 1
+        dailyDate = todayDate
+        // Persist to the most recent row (CONFIGURED, ACTIVE, or EXPIRED)
+        val mostRecent = rows.maxByOrNull { it.updatedAt }
+        if (mostRecent != null) {
+            val idx = rows.indexOfFirst { it.localId == mostRecent.localId }
+            if (idx >= 0) {
+                rows[idx] = mostRecent.copy(dailyShortsCount = dailyCount, dailyShortsDate = dailyDate)
+            }
+        }
+        return dailyCount
+    }
+
+    override fun getDailyCount(): Int = dailyCount
 }

@@ -136,13 +136,19 @@ class ShortsControlEngineTest {
         assertEquals(2, e.currentState().currentCount)
     }
 
-    // 5b. Counting is ignored while the limit is only CONFIGURED (not active).
+    // 5b. Daily monitoring count works WITHOUT an active limit cycle.
+    // onShortCounted() always increments the daily count.
+    // The limit count is NOT incremented when no cycle is active.
     @Test
-    fun `shorts are not counted before activation`() {
+    fun `daily count increments without active cycle`() {
         val e = engine()
         e.setLimit(200)
+        // No activate() call — limit is configured but not active
         e.onShortCounted(candidateKey = "k1", occurredAt = 0L, durationMillis = 4_000L)
-        assertEquals(0, e.currentState().currentCount)
+        // Daily count increments; limit count stays 0
+        assertFalse(e.hasActiveCycle())
+        assertEquals(1, e.currentState().dailyShortsCount)
+        assertEquals(0, e.currentState().currentCount) // limit count NOT incremented
     }
 
     // 6. Duplicate candidate is NOT counted twice.
@@ -289,9 +295,11 @@ class ShortsControlEngineTest {
         assertEquals(ShortsEnforcementState.ALLOW, after.enforcementState)
     }
 
-    // 13. Cycle expiry does NOT auto-roll — the user re-activates.
+    // 13. Cycle expiry does NOT auto-roll via currentState() — the user
+    // re-activates via the UI. But onShortCounted() DOES auto-initialize
+    // a new cycle from the saved limit so counting continues.
     @Test
-    fun `expired cycle does not auto-start a new cycle`() {
+    fun `expired cycle does not auto-start via currentState`() {
         val store = InMemoryShortsLimitCycleStore()
         val clock = Clock()
         val e = engine(store = store, clock = clock)
@@ -303,14 +311,12 @@ class ShortsControlEngineTest {
         val state = e.currentState()
 
         assertEquals(ShortsLimitCycleStatus.EXPIRED, state.status)
-        // The expired window keeps its own timestamps; NO new window was
-        // auto-created (remaining time is 0, not 24h).
+        // currentState() does NOT auto-create a new cycle.
         assertNotNull(state.cycleStartedAt)
         assertEquals(0L, state.remainingCycleMillis)
-        assertFalse(e.hasActiveCycle())
         assertFalse(e.isLimitLocked()) // editing available again
 
-        // Re-activating starts the NEXT cycle from the same configured limit.
+        // Re-activating via the UI starts the NEXT cycle from the same limit.
         clock.advance(1_000L)
         val fresh = e.activate()
         assertEquals(ShortsLimitCycleStatus.ACTIVE, fresh.status)
@@ -318,6 +324,32 @@ class ShortsControlEngineTest {
         assertEquals(200, fresh.limitCount)
         assertEquals(clock.now, fresh.cycleStartedAt)
         assertEquals(clock.now + DAY, fresh.cycleExpiresAt)
+    }
+
+    // 13b. After expiry, daily monitoring continues but limit count
+    // does NOT auto-create a new cycle. The user must re-activate.
+    @Test
+    fun `daily count continues after expiry without auto-init`() {
+        val store = InMemoryShortsLimitCycleStore()
+        val clock = Clock()
+        val e = engine(store = store, clock = clock)
+        e.setLimit(200)
+        e.activate()
+        e.onShortCounted(candidateKey = "a", occurredAt = 0L, durationMillis = 4_000L)
+        assertEquals(1, e.currentState().currentCount)
+        val dailyAfterFirst = e.currentState().dailyShortsCount
+
+        clock.advance(DAY + 1) // cycle now expired
+        assertEquals(ShortsLimitCycleStatus.EXPIRED, e.currentState().status)
+
+        // Counting after expiry: daily count increments, limit count does NOT
+        clock.advance(1_000L)
+        e.onShortCounted(candidateKey = "b", occurredAt = clock.now, durationMillis = 4_000L)
+
+        // Daily count incremented; no new cycle was auto-created
+        assertFalse(e.hasActiveCycle())
+        assertEquals(dailyAfterFirst + 1, e.currentState().dailyShortsCount)
+        assertEquals(0, e.currentState().currentCount) // limit count NOT incremented
     }
 
     // 14. 0 / invalid limit is safe.
@@ -480,5 +512,41 @@ class ShortsControlEngineTest {
         val expired = e.currentState()
         assertEquals(ShortsLimitCycleStatus.EXPIRED, expired.status) // no auto-roll
         assertFalse(expired.limitReached)
+    }
+
+    // 23. Daily monitoring works without limit activation.
+    // Counting does NOT auto-create a limit cycle.
+    @Test
+    fun `daily count works without limit activation`() {
+        val clock = Clock()
+        val e = engine(clock = clock)
+        e.setLimit(50)
+        // No activate() call — user never pressed ACTIVE
+        assertFalse(e.hasActiveCycle())
+
+        // Daily count increments; limit count stays 0
+        e.onShortCounted(candidateKey = "k1", occurredAt = 0L, durationMillis = 4_000L)
+        assertFalse(e.hasActiveCycle())
+        val state = e.currentState()
+        assertEquals(0, state.currentCount) // limit count NOT incremented
+        assertEquals(1, state.dailyShortsCount) // daily count incremented
+        assertEquals(50, state.limitCount)
+    }
+
+    // 24. Limit reached requires explicit activation.
+    @Test
+    fun `limit reached requires explicit activation`() {
+        val clock = Clock()
+        val e = engine(clock = clock)
+        e.setLimit(2)
+        e.activate() // must activate first
+        e.onShortCounted(candidateKey = "a", occurredAt = 0L, durationMillis = 4_000L)
+        e.onShortCounted(candidateKey = "b", occurredAt = 1_000L, durationMillis = 4_000L)
+        val state = e.currentState()
+        assertEquals(ShortsLimitCycleStatus.LIMIT_REACHED, state.status)
+        assertTrue(state.limitReached)
+        assertEquals(2, state.currentCount)
+        // Daily count also incremented
+        assertEquals(2, state.dailyShortsCount)
     }
 }

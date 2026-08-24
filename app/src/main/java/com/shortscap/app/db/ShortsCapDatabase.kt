@@ -21,6 +21,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * sessions — independent of the Shorts domain).
  * Version 4: Domain Blocking Foundation adds blocked_domains (the durable
  * blocked-domain list the future Local VPN/DNS filtering engine consumes).
+ * Version 5: Daily Monitoring Count adds dailyShortsCount, dailyShortsDate,
+ * autoRestartEnabled to shorts_limit_cycle (purely additive).
  */
 @Database(
     entities = [
@@ -31,7 +33,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ScreenActivityUsageEntity::class,
         BlockedDomainEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class ShortsCapDatabase : RoomDatabase() {
@@ -115,6 +117,18 @@ abstract class ShortsCapDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * P1-6: adds daily monitoring count and auto-restart columns to
+         * shorts_limit_cycle. Pure additive — existing rows get defaults.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `shorts_limit_cycle` ADD COLUMN `dailyShortsCount` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `shorts_limit_cycle` ADD COLUMN `dailyShortsDate` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `shorts_limit_cycle` ADD COLUMN `autoRestartEnabled` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var instance: ShortsCapDatabase? = null
 
@@ -125,7 +139,7 @@ abstract class ShortsCapDatabase : RoomDatabase() {
                     context.applicationContext,
                     ShortsCapDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
             }
     }
 }

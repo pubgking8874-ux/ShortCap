@@ -20,9 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import android.util.Log
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,6 +80,14 @@ fun ShortsHudContent(
     val count = uiState.count
     val limit = uiState.limit
     val visible = uiState.visible
+
+    // --- HUD_COUNT_RENDER diagnostic ---
+    SideEffect {
+        Log.i("SC_RT", "SC_RT UI_RENDER displayedCount=$count limit=$limit visible=$visible")
+        Log.i("SC_COUNT",
+            "SC_COUNT HUD_COUNT_RENDER count=$count limit=$limit visible=$visible",
+        )
+    }
 
     // Entry animation: alpha 0->1, scale 0.92->1.00, ~200ms — applied on the
     // very first frame after the overlay is added.

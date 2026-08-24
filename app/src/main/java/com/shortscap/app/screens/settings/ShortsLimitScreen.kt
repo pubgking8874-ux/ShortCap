@@ -27,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import com.shortscap.app.network.ShortsPlatformUsageDto
 import com.shortscap.app.shorts.DEFAULT_LIMIT_UPPER_BOUND
 import com.shortscap.app.shorts.LimitInputError
 import com.shortscap.app.shorts.LimitInputResult
+import android.util.Log
 import com.shortscap.app.shorts.ShortsControlEngine
 import com.shortscap.app.shorts.ShortsControlState
 import com.shortscap.app.shorts.ShortsControlSyncer
@@ -135,6 +137,15 @@ fun ShortsLimitScreen(
     // Authoritative state re-derived each tick (expiry is timestamp-driven).
     val state = remember(now) { engine.currentState(now) }
     val pageState = deriveLimitPageState(state)
+
+    // --- DASHBOARD_COUNT_RENDER diagnostic ---
+    SideEffect {
+        Log.i("SC_COUNT",
+            "SC_COUNT DASHBOARD_COUNT_RENDER count=${state.currentCount} " +
+                "limit=${state.limitCount} remaining=${state.remainingCount} " +
+                "status=${state.status}",
+        )
+    }
     var syncStatus by remember { mutableStateOf(ShortsSyncStatus.IDLE) }
 
     // Unified limit input — single source of the limit the user wants.

@@ -3576,6 +3576,116 @@ Android system Accessibility Settings shows the ShortsCap service **ON**.
   permissions, navigation, backend, enforcement architecture, existing
   SC_DIAG logging.
 
+### Phase 22 — Cross-platform content evidence collection + 5-tier adapter architecture *(Aug 22, 2026)*
+
+- **Content evidence for ALL platforms:** the accessibility service now
+  collects `WindowContentEvidence` (node class names, resource IDs, content
+  descriptions) for all supported short-form platforms, not just YouTube.
+  Non-YouTube platforms use `PLATFORM_WALK_THROTTLE_MILLIS = 500ms` with
+  smaller walk bounds (`PLATFORM_MAX_WALK_NODES = 400`,
+  `PLATFORM_MAX_WALK_DEPTH = 40`). Evidence is dispatched via
+  `MonitoringEventHub.dispatchForegroundContentObserved()` for each platform.
+- **5-tier detection architecture** for each adapter:
+
+  | Tier | Signal | Confidence |
+  |------|--------|------------|
+  | 1 | Activity class match (known short-video class) | 0.80 |
+  | 2 | Activity class keyword ("reel", "feed", "video") | 0.65 |
+  | 3 | Structural content evidence (node class/ID + player shape) | 0.70 |
+  | 4 | Content description text (unique to surface) | 0.60 |
+  | 5 | Scroll interaction fallback | 0.55–0.75 |
+
+- **Platform-specific adapters upgraded:** `InstagramReelsAdapter`,
+  `TikTokAdapter`, `SnapchatSpotlightAdapter`, `FacebookReelsAdapter`,
+  `MojAdapter`, `ShareChatShortsAdapter`, `XVideoAdapter`,
+  `LinkedInVideoAdapter` — each now uses all 5 tiers with diagnostic logging.
+- **Snapchat Stories vs Spotlight:** `SnapchatSpotlightAdapter` explicitly
+  rejects Stories (surface = `SNAPCHAT_STORIES`, `isShortForm = false`) and
+  only confirms Spotlight when Spotlight-specific signals are present.
+- **PLATFORM_OBSERVATION diagnostic logging:** every detection attempt for
+  every platform now logs: package, activity class, platform, surface,
+  confidence, all available classes/IDs/descriptions, and rejection reason.
+  Logcat filter: `SC_PLATFORM_OBS`.
+- **PLATFORM_DIAG evidence logging:** non-YouTube content evidence collection
+  logs class lists, ID lists, and content description lists for each
+  platform. Logcat filter: `SC_PLATFORM_DIAG`.
+- **YouTube detection unchanged:** YouTube adapter remains untouched with its
+  existing tier system. YouTube content evidence collection remains unchanged
+  with its 150ms throttle.
+- **Files changed:** `ShortsCapAccessibilityService.kt` (cross-platform evidence
+  collection), `ShortsMonitoringPipeline.kt` (PLATFORM_OBSERVATION logging),
+  `InstagramReelsAdapter.kt`, `TikTokAdapter.kt`, `SnapchatSpotlightAdapter.kt`,
+  `FacebookReelsAdapter.kt`, `MojAdapter.kt`, `ShareChatShortsAdapter.kt`,
+  `XVideoAdapter.kt`, `LinkedInVideoAdapter.kt`.
+
+### Phase 22B — Snapchat false Spotlight fix + detection result preservation *(Aug 22, 2026)*
+
+- **SNAPCHAT BUG #1 — False Spotlight Detection:** Snapchat's
+  `com.snap.mushroom.MainActivity` was triggering Spotlight detection because:
+  (a) the scroll fallback treated ANY scroll on Snapchat as Spotlight evidence,
+  and (b) the content-description check could match a "Spotlight" tab label
+  on the home screen. **Fix:** removed the scroll interaction fallback entirely
+  for Snapchat (home, Stories, Discover, and Chat all scroll — scroll alone is
+  not evidence), removed the generic hosting-class check ("main"/"feed"/
+  "discover"), and kept only Tier 1 ("spotlight" in activity class), Tier 3
+  (structural content evidence), and Tier 4 (Spotlight-unique text signals).
+  Snapchat home now correctly produces `UNCONFIRMED` / no session.
+- **SNAPCHAT BUG #2 — Detection result loss during swipe:** when a content
+  evidence event arrived during a swipe transition with empty/stale evidence,
+  `notifySurfaceState()` overwrote `lastDetectionResult` with UNKNOWN. By the
+  time `countShort()` ran, the confirmed Spotlight metadata was lost, producing
+  `surface=UNKNOWN confidence=0.2` in the COUNTED record. **Fix:**
+  `notifySurfaceState()` now preserves the strongest confirmed detection
+  result — once `lastDetectionResult` contains a confirmed Short (above
+  confidence threshold), it is never downgraded to UNKNOWN by transient
+  evidence loss. This applies to ALL platforms, not just Snapchat.
+- **Files changed:** `SnapchatSpotlightAdapter.kt` (removed scroll fallback +
+  generic class check), `ShortsMonitoringPipeline.kt` (preserved confirmed
+  detection result).
+
+### Phase 23 — Evidence loss grace period + session boundary fix + HUD flicker prevention *(Aug 22, 2026)*
+
+- **Root cause:** the QUALIFIED state had no automatic counting mechanism.
+  Counting relied entirely on scroll events (`TYPE_VIEW_SCROLLED`) or
+  immediate evidence loss. When YouTube kept Shorts content visible during a
+  swipe (no evidence loss) and no scroll event fired, the session stayed
+  QUALIFIED forever and was never counted. Additionally, temporary evidence
+  loss during UI transitions immediately destroyed sessions (DISCARDED if
+  WATCHING, COUNTED if QUALIFIED), causing HUD flicker and premature session
+  termination.
+- **Evidence loss grace period:** added `evidenceLostAt` timestamp to
+  `ActiveContext` and `EVIDENCE_LOST_GRACE_MILLIS = 1000L`. When evidence is
+  temporarily lost during a UI transition, the session is NOT destroyed
+  immediately. Instead, a grace period starts. If evidence returns within
+  1000ms, the session continues. If the grace period expires, the session is
+  counted (QUALIFIED) or discarded (WATCHING). This prevents premature
+  session destruction during YouTube/Snapchat swipe transitions.
+- **Session boundary on platform change:** `onForegroundAppChanged()` now
+  explicitly counts QUALIFIED sessions when the user leaves the Shorts
+  platform (package change), instead of relying on evidence loss.
+- **HUD flicker prevention:** `broadcastState` is now preserved (kept as the
+  last known Shorts state) during the evidence loss grace period, instead of
+  being set to `null` immediately. The HUD stays visible during transient
+  evidence loss and only hides when the grace period expires or there was
+  never a Shorts session.
+- **New diagnostic logs:** `TEMPORARY_EVIDENCE_LOST`, `EVIDENCE_LOST_PENDING`,
+  `CONFIRMED_SURFACE_EXIT`, `CONFIRMED_SURFACE_RETURN`, `SHORT_SESSION_START`,
+  `SHORT_SESSION_BOUNDARY`.
+- **Files changed:** `ShortsMonitoringPipeline.kt` (evidence loss grace period,
+  session boundary logic, HUD flicker prevention, new diagnostic logs).
+- **NOT changed:** YouTube detection logic, Snapchat detection logic,
+  scroll debounce, database, UI, overlay behavior.
+
+### Phase 23B — Qualification threshold correction to 3 seconds *(Aug 22, 2026)*
+
+- **Bug:** `SHORT_MIN_ENGAGEMENT_MILLIS` was set to `2_000L` (2 seconds) in
+  a previous phase, but the existing product requirement specifies 3 seconds.
+  This caused Shorts to qualify too early (at 2 seconds instead of 3),
+  potentially counting Shorts the user did not meaningfully engage with.
+- **Fix:** corrected `SHORT_MIN_ENGAGEMENT_MILLIS` from `2_000L` to `3_000L`
+  in `ShortUsageAggregator.kt`.
+- **Files changed:** `ShortUsageAggregator.kt` (constant value only).
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service

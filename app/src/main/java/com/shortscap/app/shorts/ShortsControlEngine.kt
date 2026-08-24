@@ -1,5 +1,6 @@
 package com.shortscap.app.shorts
 
+import android.util.Log
 import com.shortscap.app.BuildConfig
 import java.util.LinkedHashSet
 
@@ -152,6 +153,7 @@ class ShortsControlEngine(
         if (configured != null) {
             // Start the window with the configured limit; the CONFIGURED row
             // is transitioned in place into the ACTIVE cycle.
+            // Preserve daily count and auto-restart setting.
             store.save(
                 configured.copy(
                     currentCount = 0,
@@ -161,6 +163,10 @@ class ShortsControlEngine(
                     status = ShortsLimitCycleStatus.ACTIVE,
                     warningTriggered = false,
                     limitReached = false,
+                    // Daily count is preserved — NOT reset on activation.
+                    dailyShortsCount = configured.dailyShortsCount,
+                    dailyShortsDate = configured.dailyShortsDate,
+                    autoRestartEnabled = configured.autoRestartEnabled,
                     updatedAt = now,
                 )
             )
@@ -228,14 +234,40 @@ class ShortsControlEngine(
         return currentState()
     }
 
-    /** Records one VALID Short (the aggregator already applied the 3–5s rule). */
+    /**
+     * Enables or disables auto-restart for the current or next cycle.
+     * When auto-restart is ON, a new 24h cycle is automatically created
+     * when the current one expires (same saved limit, count resets to 0).
+     */
+    fun setAutoRestart(enabled: Boolean, now: Long = nowMillis()): ShortsControlState {
+        // Update the configured row if it exists
+        val configured = store.configuredCycle()
+        if (configured != null) {
+            store.save(configured.copy(autoRestartEnabled = enabled, updatedAt = now))
+        }
+        // Also update the active cycle if one exists
+        val active = store.currentCycle()
+        if (active != null && active.cycleExpiresAt > now) {
+            store.save(active.copy(autoRestartEnabled = enabled, updatedAt = now))
+        }
+        return currentState()
+    }
+
+    /**
+     * Records one VALID Short (the aggregator already applied the 3–5s rule).
+     *
+     * This method ALWAYS increments the Daily Monitoring Count, regardless of
+     * whether an active limit cycle exists. The Active Limit Count is only
+     * incremented when there IS an active cycle.
+     *
+     * Daily monitoring is informational and must never depend on limit activation.
+     */
     fun onShortCounted(
         candidateKey: String,
         occurredAt: Long,
         durationMillis: Long,
         now: Long = nowMillis(),
     ): ShortsControlState {
-        val cycle = ensureFreshCycle(now) ?: return currentState()
         // One logical Short = one count: ignore repeated/recomposition
         // callbacks for the same candidate within the session.
         if (!recentCandidates.add(candidateKey)) return currentState()
@@ -249,10 +281,38 @@ class ShortsControlEngine(
             }
         }
 
+        // --- STEP 1: Always increment Daily Monitoring Count ---
+        // This is independent of any limit cycle.
+        val todayDate = java.time.LocalDate.now().toString() // "yyyy-MM-dd"
+        val newDailyCount = store.incrementDailyCount(todayDate)
+        Log.i("SC_COUNT",
+            "SC_COUNT DAILY_SHORT_INCREMENTED dailyCount=$newDailyCount date=$todayDate",
+        )
+
+        // --- STEP 2: Increment Active Limit Count (only if cycle exists) ---
+        val savedLimit = resolveSavedLimit()
+        val hasActive = store.currentCycle()?.let { it.cycleExpiresAt > now } == true
+        Log.i("SC_COUNT",
+            "SC_COUNT LIMIT_CONFIG_CHECK savedLimit=${savedLimit ?: "none"} " +
+                "activeCycle=$hasActive",
+        )
+
+        if (!hasActive) {
+            // No active limit cycle — daily count is the only count.
+            // This is NOT an error. The user may not have activated a limit.
+            Log.i("SC_COUNT",
+                "SC_COUNT NO_ACTIVE_CYCLE dailyCount=$newDailyCount limitNotActive",
+            )
+            return currentState()
+        }
+
+        // Active cycle exists — increment the limit count
+        val cycle = ensureFreshCycle(now) ?: return currentState()
         val count = cycle.currentCount + 1
         val duration = cycle.cycleDurationMillis + durationMillis
         val limitReached = count >= cycle.limitCount
         val warning = evaluateWarning(count, duration)
+        Log.i("SC_RT", "SC_RT ROOM_WRITE count=$count limit=${cycle.limitCount}")
         store.save(
             cycle.copy(
                 currentCount = count,
@@ -263,6 +323,16 @@ class ShortsControlEngine(
                 updatedAt = now,
             )
         )
+        Log.i("SC_RT", "SC_RT ROOM_WRITE_COMPLETE count=$count")
+        Log.i("SC_COUNT",
+            "SC_COUNT SHORT_INCREMENTED count=$count limit=${cycle.limitCount} dailyCount=$newDailyCount",
+        )
+        if (limitReached) {
+            Log.i("SC_COUNT",
+                "SC_COUNT LIMIT_REACHED count=$count limit=${cycle.limitCount}",
+            )
+        }
+
         return currentState()
     }
 
@@ -275,15 +345,38 @@ class ShortsControlEngine(
      * CONFIGURED (READY_TO_ACTIVATE — no cycle, no countdown, no lock).
      */
     fun currentState(now: Long = nowMillis()): ShortsControlState {
+        val dailyCount = store.getDailyCount()
         val cycle = store.currentCycle()
         if (cycle != null) {
-            if (cycle.cycleExpiresAt > now) return deriveState(cycle, now)
-            // Expired: persist EXPIRED (no auto-roll — the user re-activates)
-            // and surface the EXPIRED state so the page shows the expired
-            // notice + ACTIVE button instead of silently resetting.
+            if (cycle.cycleExpiresAt > now) return deriveState(cycle, now, dailyCount)
+            // Cycle has expired.
+            if (cycle.autoRestartEnabled) {
+                // Auto-restart: create a new 24h cycle from the saved limit.
+                val savedLimit = cycle.limitCount
+                Log.i("SC_COUNT",
+                    "SC_COUNT AUTO_RESTART limit=$savedLimit previousCount=${cycle.currentCount} dailyCount=$dailyCount",
+                )
+                val newCycle = store.save(
+                    ShortsLimitCycle(
+                        limitCount = savedLimit,
+                        currentCount = 0,
+                        cycleDurationMillis = 0L,
+                        cycleStartedAt = now,
+                        cycleExpiresAt = now + cycleDurationMillis,
+                        status = ShortsLimitCycleStatus.ACTIVE,
+                        warningTriggered = false,
+                        limitReached = false,
+                        autoRestartEnabled = true,
+                        createdAt = now,
+                        updatedAt = now,
+                    )
+                )
+                return deriveState(newCycle, now, dailyCount)
+            }
+            // No auto-restart: mark EXPIRED, stop enforcement.
             val expired = cycle.copy(status = ShortsLimitCycleStatus.EXPIRED, updatedAt = now)
             store.save(expired)
-            return deriveState(expired, now)
+            return deriveState(expired, now, dailyCount)
         }
         val configured = store.configuredCycle()
         if (configured != null) {
@@ -292,6 +385,7 @@ class ShortsControlEngine(
                 status = ShortsLimitCycleStatus.CONFIGURED,
                 currentCount = 0,
                 limitCount = configured.limitCount,
+                dailyShortsCount = dailyCount,
                 usageRatio = 0f,
                 remainingCount = configured.limitCount,
                 cycleStartedAt = null,
@@ -306,13 +400,14 @@ class ShortsControlEngine(
         // recent EXPIRED window (editing + re-activation available) rather
         // than falling back to first-time setup.
         store.history().firstOrNull { it.status == ShortsLimitCycleStatus.EXPIRED }?.let {
-            return deriveState(it, now)
+            return deriveState(it, now, dailyCount)
         }
         return ShortsControlState(
             cycle = null,
             status = ShortsLimitCycleStatus.DISABLED,
             currentCount = 0,
             limitCount = 0,
+            dailyShortsCount = dailyCount,
             usageRatio = 0f,
             remainingCount = 0,
             cycleStartedAt = null,
@@ -329,25 +424,82 @@ class ShortsControlEngine(
     // ------------------------------------------------------------------
 
     /**
-     * Returns the active cycle valid at [now] for counting, or null when no
-     * cycle is running. A saved-but-not-activated limit (CONFIGURED) is NOT
-     * counted; an expired window is marked EXPIRED and no next cycle is
-     * auto-created — counting resumes only after an explicit [activate].
+     * Returns the active cycle valid at [now] for counting.
+     *
+     * If no active cycle exists, this method auto-initializes a new 24-hour
+     * cycle from the saved limit (either a CONFIGURED row or the most recent
+     * EXPIRED row's limitCount). This ensures that Shorts continue to be
+     * counted even when the user hasn't explicitly re-activated after expiry.
+     *
+     * Returns null ONLY when no saved limit exists at all (never configured).
      */
     private fun ensureFreshCycle(now: Long): ShortsLimitCycle? {
-        val active = store.currentCycle() ?: return null
-        if (active.cycleExpiresAt > now) return active
-        store.save(active.copy(status = ShortsLimitCycleStatus.EXPIRED, updatedAt = now))
+        // Check for an existing active cycle
+        val active = store.currentCycle()
+        if (active != null) {
+            if (active.cycleExpiresAt > now) return active
+            // Active cycle has expired — mark it
+            store.save(active.copy(status = ShortsLimitCycleStatus.EXPIRED, updatedAt = now))
+        }
+
+        // No active cycle — attempt to auto-initialize from saved limit
+        val savedLimit = resolveSavedLimit()
+        if (savedLimit != null) {
+            Log.i("SC_COUNT",
+                "SC_COUNT CYCLE_AUTO_INITIALIZED limit=$savedLimit reason=${if (active != null) "EXPIRED" else "MISSING"}",
+            )
+            return store.save(
+                ShortsLimitCycle(
+                    limitCount = savedLimit,
+                    currentCount = 0,
+                    cycleDurationMillis = 0L,
+                    cycleStartedAt = now,
+                    cycleExpiresAt = now + cycleDurationMillis,
+                    status = ShortsLimitCycleStatus.ACTIVE,
+                    warningTriggered = false,
+                    limitReached = false,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+        }
+
+        // No saved limit exists — counting cannot proceed
         return null
     }
 
-    private fun deriveState(cycle: ShortsLimitCycle, now: Long): ShortsControlState {
+    /**
+     * Resolves the user's persistent Shorts limit from the store.
+     *
+     * Priority:
+     *  1. A CONFIGURED row (user explicitly set a limit, not yet activated)
+     *  2. The most recent EXPIRED row's limitCount (limit persists after cycle expiry)
+     *  3. null (never configured)
+     */
+    private fun resolveSavedLimit(): Int? {
+        // Priority 1: explicit configured limit
+        val configured = store.configuredCycle()
+        if (configured != null && configured.limitCount > 0) {
+            return configured.limitCount
+        }
+        // Priority 2: most recent expired cycle's limit
+        val lastExpired = store.history()
+            .firstOrNull { it.status == ShortsLimitCycleStatus.EXPIRED }
+        if (lastExpired != null && lastExpired.limitCount > 0) {
+            return lastExpired.limitCount
+        }
+        return null
+    }
+
+    private fun deriveState(cycle: ShortsLimitCycle, now: Long, dailyCount: Int = 0): ShortsControlState {
         val limit = cycle.limitCount
-        val ratio = if (limit > 0) cycle.currentCount.toFloat() / limit else 0f
-        // A finished window (EXPIRED / DISABLED) is never in an enforcement
-        // state — enforcement belongs to the running window only.
+        // When the window is over (EXPIRED / DISABLED), there is no active
+        // enforcement cycle, so the limit count is 0. Only an ACTIVE or
+        // LIMIT_REACHED cycle has a meaningful currentCount.
         val windowOver = cycle.status == ShortsLimitCycleStatus.EXPIRED ||
             cycle.status == ShortsLimitCycleStatus.DISABLED
+        val effectiveCount = if (windowOver) 0 else cycle.currentCount
+        val ratio = if (limit > 0) effectiveCount.toFloat() / limit else 0f
         val enforcement = when {
             windowOver -> ShortsEnforcementState.ALLOW
             cycle.limitReached || cycle.currentCount >= limit -> ShortsEnforcementState.LIMIT_REACHED
@@ -357,10 +509,11 @@ class ShortsControlEngine(
         return ShortsControlState(
             cycle = cycle,
             status = cycle.status,
-            currentCount = cycle.currentCount,
+            currentCount = effectiveCount,
             limitCount = limit,
+            dailyShortsCount = dailyCount,
             usageRatio = ratio,
-            remainingCount = (limit - cycle.currentCount).coerceAtLeast(0),
+            remainingCount = (limit - effectiveCount).coerceAtLeast(0),
             cycleStartedAt = cycle.cycleStartedAt,
             cycleExpiresAt = cycle.cycleExpiresAt,
             remainingCycleMillis = (cycle.cycleExpiresAt - now).coerceAtLeast(0L),

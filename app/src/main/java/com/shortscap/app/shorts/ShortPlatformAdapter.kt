@@ -1,5 +1,7 @@
 package com.shortscap.app.shorts
 
+import com.shortscap.app.monitoring.WindowContentEvidence
+
 /**
  * One platform's short-form detection rules.
  *
@@ -34,6 +36,28 @@ interface ShortPlatformAdapter {
 
     /** 2/3/4. Detect the current surface for this platform. */
     fun detect(signals: ShortDetectionSignals): ShortDetectionResult
+
+    /**
+     * Determine whether the user genuinely advanced to the next short-form
+     * content item, based on platform-specific evidence.
+     *
+     * This is called when [WindowContentEvidence] changes for this platform.
+     * The adapter compares [previousEvidence] (what was last dispatched) with
+     * [currentEvidence] (what was just observed) and returns true only when
+     * there is independent evidence of a genuine user interaction — NOT merely
+     * a content/autoplay/ad/layout update.
+     *
+     * Default returns false — platforms that receive `TYPE_VIEW_SCROLLED`
+     * (YouTube, Instagram, TikTok, etc.) use that as their primary advance
+     * signal and do not need content-evidence-based detection.
+     *
+     * Platforms that do NOT generate `TYPE_VIEW_SCROLLED` (e.g. Snapchat)
+     * override this to provide their own platform-specific advance detection.
+     */
+    fun detectUserAdvance(
+        previousEvidence: WindowContentEvidence,
+        currentEvidence: WindowContentEvidence,
+    ): Boolean = false
 }
 
 /**

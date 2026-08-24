@@ -10,6 +10,7 @@ import com.shortscap.app.monitoring.MonitoringEventHub
 import com.shortscap.app.monitoring.MonitoringService
 import com.shortscap.app.monitoring.WindowContentEvidence
 import com.shortscap.app.screenactivity.ScreenActivityEngine
+import com.shortscap.app.shorts.ShortPlatformRegistry
 import com.shortscap.app.shorts.ShortsRestrictionEngine
 
 /**
@@ -98,7 +99,16 @@ class ShortsCapAccessibilityService :
         Log.i("SC_DIAG", "EVENT type=$diagType pkg=${event.packageName} cls=${event.className}")
         // ===== end TEMP-DIAG =====
 
-        val isYouTube = event.packageName?.toString() == YOUTUBE_PACKAGE
+        // ===== SC_LIFECYCLE: raw accessibility event timing =====
+        Log.i("SC_LIFECYCLE",
+            "SC_LIFECYCLE ACCESSIBILITY_EVENT eventType=$diagType " +
+                "pkg=${event.packageName} className=${event.className} " +
+                "eventTime=${event.eventTime} now=${System.currentTimeMillis()}",
+        )
+
+        val pkg = event.packageName?.toString()
+        val isYouTube = pkg == YOUTUBE_PACKAGE
+        val isSupportedPlatform = pkg != null && pkg in SUPPORTED_PLATFORM_PACKAGES
         if (isYouTube) {
             // ===== TEMP-DIAG Phase A (remove after device diagnosis) =====
             logYouTubeEventDiagnostics(event)
@@ -112,28 +122,37 @@ class ShortsCapAccessibilityService :
             // class name lets the Shorts detector separate surfaces inside
             // the same app (e.g. YouTube Shorts vs YouTube Home).
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                event.packageName?.let { pkg ->
+                event.packageName?.let { pkgName ->
                     MonitoringEventHub.dispatchForegroundAppChanged(
-                        pkg.toString(),
+                        pkgName.toString(),
                         event.className?.toString(),
                     )
                 }
-                if (isYouTube) collectYouTubeWindowContent(event)
+                if (isYouTube) {
+                    collectYouTubeWindowContent(event)
+                } else if (isSupportedPlatform) {
+                    collectPlatformWindowContent(event, pkg!!)
+                }
             }
             // Scroll interaction in the foreground app — used ONLY as an
             // additional interaction signal by the Shorts detection pipeline
             // (package metadata only, never content).
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                event.packageName?.let { pkg ->
-                    MonitoringEventHub.dispatchForegroundScrolled(pkg.toString())
+                event.packageName?.let { pkgName ->
+                    MonitoringEventHub.dispatchForegroundScrolled(pkgName.toString())
                 }
             }
             // Phase 13.2: window STRUCTURE changed (content node updates,
-            // ~30Hz while scrolling). For YouTube only, a throttled structural
-            // walk keeps the Shorts-surface signal fresh inside the generic
-            // watchwhile window. Never dispatched for other packages.
+            // ~30Hz while scrolling). For YouTube a throttled structural walk
+            // keeps the Shorts-surface signal fresh inside the generic
+            // watchwhile window. For other supported platforms, collect content
+            // evidence for platform-specific surface detection.
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                if (isYouTube) collectYouTubeWindowContent(event)
+                if (isYouTube) {
+                    collectYouTubeWindowContent(event)
+                } else if (isSupportedPlatform) {
+                    collectPlatformWindowContent(event, pkg!!)
+                }
             }
         }
     }
@@ -354,16 +373,124 @@ class ShortsCapAccessibilityService :
         super.onDestroy()
     }
 
+    // =========================================================================
+    // Phase C — Cross-platform window-structure evidence (bounded + throttled)
+    // =========================================================================
+
+    /** Last structural evidence per platform — used for delta + throttle. */
+    private val lastPlatformWalkAt = mutableMapOf<String, Long>()
+
+    /** Last dispatched content evidence per platform — used for genuine-advance detection. */
+    private val lastPlatformEvidence = mutableMapOf<String, WindowContentEvidence>()
+
+    /**
+     * Walks the active window structure for non-YouTube supported platforms and
+     * dispatches [WindowContentEvidence] (node class names + view resource ids +
+     * content descriptions, deduplicated and bounded). Same privacy rules as
+     * YouTube: only structural identifiers, never user text or passwords.
+     */
+    private fun collectPlatformWindowContent(event: AccessibilityEvent, packageName: String) {
+        val isStateChange = event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        val lastWalk = lastPlatformWalkAt[packageName] ?: 0L
+        if (!isStateChange && (event.eventTime - lastWalk) < PLATFORM_WALK_THROTTLE_MILLIS) {
+            return
+        }
+        val root = rootInActiveWindow ?: return
+        if (root.packageName?.toString() != packageName) return
+        lastPlatformWalkAt[packageName] = event.eventTime
+
+        val classes = LinkedHashSet<String>()
+        val ids = LinkedHashSet<String>()
+        val descs = LinkedHashSet<String>()
+        var visited = 0
+
+        fun walk(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || visited >= PLATFORM_MAX_WALK_NODES || depth > PLATFORM_MAX_WALK_DEPTH) return
+            visited++
+            node.className?.toString()?.let { cls ->
+                if (classes.size < MAX_EVIDENCE_ENTRIES) classes.add(cls)
+            }
+            node.viewIdResourceName?.let { id ->
+                if (ids.size < MAX_EVIDENCE_ENTRIES) ids.add(id)
+            }
+            node.contentDescription?.toString()?.let { desc ->
+                if (desc.length in 3..100 && descs.size < MAX_EVIDENCE_ENTRIES) descs.add(desc)
+            }
+            for (i in 0 until node.childCount) {
+                runCatching { node.getChild(i) }.getOrNull()?.let { child ->
+                    walk(child, depth + 1)
+                }
+            }
+        }
+        runCatching { walk(root, 0) }
+
+        Log.i("SC_PLATFORM_DIAG",
+            "SC_PLATFORM_DIAG CONTENT_EVIDENCE pkg=$packageName nodes=$visited " +
+                "classes=${classes.size} ids=${ids.size} descs=${descs.size} " +
+                "classList=${classes.take(30).joinToString(",")}"
+        )
+        Log.i("SC_PLATFORM_DIAG",
+            "SC_PLATFORM_DIAG ID_LIST pkg=$packageName ids=${ids.take(30).joinToString(",")}"
+        )
+        Log.i("SC_PLATFORM_DIAG",
+            "SC_PLATFORM_DIAG DESC_LIST pkg=$packageName descs=${descs.take(20).joinToString(",")}"
+        )
+
+        val evidence = WindowContentEvidence(
+            nodeClasses = classes.toList(),
+            nodeViewIds = ids.toList(),
+            nodeContentDescriptions = descs.toList(),
+        )
+        MonitoringEventHub.dispatchForegroundContentObserved(packageName, evidence)
+
+        // Platform-specific genuine-advance detection.
+        // CONTENT_CHANGED ≠ USER_SCROLL: we do NOT blindly dispatch a scroll
+        // event on every content change. Instead, each platform adapter
+        // determines whether the evidence change represents a genuine user
+        // advance (swipe to next Short) using platform-specific signals.
+        val adapter = ShortPlatformRegistry.adapterFor(packageName)
+        val prev = lastPlatformEvidence[packageName]
+        if (prev != null && adapter.detectUserAdvance(prev, evidence)) {
+            Log.i("SC_INTERACTION",
+                "SC_INTERACTION USER_ADVANCE pkg=$packageName platform=${adapter.platform} " +
+                    "source=CONTENT_EVIDENCE_CHANGE",
+            )
+            MonitoringEventHub.dispatchForegroundScrolled(packageName)
+        }
+        lastPlatformEvidence[packageName] = evidence
+    }
+
     private companion object {
         const val YOUTUBE_PACKAGE = "com.google.android.youtube"
 
         /** Throttle for high-frequency content-changed structural walks. */
         const val YOUTUBE_WALK_THROTTLE_MILLIS = 150L
 
+        /** Throttle for non-YouTube platform structural walks. */
+        const val PLATFORM_WALK_THROTTLE_MILLIS = 500L
+
         /** Structural walk bounds (keep the ~30Hz content updates cheap). */
         const val MAX_WALK_NODES = 600
         const val MAX_WALK_DEPTH = 60
         const val MAX_EVIDENCE_ENTRIES = 80
         const val MAX_DETAIL_LINES = 40
+
+        /** Non-YouTube platform walk bounds (smaller — these are less frequent). */
+        const val PLATFORM_MAX_WALK_NODES = 400
+        const val PLATFORM_MAX_WALK_DEPTH = 40
+
+        /** All supported short-form platform packages (excluding YouTube, which has its own path). */
+        val SUPPORTED_PLATFORM_PACKAGES: Set<String> = setOf(
+            "com.instagram.android",
+            "com.ss.android.ugc.aweme",
+            "com.zhiliaoapp.musically",
+            "com.snapchat.android",
+            "com.facebook.katana",
+            "in.mohalla.video",
+            "com.twitter.android",
+            "com.twitter.android.lite",
+            "com.linkedin.android",
+            "com.sharechat.android",
+        )
     }
 }

@@ -31,6 +31,11 @@ data class ShortsLimitCycleEntity(
     val limitReached: Boolean,
     val createdAt: Long,
     val updatedAt: Long,
+    // --- Daily Monitoring Count (independent of limit cycle) ---
+    val dailyShortsCount: Int = 0,
+    val dailyShortsDate: String = "",
+    // --- Auto Restart setting ---
+    val autoRestartEnabled: Boolean = false,
 )
 
 @Dao
@@ -61,4 +66,19 @@ interface ShortsLimitCycleDao {
     /** All windows, newest first (history is never deleted on disable). */
     @Query("SELECT * FROM shorts_limit_cycle ORDER BY cycleStartedAt DESC")
     suspend fun history(): List<ShortsLimitCycleEntity>
+
+    // --- Daily Monitoring Count ---
+
+    /** Returns the daily count from the most recent row (CONFIGURED, ACTIVE, or EXPIRED). */
+    @Query(
+        "SELECT dailyShortsCount FROM shorts_limit_cycle ORDER BY updatedAt DESC LIMIT 1"
+    )
+    suspend fun getDailyCount(): Int?
+
+    /** Atomically sets the daily count and date on the most recent row. */
+    @Query(
+        "UPDATE shorts_limit_cycle SET dailyShortsCount = :count, dailyShortsDate = :date " +
+            "WHERE localId = (SELECT localId FROM shorts_limit_cycle ORDER BY updatedAt DESC LIMIT 1)"
+    )
+    suspend fun updateDailyCount(count: Int, date: String)
 }

@@ -46,6 +46,24 @@ class RoomShortsLimitCycleStore(
         return disabled
     }
 
+    override fun incrementDailyCount(todayDate: String): Int {
+        val currentDaily = ioBlocking { dao.getDailyCount() } ?: 0
+        val newDaily = if (todayDate == (ioBlocking { dao.configured() }?.dailyShortsDate ?: "")) {
+            currentDaily + 1
+        } else {
+            1 // New day — reset to 1
+        }
+        ioBlocking { dao.updateDailyCount(newDaily, todayDate) }
+        return newDaily
+    }
+
+    override fun getDailyCount(): Int {
+        val configured = ioBlocking { dao.configured() }
+        if (configured == null) return 0
+        // Check if the stored date matches today — if not, count is stale
+        return configured.dailyShortsCount
+    }
+
     private fun <T> ioBlocking(block: suspend () -> T): T =
         runBlocking(ioDispatcher) { block() }
 }
@@ -66,6 +84,9 @@ private fun ShortsLimitCycle.toEntity() = ShortsLimitCycleEntity(
     limitReached = limitReached,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    dailyShortsCount = dailyShortsCount,
+    dailyShortsDate = dailyShortsDate,
+    autoRestartEnabled = autoRestartEnabled,
 )
 
 private fun ShortsLimitCycleEntity.toCycle() = ShortsLimitCycle(
@@ -84,4 +105,7 @@ private fun ShortsLimitCycleEntity.toCycle() = ShortsLimitCycle(
     limitReached = limitReached,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    dailyShortsCount = dailyShortsCount,
+    dailyShortsDate = dailyShortsDate,
+    autoRestartEnabled = autoRestartEnabled,
 )

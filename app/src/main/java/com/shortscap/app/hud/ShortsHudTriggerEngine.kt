@@ -1,6 +1,7 @@
 package com.shortscap.app.hud
 
 import android.content.Context
+import android.util.Log
 import com.shortscap.app.accessibility.AccessibilityServiceStatus
 import com.shortscap.app.monitoring.MonitoringService
 import com.shortscap.app.shorts.ShortFormSurfaceState
@@ -87,6 +88,26 @@ object ShortsHudTriggerEngine {
      * reflects the new configuration without waiting for another detection.
      */
     fun refresh(context: Context): Boolean = onSurfaceChanged(lastSurface, context)
+
+    /**
+     * Directly updates the HUD's live count from the pipeline's
+     * [com.shortscap.app.shorts.ShortsMonitoringPipeline.CountChangeListener].
+     * Called after every successful countShort() so the HUD reflects the
+     * persisted count without waiting for a surface-state broadcast.
+     *
+     * Uses Compose [mutableStateOf] under the hood — the overlay
+     * recomposes automatically when the count changes.
+     */
+    fun updateCount(count: Int, limit: Int) {
+        val oldCount = uiState.count
+        uiState.count = count
+        uiState.limit = limit
+        uiState.remaining = (limit - count).coerceAtLeast(0)
+        Log.i("SC_RT", "SC_RT HUD_STATE_UPDATE oldCount=$oldCount newCount=$count limit=$limit remaining=${uiState.remaining} visible=${uiState.visible}")
+        Log.i("SC_COUNT",
+            "SC_COUNT HUD_STATE_UPDATED count=$count limit=$limit remaining=${uiState.remaining}",
+        )
+    }
 
     /** Drops the remembered surface (called on controller stop). */
     fun reset() {

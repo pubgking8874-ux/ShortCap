@@ -1,6 +1,7 @@
 package com.shortscap.app.hud
 
 import android.content.Context
+import android.util.Log
 import com.shortscap.app.shorts.ShortFormSurfaceListener
 import com.shortscap.app.shorts.ShortFormSurfaceState
 import com.shortscap.app.shorts.ShortsMonitoringPipeline
@@ -62,18 +63,29 @@ object ShortsHudController {
      * Idempotent — safe to call from the accessibility service's
      * onServiceConnected.
      */
+    private val countListener = ShortsMonitoringPipeline.CountChangeListener { count, limit ->
+        onCountChanged(count, limit)
+    }
+
+    /**
+     * Subscribes to the shared pipeline's surface-state notifications.
+     * Idempotent — safe to call from the accessibility service's
+     * onServiceConnected.
+     */
     fun start(context: Context) {
         this.context = context.applicationContext
         if (started) return
         started = true
         val pipeline = ShortsMonitoringPipeline.sharedInstance
         pipeline.addSurfaceListener(surfaceListener)
+        pipeline.addCountListener(countListener)
     }
 
     /** Unsubscribes and hides the overlay. Safe to call repeatedly. */
     fun stop() {
         if (started) {
             ShortsMonitoringPipeline.sharedInstance.removeSurfaceListener(surfaceListener)
+            ShortsMonitoringPipeline.sharedInstance.removeCountListener(countListener)
             started = false
         }
         ShortsHudTriggerEngine.reset()
@@ -114,5 +126,23 @@ object ShortsHudController {
             return
         }
         ShortsHudOverlayManager.show(ctx, ShortsHudTriggerEngine.uiState, store.appearance())
+    }
+
+    /**
+     * Called by the pipeline's [CountChangeListener] after every successful
+     * countShort().  Updates the HUD's live count directly — bypasses the
+     * surface-state broadcast which is deduplicated when the session key
+     * (package|activity|startedAt) hasn't changed.
+     */
+    private fun onCountChanged(count: Int, limit: Int) {
+        Log.i("SC_RT", "SC_RT HUD_COUNT_RECEIVED count=$count limit=$limit showing=${ShortsHudOverlayManager.isShowing}")
+        ShortsHudTriggerEngine.updateCount(count, limit)
+        Log.i("SC_COUNT",
+            "SC_COUNT HUD_COUNT_RENDER count=$count limit=$limit showing=${ShortsHudOverlayManager.isShowing}",
+        )
+        // If the HUD overlay is already showing, it will recompose automatically
+        // because ShortsHudUiState uses Compose mutableStateOf. If it is not
+        // showing (e.g. settings page), no action needed — the next
+        // onSurfaceChanged() call will pick up the fresh count.
     }
 }

@@ -63,6 +63,7 @@ import com.shortscap.app.study.maskContact
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
+import com.shortscap.app.shorts.ShortsControlEngine
 import com.shortscap.app.favicon.FaviconRepository
 import com.shortscap.app.web.WebAnalyticsPeriod
 import com.shortscap.app.web.WebRepository
@@ -340,6 +341,59 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             delay(900)
             _uiState.update { it.copy(homeLoading = false) }
+        }
+
+        // ------------------------------------------------------------------
+        // Shorts goal synchronization — polls the AUTHORITATIVE
+        // ShortsControlEngine.shared (the single source of truth for both the
+        // daily Shorts limit and the current Shorts count) every second.
+        //
+        // Before this, the Dashboard circular goal used hardcoded mock values
+        // ("245 Shorts", progress 0.65f) that were never updated from the
+        // counting pipeline or the Settings limit.  After this fix:
+        //
+        //   Dashboard current count == ShortsControlEngine.currentCount
+        //   Dashboard goal/limit   == ShortsControlEngine.limitCount
+        //   Dashboard progress     == currentCount / limitCount (clamped 0..1)
+        //
+        // The polling interval (1 s) matches the ShortsLimitScreen tick and
+        // is light enough for battery — one Room read per second on IO.
+        // ------------------------------------------------------------------
+        viewModelScope.launch {
+            while (isActive) {
+                val engineState = ShortsControlEngine.shared.currentState()
+                val count = engineState.currentCount
+                val limit = engineState.limitCount
+                val watchTimeMillis = engineState.cycle?.cycleDurationMillis ?: 0L
+                val progress = if (limit > 0) (count.toFloat() / limit).coerceIn(0f, 1f) else 0f
+                val watchHours = watchTimeMillis / 3_600_000L
+                val watchMinutes = (watchTimeMillis % 3_600_000L) / 60_000L
+                val watchTimeText = when {
+                    watchHours > 0 -> "${watchHours}h ${watchMinutes}m"
+                    watchMinutes > 0 -> "${watchMinutes}m"
+                    else -> "0m"
+                }
+                _uiState.update { state ->
+                    state.copy(
+                        homeMetrics = listOf(
+                            ScCircularMetric(
+                                id = "shorts-watch-time",
+                                label = "Today's Shorts Watch Time",
+                                value = watchTimeText,
+                                progress = progress,
+                            ),
+                            ScCircularMetric(
+                                id = "shorts-watched",
+                                label = "Today's Shorts Watched",
+                                value = "$count",
+                                unit = "Shorts",
+                                progress = progress,
+                            ),
+                        ),
+                    )
+                }
+                delay(1_000L)
+            }
         }
     }
 
