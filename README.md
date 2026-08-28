@@ -394,6 +394,30 @@ Complete rewrite of the Shorts monitoring pipeline to implement a simplified, de
 
 - **Process restart safe:** In-memory `active` context is lost on restart → starts from `NO_SESSION`. Persisted daily count, limit, and cycle survive.
 
+### Phase 15 — HUD recovery on count update *(Aug 28, 2026)*
+**Files:** `ShortsHudController.kt`
+
+- Added HUD overlay recovery in `onCountChanged()`: if the HUD overlay is not showing when a valid count update arrives, re-show it using the existing `ShortsHudOverlayManager.show()` API.
+- Diagnostic logs added: `SC_RT HUD_RECOVERY_CHECK`, `SC_RT HUD_RECOVERY_SHOW_REQUEST`, `SC_RT HUD_RECOVERY_SHOW_RESULT`.
+- All existing permission/enabled/double-add protections preserved (delegated to `ShortsHudOverlayManager.show()`).
+
+### Phase 16 — TRANSIENT_UI scroll gate bypass for QUALIFIED sessions *(Aug 28, 2026)*
+**Files:** `ShortsMonitoringPipeline.kt`
+
+- Modified `onForegroundScrolled()`: when a session is already `QUALIFIED` (≥3000ms watched), the TRANSIENT_UI scroll gate is bypassed so a genuine swipe is not suppressed by stale cached content evidence (e.g. like/share/comment keywords).
+- WATCHING and NO_SESSION sessions retain existing TRANSIENT_UI protection unchanged.
+- Diagnostic log added: `SC_SCROLL_DECISION ... reason=QUALIFIED_TRANSIENT_UI_BYPASS`.
+
+### Phase 17 — Snapchat Short-to-Short advance detection reliability *(Aug 28, 2026)*
+**Files:** `SnapchatSpotlightAdapter.kt`
+
+- Enhanced `detectUserAdvance()` with a **content description fingerprint** alongside the existing Shorts-specific class comparison.
+- Content fingerprint filters out static UI labels (like, share, comments, navigation, player controls) and only compares meaningful content-specific descriptions (creator text, captions, unique content).
+- Advance is detected when EITHER the class fingerprint OR the content fingerprint changes.
+- Static/generic labels excluded via `STATIC_LABELS` set: navigation items, UI actions, player controls, overlay/chrome.
+- Minimum content description length filter (4 chars) excludes button labels and icon text.
+- Diagnostic logs added: `SC_SNAP_ADVANCE` with prev/curr class and content fingerprints.
+
 ### Phase 8 — Shorts Limit screen: unified compact page *(Aug 16, 2026)*
 **Files:** `screens/settings/ShortsLimitScreen.kt` (rewritten single screen — old wizard composables removed), `i18n/AppStrings.kt` + all five catalogs (`EnglishStrings.kt` / `HindiStrings.kt` / `UrduStrings.kt` / `ChineseStrings.kt` / `SpanishStrings.kt`), and this `README.md`
 

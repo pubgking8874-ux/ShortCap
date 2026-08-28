@@ -149,33 +149,80 @@ object SnapchatSpotlightAdapter : ShortPlatformAdapter {
 
     /**
      * Snapchat does not generate `TYPE_VIEW_SCROLLED` (custom ViewPager).
-     * We detect genuine advances by comparing Shorts-specific structural
-     * classes between the previous and current content evidence.
+     * We detect genuine advances using two complementary signals:
      *
-     * During normal playback, Shorts-specific classes (Spotlight/Reel nodes)
-     * remain stable. A genuine swipe causes the entire view hierarchy to
-     * shift: old Short exits, new Short enters, causing structural class
-     * changes in the Shorts-specific subset.
+     *  1. Shorts-specific structural class comparison (existing).
+     *     During normal playback these classes are stable. A genuine swipe
+     *     can shift the view hierarchy, but identical classes between Shorts
+     *     are common — so this signal alone is insufficient.
      *
-     * Non-Shorts changes (ads, UI updates, progress bars) affect generic
-     * classes that we filter out. The pipeline's 3-second protection window
-     * provides additional defense against false positives.
+     *  2. Content description fingerprint (new). Creator/channel text,
+     *     caption, and unique content descriptions change between Shorts.
+     *     Static UI labels (like, share, comment, navigation) are excluded.
+     *
+     * Advance is detected when EITHER signal shows a meaningful change.
+     * The pipeline's 3-second qualification + 500ms scroll debounce provide
+     * additional defense against false positives.
      */
     override fun detectUserAdvance(
         previousEvidence: WindowContentEvidence,
         currentEvidence: WindowContentEvidence,
     ): Boolean {
+        // --- Signal 1: Shorts-specific class comparison (existing) ---
         val prevShorts = previousEvidence.nodeClasses.filter { isShortsSpecific(it) }.toSet()
         val currShorts = currentEvidence.nodeClasses.filter { isShortsSpecific(it) }.toSet()
-        if (prevShorts == currShorts) return false
-        val changed = prevShorts.size != currShorts.size ||
-            prevShorts.any { it !in currShorts } ||
-            currShorts.any { it !in prevShorts }
-        Log.i("SC_INTERACTION",
-            "SC_INTERACTION ADVANCE_CHECK pkg=$packageNames platform=SNAPCHAT " +
-                "prevShorts=${prevShorts.size} currShorts=${currShorts.size} changed=$changed",
+        val classChanged = prevShorts != currShorts
+
+        // --- Signal 2: Content description fingerprint (new) ---
+        val prevContent = contentFingerprint(previousEvidence.nodeContentDescriptions)
+        val currContent = contentFingerprint(currentEvidence.nodeContentDescriptions)
+        val contentChanged = prevContent != currContent
+
+        val advance = classChanged || contentChanged
+
+        Log.i("SC_SNAP_ADVANCE",
+            "SC_SNAP_ADVANCE prevClassFingerprint=${prevShorts.size} " +
+                "currClassFingerprint=${currShorts.size} classChanged=$classChanged " +
+                "prevContentFingerprint=${prevContent.size} " +
+                "currContentFingerprint=${currContent.size} contentChanged=$contentChanged " +
+                "advance=$advance",
         )
-        return changed
+
+        if (advance) {
+            Log.i("SC_INTERACTION",
+                "SC_INTERACTION USER_ADVANCE pkg=$packageNames platform=SNAPCHAT " +
+                    "source=SNAPCHAT_CONTENT_FINGERPRINT classChanged=$classChanged " +
+                    "contentChanged=$contentChanged",
+            )
+        } else {
+            Log.i("SC_INTERACTION",
+                "SC_INTERACTION USER_ADVANCE_REJECTED pkg=$packageNames platform=SNAPCHAT " +
+                    "reason=SAME_CONTENT",
+            )
+        }
+
+        return advance
+    }
+
+    /**
+     * Builds a content fingerprint from accessibility content descriptions,
+     * excluding static UI labels, navigation items, and transient overlay
+     * text. Only meaningful content-specific descriptions survive.
+     *
+     * Filters out:
+     *  - Descriptions shorter than 4 characters (button labels, icons)
+     *  - Static Snapchat navigation: map, chat, camera, stories, spotlight, search
+     *  - Generic UI actions: like, share, comment, follow, subscribe, etc.
+     *  - Overlay/chrome: back, close, send, save, more, dismiss
+     */
+    private fun contentFingerprint(descriptions: List<String>): Set<String> {
+        return descriptions
+            .filter { it.length >= MIN_CONTENT_DESC_LENGTH }
+            .map { it.lowercase().trim() }
+            .filter { desc ->
+                STATIC_LABELS.none { label -> desc == label || desc.contains(label) }
+            }
+            .toSet()
     }
 
     /** Class is Shorts/Spotlight-specific (not a generic Android widget). */
@@ -189,5 +236,32 @@ object SnapchatSpotlightAdapter : ShortPlatformAdapter {
     private val SPOTLIGHT_UNIQUE_DESCRIPTIONS = setOf(
         "spotlight",
         "send to spotlight",
+    )
+
+    /** Minimum content description length to be considered meaningful. */
+    private const val MIN_CONTENT_DESC_LENGTH = 4
+
+    /**
+     * Static UI labels to exclude from content fingerprint.
+     * These appear across all Shorts and do not identify specific content.
+     */
+    private val STATIC_LABELS = setOf(
+        // Snapchat navigation
+        "map", "chat", "camera", "stories", "spotlight", "search",
+        "add friends", "story sent", "discover",
+        // Generic UI actions
+        "like", "share", "comment", "comments", "reply", "replies",
+        "follow", "subscribe", "subscribed",
+        "more", "back", "close", "send", "save", "dismiss",
+        "bookmark", "saved", "unlike", "dislike",
+        // Player controls
+        "play", "pause", "mute", "unmute",
+        "fullscreen", "exit fullscreen",
+        // Overlays / chrome
+        "description", "expand", "collapse",
+        "settings", "autoplay",
+        "keyboard", "text input", "type a message",
+        "compose", "write a comment",
+        "bottom sheet", "dialog", "popup", "modal",
     )
 }
