@@ -291,7 +291,19 @@ class ShortsControlEngine(
 
         // --- STEP 2: Increment Active Limit Count (only if cycle exists) ---
         val savedLimit = resolveSavedLimit()
-        val hasActive = store.currentCycle()?.let { it.cycleExpiresAt > now } == true
+        val currentCycle = store.currentCycle()
+        val hasActive = currentCycle?.let { it.cycleExpiresAt > now } == true
+
+        // --- CYCLE_STATE diagnostic ---
+        Log.i("SC_COUNT",
+            "SC_COUNT CYCLE_STATE active=$hasActive " +
+                "currentCount=${currentCycle?.currentCount ?: "none"} " +
+                "limitCount=${currentCycle?.limitCount ?: "none"} " +
+                "cycleStartedAt=${currentCycle?.cycleStartedAt ?: "none"} " +
+                "cycleExpiresAt=${currentCycle?.cycleExpiresAt ?: "none"} " +
+                "now=$now remainingMillis=${if (currentCycle != null && currentCycle.cycleExpiresAt > now) (currentCycle.cycleExpiresAt - now) else "none"} " +
+                "status=${currentCycle?.status ?: "none"} savedLimit=${savedLimit ?: "none"}",
+        )
         Log.i("SC_COUNT",
             "SC_COUNT LIMIT_CONFIG_CHECK savedLimit=${savedLimit ?: "none"} " +
                 "activeCycle=$hasActive",
@@ -530,5 +542,162 @@ class ShortsControlEngine(
             ?.let { durationMillis >= it * 60_000L } ?: false
         return countWarn || timeWarn
     }
+
+    // ==================================================================
+    // DEBUG / TEST CONTROLS — Development-only limit cycle manipulation
+    // ==================================================================
+    // These methods are only safe because allowEditWhileActive is gated by
+    // BuildConfig.DEBUG. In release builds allowEditWhileActive=false so
+    // production cycles are always locked. The UI section that calls these
+    // methods is also gated by BuildConfig.DEBUG.
+    // ==================================================================
+
+    /** Stored original expiry for pause/resume. 0L = not paused. */
+    @Volatile private var pausedOriginalExpiry: Long = 0L
+
+    /**
+     * DEBUG: Reset the current cycle to a clean testing state.
+     * Sets count=0, limitReached=false, warningTriggered=false, and extends
+     * the cycle by 24 hours from now so the developer can test freely.
+     */
+    fun debugResetCycle(): ShortsControlState {
+        val now = nowMillis()
+        val cycle = store.currentCycle()
+        val limit = cycle?.limitCount?.takeIf { it > 0 }
+            ?: store.configuredCycle()?.limitCount
+            ?: 50
+        store.save(
+            ShortsLimitCycle(
+                limitCount = limit,
+                currentCount = 0,
+                cycleDurationMillis = 0L,
+                cycleStartedAt = now,
+                cycleExpiresAt = now + cycleDurationMillis,
+                status = ShortsLimitCycleStatus.ACTIVE,
+                warningTriggered = false,
+                limitReached = false,
+                createdAt = now,
+                updatedAt = now,
+            )
+        )
+        pausedOriginalExpiry = 0L
+        Log.i("SC_DEBUG", "SC_DEBUG RESET_CYCLE limit=$limit now=$now")
+        return currentState()
+    }
+
+    /**
+     * DEBUG: Set the current count to an arbitrary value.
+     * Useful for testing limit-reached behavior at specific counts.
+     */
+    fun debugSetCount(count: Int): ShortsControlState {
+        val now = nowMillis()
+        val cycle = ensureFreshCycle(now) ?: return currentState()
+        val limitReached = count >= cycle.limitCount
+        store.save(
+            cycle.copy(
+                currentCount = count,
+                limitReached = limitReached,
+                status = if (limitReached) ShortsLimitCycleStatus.LIMIT_REACHED
+                    else ShortsLimitCycleStatus.ACTIVE,
+                updatedAt = now,
+            )
+        )
+        Log.i("SC_DEBUG", "SC_DEBUG SET_COUNT count=$count limit=${cycle.limitCount} limitReached=$limitReached")
+        return currentState()
+    }
+
+    /**
+     * DEBUG: Set the limit to an arbitrary value.
+     * Uses the existing setLimit() path.
+     */
+    fun debugSetLimit(limit: Int): ShortsControlState {
+        if (limit <= 0) return currentState()
+        val now = nowMillis()
+        val cycle = store.currentCycle()
+        if (cycle != null && cycle.cycleExpiresAt > now) {
+            // Active cycle — update threshold only (preserves count/timers)
+            store.save(cycle.copy(limitCount = limit, updatedAt = now))
+        } else {
+            // No active cycle — save configured limit
+            val configured = store.configuredCycle()
+            if (configured != null) {
+                store.save(configured.copy(limitCount = limit, updatedAt = now))
+            } else {
+                store.save(
+                    ShortsLimitCycle(
+                        limitCount = limit,
+                        cycleStartedAt = 0L,
+                        cycleExpiresAt = 0L,
+                        status = ShortsLimitCycleStatus.CONFIGURED,
+                        createdAt = now,
+                        updatedAt = now,
+                    )
+                )
+            }
+        }
+        Log.i("SC_DEBUG", "SC_DEBUG SET_LIMIT limit=$limit")
+        return currentState()
+    }
+
+    /**
+     * DEBUG: Clear only the limit-reached flag without resetting count.
+     */
+    fun debugClearLimitReached(): ShortsControlState {
+        val now = nowMillis()
+        val cycle = store.currentCycle() ?: return currentState()
+        store.save(
+            cycle.copy(
+                limitReached = false,
+                status = ShortsLimitCycleStatus.ACTIVE,
+                updatedAt = now,
+            )
+        )
+        Log.i("SC_DEBUG", "SC_DEBUG CLEAR_LIMIT_REACHED count=${cycle.currentCount}")
+        return currentState()
+    }
+
+    /**
+     * DEBUG: Pause the 24-hour cycle by extending its expiry far into the
+     * future. The cycle remains ACTIVE but the countdown effectively stops.
+     * Call [debugResumeCycle] to restore the original expiry.
+     */
+    fun debugPauseCycle(): ShortsControlState {
+        val now = nowMillis()
+        val cycle = store.currentCycle() ?: return currentState()
+        if (pausedOriginalExpiry > 0L) return currentState() // already paused
+        pausedOriginalExpiry = cycle.cycleExpiresAt
+        store.save(
+            cycle.copy(
+                cycleExpiresAt = now + 365L * 24L * 60L * 60L * 1000L, // ~1 year
+                updatedAt = now,
+            )
+        )
+        Log.i("SC_DEBUG", "SC_DEBUG PAUSE originalExpiry=$pausedOriginalExpiry")
+        return currentState()
+    }
+
+    /**
+     * DEBUG: Resume a paused cycle by restoring its original expiry.
+     * If the original expiry has already passed, the cycle is marked EXPIRED.
+     */
+    fun debugResumeCycle(): ShortsControlState {
+        val now = nowMillis()
+        val cycle = store.currentCycle() ?: return currentState()
+        val original = pausedOriginalExpiry
+        if (original <= 0L) return currentState() // not paused
+        pausedOriginalExpiry = 0L
+        if (original <= now) {
+            // Original expiry already passed — mark expired
+            store.save(cycle.copy(status = ShortsLimitCycleStatus.EXPIRED, updatedAt = now))
+            Log.i("SC_DEBUG", "SC_DEBUG RESUME expired originalExpiry=$original")
+        } else {
+            store.save(cycle.copy(cycleExpiresAt = original, updatedAt = now))
+            Log.i("SC_DEBUG", "SC_DEBUG RESUME restoredExpiry=$original")
+        }
+        return currentState()
+    }
+
+    /** DEBUG: Whether the cycle is currently paused. */
+    fun isDebugPaused(): Boolean = pausedOriginalExpiry > 0L
 
 }

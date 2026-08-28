@@ -63,4 +63,25 @@ interface ShortsStoreDao {
 
     @Query("DELETE FROM shorts_events")
     suspend fun clearEvents()
+
+    // ---- Phase 1: Aggregation queries for real Shorts usage metrics ----
+
+    /** Aggregated Shorts usage for a time range. */
+    data class ShortsUsageSummary(
+        val totalDurationMillis: Long,
+        val totalCount: Int,
+    )
+
+    /**
+     * Sum of duration and count for shorts_usage records whose occurredAt
+     * falls inside [rangeStart, rangeEnd). Returns zeros when no records match.
+     */
+    @Query("""
+        SELECT
+            COALESCE(SUM(durationMillis), 0) AS totalDurationMillis,
+            COALESCE(SUM(countDelta), 0) AS totalCount
+        FROM shorts_usage
+        WHERE occurredAt >= :rangeStart AND occurredAt < :rangeEnd
+    """)
+    suspend fun usageSummary(rangeStart: Long, rangeEnd: Long): ShortsUsageSummary
 }

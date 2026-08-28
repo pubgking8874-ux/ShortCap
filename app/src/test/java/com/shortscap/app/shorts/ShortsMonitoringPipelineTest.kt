@@ -425,4 +425,283 @@ class ShortsMonitoringPipelineTest {
 
         assertEquals(1, p.currentBudget().totalShorts)
     }
+
+    // ====================================================================
+    // TRANSIENT_UI gate regression tests (Phase: cross-platform fix)
+    // ====================================================================
+    //
+    // NOTE: These tests verify the surface listener (HUD state) and session
+    // state transitions — NOT the budget/count (which requires
+    // ShortsControlEngine.shared and is a pre-existing test-infrastructure gap
+    // affecting all tests 1–25).
+
+    /** Evidence that looks like transient UI (has like/share/comment labels). */
+    private fun transientUiEvidence(): WindowContentEvidence = WindowContentEvidence(
+        nodeClasses = listOf("android.widget.FrameLayout"),
+        nodeViewIds = listOf("com.instagram.android:id/comment_button"),
+        nodeContentDescriptions = listOf("like", "share", "comment on this post"),
+    )
+
+    /** Evidence that is clearly Shorts player (structural + transient mixed). */
+    private fun shortsPlayerWithTransientEvidence(): WindowContentEvidence = WindowContentEvidence(
+        nodeClasses = listOf(
+            "com.instagram.android.widget.ReelPlayerView",
+            "android.widget.FrameLayout",
+        ),
+        nodeViewIds = listOf(
+            "com.instagram.android:id/reel_recycler",
+            "com.instagram.android:id/comment_button",
+        ),
+        nodeContentDescriptions = listOf(
+            "like",
+            "share",
+            "watch reels",
+        ),
+    )
+
+    // 26. NO_SESSION + TRANSIENT_UI: detection must proceed via scroll fallback.
+    //     The surface listener must receive a non-null state (HUD shown)
+    //     when the adapter detects Shorts despite transient UI labels.
+    @Test
+    fun `transient UI evidence does not block initial detection with scroll`() {
+        val detect: (ShortDetectionSignals) -> ShortDetectionResult = { signals ->
+            if (signals.interactionCount >= 1) {
+                ShortDetectionResult(
+                    ShortPlatform.INSTAGRAM, ShortSurface.INSTAGRAM_REELS,
+                    isShortForm = true, confidence = 0.65f, DetectionMethod.PLATFORM_ADAPTER,
+                )
+            } else {
+                ShortDetectionResult(
+                    ShortPlatform.INSTAGRAM, ShortSurface.UNKNOWN,
+                    isShortForm = false, confidence = 0.15f, DetectionMethod.PLATFORM_ADAPTER,
+                )
+            }
+        }
+        val store = InMemoryShortsLocalStore()
+        val p = ShortsMonitoringPipeline(
+            detect = detect, store = store, nowMillis = clock,
+        )
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        p.enter("com.instagram.android", null, 0L)
+        now = 500L
+        p.onForegroundContentObserved("com.instagram.android", transientUiEvidence())
+        p.onForegroundScrolled("com.instagram.android")
+        now = 1_000L
+        p.onForegroundContentObserved("com.instagram.android", transientUiEvidence())
+
+        // The surface listener must have received a non-null state
+        // (HUD shown) — the scroll fallback detected Reels despite transient UI.
+        assertTrue(
+            "Expected at least one non-null surface state (HUD shown), got: $states",
+            states.any { it != null },
+        )
+        val activeState = states.firstNotNullOfOrNull { it }
+        assertEquals(ShortPlatform.INSTAGRAM, activeState?.platform)
+        assertEquals(ShortSurface.INSTAGRAM_REELS, activeState?.surface)
+    }
+
+    // 27. NO_SESSION + TRANSIENT_UI + non-short adapter: HUD must stay hidden.
+    @Test
+    fun `transient UI evidence with non-short adapter result does not create session`() {
+        val detect: (ShortDetectionSignals) -> ShortDetectionResult = {
+            ShortDetectionResult(
+                ShortPlatform.FACEBOOK, ShortSurface.UNKNOWN,
+                isShortForm = false, confidence = 0.15f, DetectionMethod.PLATFORM_ADAPTER,
+            )
+        }
+        val p = ShortsMonitoringPipeline(
+            detect = detect, store = InMemoryShortsLocalStore(), nowMillis = clock,
+        )
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        p.enter("com.facebook.katana", null, 0L)
+        now = 500L
+        p.onForegroundContentObserved("com.facebook.katana", transientUiEvidence())
+        now = 1_000L
+        p.onForegroundContentObserved("com.facebook.katana", transientUiEvidence())
+        p.leaveToNeutral(60_000L)
+
+        // No surface state should ever be non-null.
+        assertTrue(
+            "Expected all surface states to be null, got: $states",
+            states.all { it == null },
+        )
+    }
+
+    // 28. WATCHING session + TRANSIENT_UI: session must be preserved
+    //     and the surface listener must keep receiving non-null state.
+    @Test
+    fun `transient UI during watching session preserves session`() {
+        val p = pipeline()
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+        p.enter("com.google.android.youtube", youtubeShortsClass, 0L)
+
+        // Content evidence with transient UI — session must be preserved.
+        now = 1_000L
+        p.onForegroundContentObserved("com.google.android.youtube", transientUiEvidence())
+
+        // The surface listener must have received a non-null state
+        // (HUD shown) and the transient UI must NOT have caused a null.
+        assertTrue(
+            "Expected non-null surface state (HUD shown), got: $states",
+            states.any { it != null },
+        )
+        // The last state before leaving must be non-null (HUD still visible).
+        assertTrue(
+            "HUD must still be visible after transient UI during WATCHING",
+            states.last() != null,
+        )
+    }
+
+    // 29. QUALIFIED session + TRANSIENT_UI: session must be preserved.
+    @Test
+    fun `transient UI during qualified session preserves qualification`() {
+        val p = pipeline()
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+        p.enter("com.google.android.youtube", youtubeShortsClass, 0L)
+
+        // Advance to QUALIFIED (>= 3s)
+        now = 4_000L
+        p.onForegroundContentObserved("com.google.android.youtube", shortsPlayerEvidence())
+
+        // Transient UI arrives — must NOT destroy the qualified session.
+        now = 5_000L
+        p.onForegroundContentObserved("com.google.android.youtube", transientUiEvidence())
+
+        // HUD must still be visible after transient UI during QUALIFIED.
+        assertTrue(
+            "HUD must still be visible after transient UI during QUALIFIED",
+            states.last() != null,
+        )
+    }
+
+    // 30. YouTube Shorts player evidence with transient UI labels:
+    //     detection must proceed despite transient UI keywords in evidence.
+    @Test
+    fun `youtube shorts player detected despite transient ui labels in evidence`() {
+        val p = pipeline()
+        p.enter("com.google.android.youtube", youtubeMainActivity, 0L)
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        // Content evidence with both Shorts player AND transient UI labels.
+        p.onForegroundContentObserved("com.google.android.youtube", shortsPlayerWithTransientEvidence())
+
+        // The adapter must detect Shorts despite transient UI labels.
+        assertTrue(
+            "Expected Shorts detection despite transient UI, got: $states",
+            states.any { it != null },
+        )
+        val activeState = states.firstNotNullOfOrNull { it }
+        assertEquals(ShortPlatform.YOUTUBE, activeState?.platform)
+        assertEquals(ShortSurface.YOUTUBE_SHORTS, activeState?.surface)
+    }
+
+    // 31. Facebook Reels: scroll fallback must fire despite transient UI.
+    @Test
+    fun `facebook reels detected via scroll fallback despite transient ui`() {
+        val detect: (ShortDetectionSignals) -> ShortDetectionResult = { signals ->
+            if (signals.interactionCount >= 1) {
+                ShortDetectionResult(
+                    ShortPlatform.FACEBOOK, ShortSurface.FACEBOOK_REELS,
+                    isShortForm = true, confidence = 0.65f, DetectionMethod.PLATFORM_ADAPTER,
+                )
+            } else {
+                ShortDetectionResult(
+                    ShortPlatform.FACEBOOK, ShortSurface.UNKNOWN,
+                    isShortForm = false, confidence = 0.15f, DetectionMethod.PLATFORM_ADAPTER,
+                )
+            }
+        }
+        val p = ShortsMonitoringPipeline(
+            detect = detect, store = InMemoryShortsLocalStore(), nowMillis = clock,
+        )
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        p.enter("com.facebook.katana", null, 0L)
+        now = 500L
+        p.onForegroundContentObserved("com.facebook.katana", transientUiEvidence())
+        p.onForegroundScrolled("com.facebook.katana")
+        now = 1_000L
+        p.onForegroundContentObserved("com.facebook.katana", transientUiEvidence())
+
+        assertTrue(
+            "Expected Facebook Reels detection via scroll fallback, got: $states",
+            states.any { it != null },
+        )
+        val activeState = states.firstNotNullOfOrNull { it }
+        assertEquals(ShortPlatform.FACEBOOK, activeState?.platform)
+        assertEquals(ShortSurface.FACEBOOK_REELS, activeState?.surface)
+    }
+
+    // 32. Snapchat Spotlight: activity class detection still works
+    //     (TRANSIENT_UI must not interfere with already-detected session).
+    @Test
+    fun `snapchat spotlight detection via activity class is preserved through transient ui`() {
+        // Snapchat detects via activity class ("spotlight" in class name),
+        // so it should work regardless of TRANSIENT_UI evidence.
+        val detect: (ShortDetectionSignals) -> ShortDetectionResult = { signals ->
+            if (signals.activityClassName?.lowercase()?.contains("spotlight") == true) {
+                ShortDetectionResult(
+                    ShortPlatform.SNAPCHAT, ShortSurface.SNAPCHAT_SPOTLIGHT,
+                    isShortForm = true, confidence = 0.80f, DetectionMethod.PLATFORM_ADAPTER,
+                )
+            } else {
+                ShortDetectionResult(
+                    ShortPlatform.SNAPCHAT, ShortSurface.UNKNOWN,
+                    isShortForm = false, confidence = 0.15f, DetectionMethod.PLATFORM_ADAPTER,
+                )
+            }
+        }
+        val p = ShortsMonitoringPipeline(
+            detect = detect, store = InMemoryShortsLocalStore(), nowMillis = clock,
+        )
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        p.enter("com.snapchat.android", "com.snapchat.android.SpotlightActivity", 0L)
+
+        // Snapchat detection must succeed immediately via activity class.
+        assertTrue(
+            "Expected Snapchat Spotlight detection, got: $states",
+            states.any { it != null },
+        )
+        val activeState = states.firstNotNullOfOrNull { it }
+        assertEquals(ShortPlatform.SNAPCHAT, activeState?.platform)
+        assertEquals(ShortSurface.SNAPCHAT_SPOTLIGHT, activeState?.surface)
+
+        // Now send transient UI evidence — session must survive.
+        now = 1_000L
+        p.onForegroundContentObserved("com.snapchat.android", transientUiEvidence())
+
+        // HUD must still be visible (session preserved through transient UI).
+        assertTrue(
+            "HUD must survive transient UI during active Snapchat session",
+            states.last() != null,
+        )
+    }
+
+    // 33. Non-short content with transient UI: HUD must stay hidden.
+    @Test
+    fun `non-short youtube content with transient ui stays hidden`() {
+        val p = pipeline()
+        p.enter("com.google.android.youtube", youtubeHomeClass, 0L)
+        val states = mutableListOf<ShortFormSurfaceState?>()
+        p.addSurfaceListener(ShortFormSurfaceListener { states.add(it) })
+
+        now = 1_000L
+        p.onForegroundContentObserved("com.google.android.youtube", transientUiEvidence())
+
+        // YouTube Home is not Shorts — HUD must stay hidden.
+        assertTrue(
+            "Expected all surface states null for YouTube Home, got: $states",
+            states.all { it == null },
+        )
+    }
 }

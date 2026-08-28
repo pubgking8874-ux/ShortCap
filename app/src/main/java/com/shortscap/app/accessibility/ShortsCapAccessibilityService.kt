@@ -343,14 +343,29 @@ class ShortsCapAccessibilityService :
         lastYouTubeClasses = classes
         lastYouTubeIds = ids
         Log.i("SC_YT_NODE_DIAG", "SC_YT_NODE_DIAG DISPATCHING_EVIDENCE classes=${classes.size} ids=${ids.size} classList=${classes.take(40).joinToString(",")}")
+        val evidence = WindowContentEvidence(
+            nodeClasses = classes.toList(),
+            nodeViewIds = ids.toList(),
+            nodeContentDescriptions = descs.toList(),
+        )
         MonitoringEventHub.dispatchForegroundContentObserved(
             YOUTUBE_PACKAGE,
-            WindowContentEvidence(
-                nodeClasses = classes.toList(),
-                nodeViewIds = ids.toList(),
-                nodeContentDescriptions = descs.toList(),
-            ),
+            evidence,
         )
+
+        // YouTube-specific genuine-advance detection.
+        // Same pattern as collectPlatformWindowContent(): compare content
+        // evidence fingerprints to detect genuine Short-to-Short transitions.
+        val adapter = ShortPlatformRegistry.adapterFor(YOUTUBE_PACKAGE)
+        val prev = lastPlatformEvidence[YOUTUBE_PACKAGE]
+        if (prev != null && adapter.detectUserAdvance(prev, evidence)) {
+            Log.i("SC_INTERACTION",
+                "SC_INTERACTION USER_ADVANCE pkg=$YOUTUBE_PACKAGE platform=${adapter.platform} " +
+                    "source=CONTENT_FINGERPRINT_CHANGE",
+            )
+            MonitoringEventHub.dispatchForegroundScrolled(YOUTUBE_PACKAGE)
+        }
+        lastPlatformEvidence[YOUTUBE_PACKAGE] = evidence
     }
 
     override fun onInterrupt() {

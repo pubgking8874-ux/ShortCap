@@ -298,4 +298,182 @@ object YouTubeShortsAdapter : ShortPlatformAdapter {
         "shorts_player",
         "reel_player",
     )
+
+    /**
+     * Overlap threshold for identity comparison.
+     * If >50% of identity descriptors overlap, it's the same Short.
+     */
+    private const val IDENTITY_OVERLAP_THRESHOLD = 0.5
+
+    /**
+     * UI-state descriptions that change with overlays but NOT with
+     * Short identity. These must be excluded from the identity fingerprint.
+     */
+    private val UI_STATE_DESCRIPTIONS = setOf(
+        // Comments / replies
+        "comment", "reply", "replies", "add a comment",
+        // Engagement actions
+        "like", "unlike", "dislike", "save", "bookmark",
+        "share", "remix",
+        // Navigation / menus
+        "subscribe", "subscribed", "more", "menu", "settings",
+        "description", "show more", "show less",
+        // Player controls
+        "play", "pause", "mute", "unmute", "fullscreen",
+        "captions", "quality", "speed",
+        // Counts / metrics
+        "likes", "views", "videos",
+    )
+
+    // ---- Genuine user advance detection ----
+
+    /**
+     * YouTube does not always generate reliable TYPE_VIEW_SCROLLED events
+     * (e.g., vivo device delivers NO scroll events). We detect genuine
+     * advances by comparing Shorts-specific content descriptions between
+     * the previous and current content evidence.
+     *
+     * During normal playback of a single Short, the content descriptions
+     * (creator name, title, action buttons) remain stable. A genuine swipe
+     * to the next Short changes the creator/title content, while keeping
+     * Shorts-unique structural labels ("Remix this Short", "See more videos
+     * using this sound") stable.
+     *
+     * We compare content-specific descriptions (excluding Shorts-unique
+     * labels) as a fingerprint. When the fingerprint changes, it indicates
+     * a genuine transition to a different Short.
+     *
+     * Non-Shorts changes (ads, rendering transitions, accessibility tree
+     * refresh) affect generic classes but not content-specific descriptions.
+     * The pipeline's 3-second protection window provides additional defense
+     * against false positives.
+     */
+    override fun detectUserAdvance(
+        previousEvidence: WindowContentEvidence,
+        currentEvidence: WindowContentEvidence,
+    ): Boolean {
+        // ===== TRANSIENT UI GATE =====
+        // If the current evidence shows transient UI (comments, share, menu,
+        // etc.), reject the advance. The evidence change is caused by an
+        // overlay, not by a genuine Short-to-Short transition.
+        val currentDecision = ShortSurfaceClassifier.classify(
+            packageName = packageNames.first(),
+            evidence = currentEvidence,
+            sessionInProgress = true,
+        )
+        if (currentDecision.role == ShortSurfaceClassifier.SurfaceRole.TRANSIENT_UI) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames advance=false " +
+                    "reason=TRANSIENT_UI_CURRENT evidence=${currentDecision.reason}",
+            )
+            Log.i("SC_YT_FALSE_ADVANCE_GUARD",
+                "SC_YT_FALSE_ADVANCE_GUARD blocked=true pkg=$packageNames " +
+                    "reason=TRANSIENT_UI_CURRENT evidence=${currentDecision.reason}",
+            )
+            return false
+        }
+
+        // Also check if previous evidence was transient UI — if so, the
+        // transition from transient → player is not a genuine advance.
+        val prevDecision = ShortSurfaceClassifier.classify(
+            packageName = packageNames.first(),
+            evidence = previousEvidence,
+            sessionInProgress = true,
+        )
+        if (prevDecision.role == ShortSurfaceClassifier.SurfaceRole.TRANSIENT_UI) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames advance=false " +
+                    "reason=TRANSIENT_UI_PREVIOUS evidence=${prevDecision.reason}",
+            )
+            Log.i("SC_YT_FALSE_ADVANCE_GUARD",
+                "SC_YT_FALSE_ADVANCE_GUARD blocked=true pkg=$packageNames " +
+                    "reason=TRANSIENT_UI_PREVIOUS evidence=${prevDecision.reason}",
+            )
+            return false
+        }
+
+        val prevFingerprint = identityFingerprint(previousEvidence)
+        val currFingerprint = identityFingerprint(currentEvidence)
+
+        // Empty fingerprints: no identity signals available → no advance.
+        if (prevFingerprint.isEmpty() && currFingerprint.isEmpty()) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames identityEmpty=true advance=false",
+            )
+            return false
+        }
+
+        // Asymmetric: one has identity, other doesn't → too uncertain.
+        if (prevFingerprint.isEmpty() || currFingerprint.isEmpty()) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames asymmetric=true " +
+                    "prevSize=${prevFingerprint.size} currSize=${currFingerprint.size} advance=false",
+            )
+            return false
+        }
+
+        // Compute identity overlap: what fraction of identity descriptors
+        // are shared between previous and current evidence?
+        val intersection = prevFingerprint.intersect(currFingerprint)
+        val union = prevFingerprint.union(currFingerprint)
+        val overlap = if (union.isEmpty()) 1.0 else intersection.size.toDouble() / union.size
+
+        // High overlap (>50%) = same Short with UI changes.
+        // Low overlap (<=50%) = different Short (genuine advance).
+        val isAdvance = overlap <= IDENTITY_OVERLAP_THRESHOLD
+
+        Log.i("SC_YT_ADVANCE",
+            "SC_YT_ADVANCE pkg=$packageNames " +
+                "prevIdentity=${prevFingerprint.take(3)} currIdentity=${currFingerprint.take(3)} " +
+                "overlap=${String.format("%.2f", overlap)} threshold=$IDENTITY_OVERLAP_THRESHOLD " +
+                "advance=$isAdvance",
+        )
+
+        if (!isAdvance) {
+            Log.i("SC_YT_FALSE_ADVANCE_GUARD",
+                "SC_YT_FALSE_ADVANCE_GUARD blocked=true pkg=$packageNames " +
+                    "reason=SAME_SHORT_UI_CHANGE overlap=${String.format("%.2f", overlap)}",
+            )
+        }
+
+        return isAdvance
+    }
+
+    /**
+     * Extract a SHORT IDENTITY fingerprint from content evidence.
+     *
+     * This intentionally excludes:
+     *  - Shorts-structural labels ("Remix this Short", "See more videos using this sound")
+     *  - UI-state labels (Comments, Like, Share, Save, Reply, Subscribe, etc.)
+     *  - Short/generic labels (< 8 chars) that are likely UI controls
+     *
+     * Retains only stable content-identity signals:
+     *  - Creator/channel name (e.g., "@sarthakreactss")
+     *  - Short title/caption text
+     *  - Stable media-specific descriptions
+     *
+     * These are the descriptions that change when Short A → Short B
+     * but remain stable when Short A → Short A + comments open.
+     */
+    private fun identityFingerprint(evidence: WindowContentEvidence): Set<String> {
+        return evidence.nodeContentDescriptions
+            .filter { desc ->
+                val lower = desc.lowercase()
+                // Exclude Shorts-structural labels (stable across all Shorts)
+                !SHORTS_UNIQUE_DESCRIPTIONS.any { lower.contains(it) }
+            }
+            .filter { desc ->
+                val lower = desc.lowercase()
+                // Exclude UI-state labels (change with overlays, not with Short identity)
+                !UI_STATE_DESCRIPTIONS.any { lower.contains(it) }
+            }
+            .map { it.lowercase().trim() }
+            .filter { it.length >= 8 }  // UI labels are typically short; identity is longer
+            .toSet()
+    }
+
+    /** Check if a class is a Shorts player node (for structural fallback). */
+    private fun isShortsPlayerNode(className: String): Boolean {
+        return className.isShortPlayerNodeClass()
+    }
 }

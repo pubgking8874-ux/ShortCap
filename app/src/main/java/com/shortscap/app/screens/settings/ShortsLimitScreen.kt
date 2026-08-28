@@ -59,6 +59,7 @@ import com.shortscap.app.shorts.DEFAULT_LIMIT_UPPER_BOUND
 import com.shortscap.app.shorts.LimitInputError
 import com.shortscap.app.shorts.LimitInputResult
 import android.util.Log
+import com.shortscap.app.BuildConfig
 import com.shortscap.app.shorts.ShortsControlEngine
 import com.shortscap.app.shorts.ShortsControlState
 import com.shortscap.app.shorts.ShortsControlSyncer
@@ -302,6 +303,17 @@ fun ShortsLimitScreen(
                 enabled = canActivate,
                 onClick = { activateConfirmOpen = true },
             )
+
+            // 7. DEBUG/TEST controls — only visible in debug builds.
+            // Allows developers to manipulate the limit cycle for testing
+            // without waiting 24 real hours.
+            if (BuildConfig.DEBUG) {
+                DebugTestControls(
+                    state = state,
+                    engine = engine,
+                    onStateChange = { now = System.currentTimeMillis() },
+                )
+            }
         }
     }
 
@@ -628,4 +640,167 @@ private fun SectionTitle(text: String) {
         color = LocalScColors.current.TextSecondary,
         style = ScTextStyles.SectionTitle,
     )
+}
+
+// ---------------------------------------------------------------------------
+// DEBUG / TEST CONTROLS — Development-only limit cycle manipulation
+// ---------------------------------------------------------------------------
+
+/**
+ * Debug-only test controls for the Shorts limit cycle.
+ * Only visible in debug builds (gated by BuildConfig.DEBUG at the call site).
+ * Allows developers to reset, pause, resume, and manipulate the cycle
+ * without waiting 24 real hours.
+ */
+@Composable
+private fun DebugTestControls(
+    state: ShortsControlState,
+    engine: ShortsControlEngine,
+    onStateChange: () -> Unit,
+) {
+    val colors = LocalScColors.current
+    val shape = RoundedCornerShape(14.dp)
+    val debugColor = Color(0xFF9333EA) // purple for debug
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(debugColor.copy(alpha = 0.08f), shape)
+            .border(1.dp, debugColor.copy(alpha = 0.3f), shape)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "DEBUG / TEST",
+                color = debugColor,
+                style = ScTextStyles.BodySemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "BuildConfig.DEBUG",
+                color = colors.TextSecondary,
+                style = ScTextStyles.Caption,
+            )
+        }
+
+        // Current state summary
+        Text(
+            "count=${state.currentCount} / limit=${state.limitCount} " +
+                "status=${state.status} enforcement=${state.enforcementState} " +
+                "paused=${engine.isDebugPaused()}",
+            color = colors.TextSecondary,
+            style = ScTextStyles.Caption,
+        )
+
+        // Limit +/-
+        DebugRow(label = "Limit") {
+            DebugButton("−") {
+                engine.debugSetLimit((state.limitCount - 10).coerceAtLeast(50))
+                onStateChange()
+            }
+            Text("${state.limitCount}", color = colors.TextPrimary, style = ScTextStyles.BodySemiBold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            DebugButton("+") {
+                engine.debugSetLimit(state.limitCount + 10)
+                onStateChange()
+            }
+        }
+
+        // Count +/-
+        DebugRow(label = "Count") {
+            DebugButton("−") {
+                engine.debugSetCount((state.currentCount - 1).coerceAtLeast(0))
+                onStateChange()
+            }
+            Text("${state.currentCount}", color = colors.TextPrimary, style = ScTextStyles.BodySemiBold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            DebugButton("+") {
+                engine.debugSetCount(state.currentCount + 1)
+                onStateChange()
+            }
+        }
+
+        // Pause / Resume
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DebugActionButton(
+                label = if (engine.isDebugPaused()) "▶ Resume" else "⏸ Pause",
+                color = if (engine.isDebugPaused()) Color(0xFF22C55E) else debugColor,
+                modifier = Modifier.weight(1f),
+            ) {
+                if (engine.isDebugPaused()) engine.debugResumeCycle()
+                else engine.debugPauseCycle()
+                onStateChange()
+            }
+            DebugActionButton(
+                label = "↺ Reset",
+                color = Color(0xFFF59E0B),
+                modifier = Modifier.weight(1f),
+            ) {
+                engine.debugResetCycle()
+                onStateChange()
+            }
+        }
+
+        // Clear Limit Reached
+        if (state.limitReached) {
+            DebugActionButton(
+                label = "Clear LIMIT_REACHED",
+                color = Color(0xFF22C55E),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                engine.debugClearLimitReached()
+                onStateChange()
+            }
+        }
+    }
+}
+
+@Composable
+private fun DebugRow(label: String, content: @Composable () -> Unit) {
+    val colors = LocalScColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(label, color = colors.TextSecondary, style = ScTextStyles.Label, modifier = Modifier.width(48.dp))
+        content()
+    }
+}
+
+@Composable
+private fun DebugButton(label: String, onClick: () -> Unit) {
+    val colors = LocalScColors.current
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(shape)
+            .background(colors.Card, shape)
+            .border(1.dp, colors.Divider, shape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = colors.TextPrimary, style = ScTextStyles.BodySemiBold)
+    }
+}
+
+@Composable
+private fun DebugActionButton(
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(color.copy(alpha = 0.15f), shape)
+            .border(1.dp, color.copy(alpha = 0.4f), shape)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = color, style = ScTextStyles.BodySemiBold)
+    }
 }

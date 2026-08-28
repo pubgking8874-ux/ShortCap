@@ -157,6 +157,18 @@ class ShortsMonitoringPipeline(
         val now = nowMillis()
         val previous = active
 
+        // ===== SC_TRACE: APP_CHANGED — full context for every foreground transition =====
+        Log.i("SC_TRACE",
+            "SC_TRACE APP_CHANGED pkg=$packageName activity=$activityClassName " +
+                "previousPkg=${previous?.packageName} previousActivity=${previous?.activityClassName} " +
+                "previousSessionState=${previous?.sessionState} previousShortStartedAt=${previous?.shortStartedAt} " +
+                "samePkg=${previous?.packageName == packageName} " +
+                "isShortsPlatform=${registry.adapterFor(packageName).platform != ShortPlatform.UNKNOWN} " +
+                "sessionInProgress=${previous?.sessionState == SessionState.WATCHING || previous?.sessionState == SessionState.QUALIFIED} " +
+                "isOurOverlay=${packageName == OUR_PACKAGE_NAME && activityClassName?.contains("ComposeView") == true} " +
+                "timestamp=$now",
+        )
+
         Log.i("SC_SHORT",
             "SC_SHORT onForegroundAppChanged pkg=$packageName cls=$activityClassName " +
                 "prevPkg=${previous?.packageName} prevCls=${previous?.activityClassName} " +
@@ -207,16 +219,44 @@ class ShortsMonitoringPipeline(
                         "pkg=$packageName sessionState=${previous.sessionState} " +
                         "elapsed=${elapsedSinceStart}ms timestamp=$now",
                 )
+                // ===== PHASE 3: Qualified session preservation =====
+                // A QUALIFIED session (>=3000ms watched) must survive transient
+                // activity-class changes during swipe transitions. Re-running
+                // detect() with a new activity class (e.g., YouTube transitioning
+                // between internal activities) can temporarily return
+                // isShortForm=false → EVIDENCE_LOST → session destroyed → genuine
+                // scroll arrives → NO_SESSION → Short not counted.
+                //
+                // Rule: if the session is already QUALIFIED, the user has watched
+                // this Short for >=3000ms. A transient classification failure must
+                // NOT destroy it. Skip notifySurfaceState() — content evidence
+                // events will continue to keep detection fresh.
+                //
+                // For WATCHING sessions (not yet qualified), still re-run
+                // notifySurfaceState() so detection can update.
+                val shouldReRunDetection = !isOurOverlay &&
+                    previous.sessionState != SessionState.QUALIFIED
+
                 active = previous.copy(
                     activityClassName = activityClassName,
                     evidenceLostAt = 0L, // package/class change = definitive signal, clear pending loss
                 )
-                // Skip detect() for our own overlay — re-running detection with
-                // "ComposeView" as the activity class would lose the Shorts
-                // classification and trigger EVIDENCE_LOST. Content evidence
-                // events will continue to call notifySurfaceState() normally.
-                if (!isOurOverlay) {
+
+                if (shouldReRunDetection) {
                     notifySurfaceState()
+                } else if (previous.sessionState == SessionState.QUALIFIED) {
+                    Log.i("SC_SHORT",
+                        "SC_SHORT QUALIFIED_SESSION_PRESERVED pkg=$packageName " +
+                            "cls=$activityClassName prevCls=${previous.activityClassName} " +
+                            "sessionId=${previous.sessionId} elapsed=${now - previous.shortStartedAt}ms " +
+                            "reason=ACTIVITY_CLASS_CHANGE_BUT_QUALIFIED",
+                    )
+                    Log.i("SC_LIFECYCLE",
+                        "SC_LIFECYCLE ACCESSIBILITY_EVENT eventType=WINDOW_STATE_CHANGED " +
+                            "pkg=$packageName className=$activityClassName " +
+                            "decision=QUALIFIED_PRESERVE sessionId=${previous.sessionId} " +
+                            "sessionState=QUALIFIED shortStartedAt=${previous.shortStartedAt}",
+                    )
                 }
                 return
             }
@@ -281,6 +321,12 @@ class ShortsMonitoringPipeline(
         Log.i("SC_SHORT",
             "SC_SHORT SHORT_SESSION_START pkg=$packageName cls=$activityClassName",
         )
+        // ===== SC_TRACE: NEW_CONTEXT — fresh ActiveContext created =====
+        Log.i("SC_TRACE",
+            "SC_TRACE NEW_CONTEXT pkg=$packageName activity=$activityClassName " +
+                "startedAt=$now previousPkg=${previous?.packageName} " +
+                "previousSessionState=${previous?.sessionState} timestamp=$now",
+        )
         active = ActiveContext(
             packageName = packageName,
             activityClassName = activityClassName,
@@ -294,13 +340,99 @@ class ShortsMonitoringPipeline(
     // =========================================================================
 
     override fun onForegroundScrolled(packageName: String) {
-        val context = active ?: return
-        if (context.packageName != packageName) return
+        val context = active
 
+        // ===== SC_SCROLL_DECISION: one log per scroll event =====
         val now = nowMillis()
-        val timeSinceLastScroll = now - context.lastScrollAt
+        if (context == null) {
+            Log.i("SC_SCROLL_DECISION",
+                "SC_SCROLL_DECISION pkg=$packageName sessionState=NO_SESSION " +
+                    "shortStartedAt=0 now=$now elapsed=0 threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} " +
+                    "samePackage=false supportedPlatform=false isQualified=false " +
+                    "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=NO_SESSION",
+            )
+            return
+        }
 
+        // ===== TRANSIENT UI GATE: suppress scroll during transient UI =====
+        // If the current evidence shows a transient UI overlay (comments, share,
+        // menu, etc.), suppress the scroll/advance detection. The scroll event
+        // may be generated by the overlay itself, not by a genuine user swipe.
+        //
+        // EXCEPTION: when sessionInProgress == false (NO_SESSION), allow the
+        // scroll to increment interactionCount so the platform adapter's scroll
+        // interaction fallback can fire during initial detection. The adapter is
+        // the authority for whether the current surface is short-form.
+        if (context.contentEvidence.nodeContentDescriptions.isNotEmpty() ||
+            context.contentEvidence.nodeViewIds.isNotEmpty() ||
+            context.contentEvidence.nodeClasses.isNotEmpty()
+        ) {
+            val sessionInProgress = context.sessionState != SessionState.NO_SESSION
+            val surfaceDecision = ShortSurfaceClassifier.classify(
+                packageName = packageName,
+                evidence = context.contentEvidence,
+                platformDetectionResult = context.lastDetectionResult,
+                sessionInProgress = sessionInProgress,
+            )
+            if (surfaceDecision.role == ShortSurfaceClassifier.SurfaceRole.TRANSIENT_UI) {
+                if (sessionInProgress) {
+                    // Active session: suppress scroll to prevent false counts
+                    // from overlay-generated scroll events.
+                    Log.i("SC_SCROLL_DECISION",
+                        "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
+                            "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${if (context.shortStartedAt > 0) now - context.shortStartedAt else 0L}ms " +
+                            "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                            "supportedPlatform=true isQualified=${context.sessionState == SessionState.QUALIFIED} " +
+                            "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=TRANSIENT_UI " +
+                            "surfaceRole=${surfaceDecision.role} gateReason=${surfaceDecision.reason}",
+                    )
+                    Log.i("SC_ADVANCE_GATE",
+                        "SC_ADVANCE_GATE pkg=$packageName allowAdvance=false " +
+                            "reason=TRANSIENT_UI_SCROLL_SUPPRESSED gateReason=${surfaceDecision.reason}",
+                    )
+                    return
+                }
+                // NO_SESSION: allow scroll to increment interactionCount so
+                // the platform adapter's scroll fallback can fire.
+                Log.i("SC_TRANSIENT_UI",
+                    "SC_TRANSIENT_UI NO_SESSION_SCROLL_ALLOWED pkg=$packageName " +
+                        "sessionState=${context.sessionState} reason=${surfaceDecision.reason}",
+                )
+                // Fall through — scroll proceeds normally
+            }
+        }
+
+        val samePackage = context.packageName == packageName
+        val isSupportedPlatform = registry.adapterFor(packageName).platform != ShortPlatform.UNKNOWN
         val elapsedSinceStart = if (context.shortStartedAt > 0) now - context.shortStartedAt else 0L
+        val isQualified = context.sessionState == SessionState.QUALIFIED ||
+            (context.sessionState == SessionState.WATCHING &&
+                context.shortStartedAt > 0 &&
+                elapsedSinceStart >= SHORT_MIN_ENGAGEMENT_MILLIS)
+
+        if (!samePackage) {
+            Log.i("SC_SCROLL_DECISION",
+                "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
+                    "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${elapsedSinceStart}ms " +
+                    "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=false " +
+                    "supportedPlatform=$isSupportedPlatform isQualified=$isQualified " +
+                    "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=WRONG_PACKAGE " +
+                    "activePkg=${context.packageName}",
+            )
+            return
+        }
+
+        if (!isSupportedPlatform) {
+            Log.i("SC_SCROLL_DECISION",
+                "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
+                    "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${elapsedSinceStart}ms " +
+                    "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                    "supportedPlatform=false isQualified=$isQualified " +
+                    "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=UNSUPPORTED_PLATFORM",
+            )
+            return
+        }
+        val timeSinceLastScroll = now - context.lastScrollAt
 
         // ===== SC_LIFECYCLE: SCROLL_EVENT — every scroll with full context =====
         Log.i("SC_LIFECYCLE",
@@ -323,9 +455,25 @@ class ShortsMonitoringPipeline(
                 "pkg=$packageName sessionState=${context.sessionState} " +
                 "elapsed=${elapsedSinceStart}ms timestamp=$now",
         )
+        // ===== SC_TRACE: SCROLL_RECEIVED — full scroll context =====
+        Log.i("SC_TRACE",
+            "SC_TRACE SCROLL_RECEIVED_V2 pkg=$packageName " +
+                "sessionState=${context.sessionState} shortStartedAt=${context.shortStartedAt} " +
+                "elapsed=${elapsedSinceStart}ms interactionCountBefore=${context.interactionCount} " +
+                "scrollDebounced=${context.lastScrollAt > 0 && timeSinceLastScroll < SCROLL_DEBOUNCE_MILLIS} " +
+                "sessionId=${context.sessionId} timestamp=$now",
+        )
 
         // ---- Global debounce: absorb rapid-fire scrolls within 500ms ----
         if (context.lastScrollAt > 0 && timeSinceLastScroll < SCROLL_DEBOUNCE_MILLIS) {
+            Log.i("SC_SCROLL_DECISION",
+                "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
+                    "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${elapsedSinceStart}ms " +
+                    "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                    "supportedPlatform=true isQualified=$isQualified " +
+                    "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=DUPLICATE_SCROLL " +
+                    "debounceRemaining=${SCROLL_DEBOUNCE_MILLIS - timeSinceLastScroll}ms",
+            )
             Log.i("SC_LIFECYCLE",
                 "SC_LIFECYCLE COUNT_DECISION sessionId=${context.sessionId} " +
                     "elapsed=${timeSinceLastScroll}ms threshold=${SCROLL_DEBOUNCE_MILLIS}ms " +
@@ -372,6 +520,14 @@ class ShortsMonitoringPipeline(
             if (prev != null && prevElapsed >= SHORT_MIN_ENGAGEMENT_MILLIS) {
                 // Previous Short was watched long enough — count it now.
                 // This scroll belongs to the transition FROM the previous Short.
+                Log.i("SC_SCROLL_DECISION",
+                    "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
+                        "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${elapsedSinceStart}ms " +
+                        "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                        "supportedPlatform=true isQualified=false " +
+                        "scrollSource=TYPE_VIEW_SCROLLED willCount=true reason=QUALIFIED_USER_SCROLL " +
+                        "countTarget=PREVIOUS prevSessionId=${prev.sessionId} prevElapsed=${prevElapsed}ms",
+                )
                 Log.i("SC_LIFECYCLE",
                     "SC_LIFECYCLE COUNT_DECISION sessionId=${prev.sessionId} " +
                         "elapsed=${prevElapsed}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
@@ -396,6 +552,14 @@ class ShortsMonitoringPipeline(
 
             // No previous session to count, or it wasn't eligible.
             // Pure residual scroll — ignore it.
+            Log.i("SC_SCROLL_DECISION",
+                "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
+                    "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${elapsedSinceStart}ms " +
+                    "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                    "supportedPlatform=true isQualified=false " +
+                    "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=RESIDUAL_SCROLL " +
+                    "hasPrevSession=${prev != null} prevElapsed=${prevElapsed}ms",
+            )
             Log.i("SC_LIFECYCLE",
                 "SC_LIFECYCLE COUNT_DECISION sessionId=${context.sessionId} " +
                     "elapsed=${elapsedSinceStart}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
@@ -445,6 +609,13 @@ class ShortsMonitoringPipeline(
         when (effectiveState) {
             SessionState.QUALIFIED -> {
                 val elapsed = now - context.shortStartedAt
+                Log.i("SC_SCROLL_DECISION",
+                    "SC_SCROLL_DECISION pkg=$packageName sessionState=QUALIFIED " +
+                        "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${elapsed}ms " +
+                        "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                        "supportedPlatform=true isQualified=true " +
+                        "scrollSource=TYPE_VIEW_SCROLLED willCount=true reason=QUALIFIED_USER_SCROLL",
+                )
                 Log.i("SC_LIFECYCLE",
                     "SC_LIFECYCLE COUNT_DECISION sessionId=${context.sessionId} " +
                         "elapsed=${elapsed}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
@@ -459,10 +630,27 @@ class ShortsMonitoringPipeline(
                         "sessionState=QUALIFIED elapsed=$elapsed willCount=true " +
                         "reason=SCROLL_CHECK timestamp=$now",
                 )
+                // ===== SC_TRACE: COUNT_DECISION — detailed scroll count decision =====
+                Log.i("SC_TRACE",
+                    "SC_TRACE COUNT_DECISION_V2 pkg=$packageName " +
+                        "sessionId=${context.sessionId} sessionState=QUALIFIED " +
+                        "elapsed=${elapsed}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
+                        "willCount=true reason=QUALIFIED_SCROLL " +
+                        "interactionCount=${context.interactionCount} " +
+                        "platform=${context.lastDetectionResult.platform} " +
+                        "surface=${context.lastDetectionResult.surface} timestamp=$now",
+                )
                 countShort(context, now)
             }
             SessionState.WATCHING -> {
                 val elapsed = now - context.shortStartedAt
+                Log.i("SC_SCROLL_DECISION",
+                    "SC_SCROLL_DECISION pkg=$packageName sessionState=WATCHING " +
+                        "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${elapsed}ms " +
+                        "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                        "supportedPlatform=true isQualified=false " +
+                        "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=BELOW_THRESHOLD",
+                )
                 Log.i("SC_LIFECYCLE",
                     "SC_LIFECYCLE COUNT_DECISION sessionId=${context.sessionId} " +
                         "elapsed=${elapsed}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
@@ -478,6 +666,14 @@ class ShortsMonitoringPipeline(
                         "sessionState=WATCHING elapsed=$elapsed willCount=false " +
                         "reason=BELOW_MIN_TIME threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} " +
                         "timestamp=$now",
+                )
+                // ===== SC_TRACE: COUNT_DECISION — detailed scroll count decision =====
+                Log.i("SC_TRACE",
+                    "SC_TRACE COUNT_DECISION_V2 pkg=$packageName " +
+                        "sessionId=${context.sessionId} sessionState=WATCHING " +
+                        "elapsed=${elapsed}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
+                        "willCount=false reason=BELOW_MIN_TIME " +
+                        "interactionCount=${context.interactionCount} timestamp=$now",
                 )
             }
             SessionState.NO_SESSION -> {
@@ -507,6 +703,15 @@ class ShortsMonitoringPipeline(
                 "shortStartedAt=${context.shortStartedAt} now=$now",
         )
 
+        // ===== SC_TRACE: SESSION_RESET — session destroyed after scroll =====
+        Log.i("SC_TRACE",
+            "SC_TRACE SESSION_RESET sessionId=${context.sessionId} " +
+                "reason=$endReason previousState=${context.sessionState} " +
+                "previousStartedAt=${context.shortStartedAt} newState=NO_SESSION " +
+                "newStartedAt=0 pkg=$packageName interactionCount=${context.interactionCount + 1} " +
+                "duration=${sessionDuration}ms timestamp=$now",
+        )
+
         active = context.copy(
             interactionCount = context.interactionCount + 1,
             sessionState = SessionState.NO_SESSION,
@@ -529,6 +734,16 @@ class ShortsMonitoringPipeline(
         if (context.packageName == packageName) {
             // ===== SC_LIFECYCLE: ACCESSIBILITY_EVENT — content evidence received =====
             val elapsedSinceStart = if (context.shortStartedAt > 0) nowMillis() - context.shortStartedAt else 0L
+
+            // ===== SC_TRACE: CONTENT_OBSERVED — every content evidence event =====
+            Log.i("SC_TRACE",
+                "SC_TRACE CONTENT_OBSERVED pkg=$packageName " +
+                    "sessionState=${context.sessionState} shortStartedAt=${context.shortStartedAt} " +
+                    "elapsed=${elapsedSinceStart}ms interactionCount=${context.interactionCount} " +
+                    "evidenceClasses=${evidence.nodeClasses.size} evidenceIds=${evidence.nodeViewIds.size} " +
+                    "evidenceDescs=${evidence.nodeContentDescriptions.size} " +
+                    "sessionId=${context.sessionId} timestamp=${nowMillis()}",
+            )
             Log.i("SC_LIFECYCLE",
                 "SC_LIFECYCLE ACCESSIBILITY_EVENT eventType=WINDOW_CONTENT_CHANGED " +
                     "pkg=$packageName sessionId=${context.sessionId} " +
@@ -536,6 +751,55 @@ class ShortsMonitoringPipeline(
                     "elapsedSinceSessionStart=${elapsedSinceStart}ms " +
                     "classes=${evidence.nodeClasses.size} ids=${evidence.nodeViewIds.size}",
             )
+
+            // ===== TRANSIENT UI GATE =====
+            // Classify the incoming evidence to detect transient UI overlays
+            // (comments, share, menu, etc.). If transient UI is detected,
+            // suppress session changes and advance detection.
+            val sessionInProgress = context.sessionState != SessionState.NO_SESSION
+            val platformResult = context.lastDetectionResult
+            val surfaceDecision = ShortSurfaceClassifier.classify(
+                packageName = packageName,
+                evidence = evidence,
+                platformDetectionResult = platformResult,
+                sessionInProgress = sessionInProgress,
+            )
+            Log.i("SC_ADVANCE_GATE",
+                "SC_ADVANCE_GATE pkg=$packageName role=${surfaceDecision.role} " +
+                    "allowAdvance=${surfaceDecision.allowAdvanceDetection} " +
+                    "reason=${surfaceDecision.reason} sessionState=${context.sessionState}",
+            )
+
+            if (surfaceDecision.role == ShortSurfaceClassifier.SurfaceRole.TRANSIENT_UI) {
+                if (sessionInProgress) {
+                    // Active session (WATCHING/QUALIFIED/EVIDENCE_LOST_PENDING):
+                    // Do NOT update contentEvidence (which could trigger evidence
+                    // loss or reset the session). But DO call notifySurfaceState()
+                    // so the session can be promoted to QUALIFIED when enough time
+                    // has elapsed — the adapter evaluates the PRESERVED content
+                    // evidence and interactionCount, not the transient overlay.
+                    Log.i("SC_SHORT",
+                        "SC_SHORT TRANSIENT_UI_PRESERVE pkg=$packageName " +
+                            "sessionState=${context.sessionState} shortStartedAt=${context.shortStartedAt} " +
+                            "reason=${surfaceDecision.reason}",
+                    )
+                    notifySurfaceState()
+                    return
+                }
+                // NO_SESSION: allow detection to proceed.
+                // TRANSIENT_UI must not globally veto platform detection.
+                // The platform adapter is the authority for determining whether
+                // the current surface is short-form. Common engagement labels
+                // (like, share, comment, save) naturally appear in the
+                // accessibility tree of every short-form platform and must not
+                // prevent initial detection.
+                Log.i("SC_TRANSIENT_UI",
+                    "SC_TRANSIENT_UI NO_SESSION_ALLOW_DETECTION pkg=$packageName " +
+                        "sessionState=${context.sessionState} reason=${surfaceDecision.reason}",
+                )
+                // Fall through to update contentEvidence and call notifySurfaceState()
+            }
+
             Log.i("SC_SHORT",
                 "SC_SHORT onForegroundContentObserved pkg=$packageName " +
                     "sessionState=${context.sessionState} shortStartedAt=${context.shortStartedAt} " +
@@ -573,6 +837,17 @@ class ShortsMonitoringPipeline(
 
         val shortsDetected = result.isShortForm &&
             result.confidence >= ShortFormSurfaceState.CONFIDENCE_THRESHOLD
+
+        // ===== SC_TRACE: SURFACE_DECISION — detection result with action =====
+        Log.i("SC_TRACE",
+            "SC_TRACE SURFACE_DECISION pkg=${context.packageName} " +
+                "platform=${result.platform} surface=${result.surface} " +
+                "confidence=${result.confidence} isShortForm=${result.isShortForm} " +
+                "sessionState=${context.sessionState} shortStartedAt=${context.shortStartedAt} " +
+                "elapsed=${if (context.shortStartedAt > 0) nowMillis() - context.shortStartedAt else 0L}ms " +
+                "shortsDetected=$shortsDetected evidenceLostAt=${context.evidenceLostAt} " +
+                "interactionCount=${context.interactionCount} timestamp=${nowMillis()}",
+        )
 
         // ===== PLATFORM_OBSERVATION: diagnostic logging for all platforms =====
         val observationClasses = context.contentEvidence.nodeClasses.take(30).joinToString(",")
@@ -627,6 +902,14 @@ class ShortsMonitoringPipeline(
                     ) {
                         newLastEndedSession = context
                     }
+                    // ===== SC_TRACE: SESSION_CREATED — new Short session begins =====
+                    Log.i("SC_TRACE",
+                        "SC_TRACE SESSION_CREATED sessionId=$newSessionId " +
+                            "pkg=${context.packageName} platform=${result.platform} " +
+                            "surface=${result.surface} startedAt=$now " +
+                            "interactionCount=${context.interactionCount} " +
+                            "confidence=${result.confidence} reason=SHORT_DETECTED timestamp=$now",
+                    )
                     // ===== SC_LIFECYCLE: SESSION_START — new Short timer begins =====
                     Log.i("SC_LIFECYCLE",
                         "SC_LIFECYCLE SESSION_START sessionId=$newSessionId " +
@@ -747,61 +1030,44 @@ class ShortsMonitoringPipeline(
                     }
                 }
                 SessionState.QUALIFIED -> {
-                    if (newEvidenceLostAt == 0L) {
-                        // First evidence loss → start grace period
-                        newEvidenceLostAt = now
-                        Log.i("SC_SHORT",
-                            "SC_SHORT TEMPORARY_EVIDENCE_LOST pkg=${context.packageName} " +
-                                "sessionState=QUALIFIED elapsed=${now - context.shortStartedAt}ms " +
-                                "gracePeriod=${EVIDENCE_LOST_GRACE_MILLIS}ms",
-                        )
-                        Log.i("SC_TRACE",
-                            "SC_TRACE EVIDENCE_LOST sessionId=${context.shortStartedAt} " +
-                                "sessionState=QUALIFIED elapsed=${now - context.shortStartedAt}ms " +
-                                "gracePeriod=${EVIDENCE_LOST_GRACE_MILLIS}ms timestamp=$now",
-                        )
-                        // Don't destroy session — keep alive during grace period
-                    } else if (now - newEvidenceLostAt > EVIDENCE_LOST_GRACE_MILLIS) {
-                        // Grace period expired → count the session
-                        val totalElapsed = now - context.shortStartedAt
-                        Log.i("SC_LIFECYCLE",
-                            "SC_LIFECYCLE COUNT_DECISION sessionId=${context.sessionId} " +
-                                "elapsed=${totalElapsed}ms threshold=${SHORT_MIN_ENGAGEMENT_MILLIS}ms " +
-                                "decision=COUNT reason=EVIDENCE_LOST_EXPIRED " +
-                                "sessionState=QUALIFIED pkg=${context.packageName}",
-                        )
-                        Log.i("SC_LIFECYCLE",
-                            "SC_LIFECYCLE SESSION_END sessionId=${context.sessionId} " +
-                                "reason=COUNTED_ON_EVIDENCE_LOST duration=${totalElapsed}ms " +
-                                "pkg=${context.packageName} evidenceLostFor=${now - newEvidenceLostAt}ms",
-                        )
-                        Log.i("SC_SHORT",
-                            "SC_SHORT CONFIRMED_SURFACE_EXIT pkg=${context.packageName} " +
-                                "sessionState=QUALIFIED elapsed=$totalElapsed " +
-                                "evidenceLostFor=${now - newEvidenceLostAt}ms",
-                        )
-                        Log.i("SC_SHORT",
-                            "SC_SHORT SCROLL pkg=${context.packageName} " +
-                                "sessionState=QUALIFIED reason=EVIDENCE_LOST_EXPIRED",
-                        )
-                        Log.i("SC_TRACE",
-                            "SC_TRACE COUNT_DECISION sessionId=${context.shortStartedAt} " +
-                                "sessionState=QUALIFIED elapsed=$totalElapsed willCount=true " +
-                                "reason=EVIDENCE_LOST_EXPIRED timestamp=$now",
-                        )
-                        countShort(context, now)
-                        newState = SessionState.NO_SESSION
-                        newShortStartedAt = 0L
-                        newEvidenceLostAt = 0L
-                    } else {
-                        // Grace period not expired → continue waiting
-                        Log.i("SC_SHORT",
-                            "SC_SHORT EVIDENCE_LOST_PENDING pkg=${context.packageName} " +
-                                "sessionState=QUALIFIED " +
-                                "evidenceLostFor=${now - newEvidenceLostAt}ms " +
-                                "remaining=${EVIDENCE_LOST_GRACE_MILLIS - (now - newEvidenceLostAt)}ms",
-                        )
-                    }
+                    // ===== Qualified session: UI overlay protection =====
+                    // A QUALIFIED session (>=3000ms watched) must survive transient
+                    // accessibility classification failures caused by UI overlays:
+                    //   - comments/chat panel
+                    //   - like/unlike UI
+                    //   - share menu
+                    //   - save/bookmark
+                    //   - three-dot menu
+                    //   - description expansion
+                    //   - channel/profile overlay
+                    //   - player controls
+                    //   - transient ad UI
+                    //
+                    // These overlays change the accessibility tree, causing detect()
+                    // to temporarily return isShortForm=false. But the underlying
+                    // Short identity has NOT changed — only UI state changed.
+                    //
+                    // Do NOT start evidence loss for QUALIFIED sessions.
+                    // The session stays QUALIFIED through UI overlays.
+                    //
+                    // Genuine Short-to-Short advances are detected by:
+                    //   - detectUserAdvance() (YouTube content fingerprint)
+                    //   - TYPE_VIEW_SCROLLED (Facebook, Instagram, etc.)
+                    //
+                    // Genuine platform exits are detected by:
+                    //   - TYPE_WINDOW_STATE_CHANGED with different package
+                    //     (PLATFORM_CHANGE path in onForegroundAppChanged)
+                    Log.i("SC_SHORT",
+                        "SC_SHORT QUALIFIED_EVIDENCE_IGNORED pkg=${context.packageName} " +
+                            "sessionState=QUALIFIED elapsed=${now - context.shortStartedAt}ms " +
+                            "reason=UI_OVERLAY_TRANSIENT",
+                    )
+                    Log.i("SC_LIFECYCLE",
+                        "SC_LIFECYCLE ACCESSIBILITY_EVENT eventType=EVIDENCE_LOST " +
+                            "pkg=${context.packageName} decision=QUALIFIED_PRESERVE " +
+                            "sessionId=${context.sessionId} sessionState=QUALIFIED " +
+                            "shortStartedAt=${context.shortStartedAt} elapsed=${now - context.shortStartedAt}ms",
+                    )
                 }
                 else -> { /* NO_SESSION */ }
             }
@@ -853,9 +1119,21 @@ class ShortsMonitoringPipeline(
         )
 
         val key = "${context.packageName}|${context.activityClassName}|${context.startedAt}"
-        if (broadcastState == lastBroadcastState && key == lastBroadcastKey) return
+        if (broadcastState == lastBroadcastState && key == lastBroadcastKey) {
+            Log.i("SC_TRACE",
+                "SC_TRACE BROADCAST_DEDUP pkg=${context.packageName} key=$key " +
+                    "broadcastState=$broadcastState lastBroadcastState=$lastBroadcastState " +
+                    "sessionState=${context.sessionState} timestamp=${nowMillis()}",
+            )
+            return
+        }
         lastBroadcastKey = key
         lastBroadcastState = broadcastState
+        Log.i("SC_TRACE",
+            "SC_TRACE BROADCAST_SENT pkg=${context.packageName} key=$key " +
+                "broadcastState=$broadcastState sessionState=${context.sessionState} " +
+                "listenerCount=${surfaceListeners.size} timestamp=${nowMillis()}",
+        )
         surfaceListeners.toList().forEach { it.onShortFormSurfaceChanged(broadcastState) }
     }
 
@@ -867,6 +1145,15 @@ class ShortsMonitoringPipeline(
         val id = ++countEventSeq
         val sessionStart = if (context.shortStartedAt > 0) context.shortStartedAt else context.startedAt
         val elapsed = (now - sessionStart).coerceAtLeast(0L)
+
+        // Defensive: if controlEngine was null at lazy-init time, fall back to the
+        // app-wide singleton. This can happen if `shared` was accessed before
+        // installControlEngine() in Application.onCreate().
+        val engine = controlEngine ?: ShortsControlEngine.shared.also {
+            Log.w("SC_RT",
+                "SC_RT ENGINE_FALLBACK id=$id controlEngine=NULL using ShortsControlEngine.shared",
+            )
+        }
 
         // Use the already-confirmed detection result from the active session.
         // Re-running detect() at count time can return UNKNOWN / low confidence
@@ -890,7 +1177,7 @@ class ShortsMonitoringPipeline(
             )
         }
 
-        val countBefore = controlEngine?.currentState()?.currentCount ?: 0
+        val countBefore = engine.currentState().currentCount
         Log.i("SC_RT", "SC_RT COUNT_EVENT id=$id")
         Log.i("SC_RT", "SC_RT COUNT_SHORT_ENTER id=$id countBefore=$countBefore candidateKey=${result.platform.name}:${result.surface.name}:${sessionStart} sessionStart=$sessionStart")
 
@@ -901,7 +1188,7 @@ class ShortsMonitoringPipeline(
         )
 
         Log.i("SC_RT", "SC_RT ENGINE_CALL id=$id countBefore=$countBefore candidateKey=${result.platform.name}:${result.surface.name}:${sessionStart}")
-        controlEngine?.onShortCounted(
+        engine.onShortCounted(
             candidateKey = "${result.platform.name}:${result.surface.name}:${sessionStart}",
             occurredAt = sessionStart,
             durationMillis = elapsed,
@@ -909,29 +1196,35 @@ class ShortsMonitoringPipeline(
         )
 
         // --- COUNT_PERSISTED diagnostic ---
-        val engineState = controlEngine?.currentState()
-        if (engineState != null) {
-            Log.i("SC_RT", "SC_RT ENGINE_RESULT id=$id countAfter=${engineState.currentCount} limit=${engineState.limitCount} status=${engineState.status}")
-            Log.i("SC_COUNT",
-                "SC_COUNT COUNT_PERSISTED platform=${result.platform} " +
-                    "surface=${result.surface} count=${engineState.currentCount} " +
-                    "limit=${engineState.limitCount} reached=${engineState.limitReached} " +
-                    "remaining=${engineState.remainingCount}",
-            )
+        val engineState = engine.currentState()
+        Log.i("SC_RT", "SC_RT ENGINE_RESULT id=$id countAfter=${engineState.currentCount} limit=${engineState.limitCount} status=${engineState.status}")
+        Log.i("SC_COUNT",
+            "SC_COUNT COUNT_PERSISTED platform=${result.platform} " +
+                "surface=${result.surface} count=${engineState.currentCount} " +
+                "limit=${engineState.limitCount} reached=${engineState.limitReached} " +
+                "remaining=${engineState.remainingCount}",
+        )
 
-            // --- COUNT_STATE_UPDATED: push to UI listeners ---
-            Log.i("SC_RT", "SC_RT LISTENER_NOTIFY id=$id count=${engineState.currentCount} listenerCount=${countListeners.size}")
-            countListeners.forEach {
-                it.onShortCountChanged(engineState.currentCount, engineState.limitCount)
-            }
-            Log.i("SC_RT", "SC_RT LISTENER_NOTIFY_COMPLETE id=$id count=${engineState.currentCount}")
-            Log.i("SC_COUNT",
-                "SC_COUNT COUNT_STATE_UPDATED count=${engineState.currentCount} " +
-                    "limit=${engineState.limitCount}",
-            )
-        } else {
-            Log.w("SC_RT", "SC_RT ENGINE_RESULT id=$id controlEngine=NULL — count NOT persisted")
+        // --- COUNT_STATE_UPDATED: push to UI listeners ---
+        Log.i("SC_RT", "SC_RT LISTENER_NOTIFY id=$id count=${engineState.currentCount} listenerCount=${countListeners.size}")
+        countListeners.forEach {
+            it.onShortCountChanged(engineState.currentCount, engineState.limitCount)
         }
+        Log.i("SC_RT", "SC_RT LISTENER_NOTIFY_COMPLETE id=$id count=${engineState.currentCount}")
+        Log.i("SC_COUNT",
+            "SC_COUNT COUNT_STATE_UPDATED count=${engineState.currentCount} " +
+                "limit=${engineState.limitCount}",
+        )
+
+        // ===== SC_TRACE: POST_COUNT_STATE — state after count =====
+        Log.i("SC_TRACE",
+            "SC_TRACE POST_COUNT_STATE oldSessionId=${context.sessionId} " +
+                "oldState=${context.sessionState} oldStartedAt=${context.shortStartedAt} " +
+                "newState=NO_SESSION newStartedAt=0 pkg=${context.packageName} " +
+                "activity=${context.activityClassName} countAfter=${engineState.currentCount} " +
+                "candidateKey=${result.platform.name}:${result.surface.name}:${sessionStart} " +
+                "timestamp=$now",
+        )
 
         store.recordUsage(
             LocalShortsUsage(

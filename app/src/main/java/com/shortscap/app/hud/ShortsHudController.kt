@@ -137,12 +137,36 @@ object ShortsHudController {
     private fun onCountChanged(count: Int, limit: Int) {
         Log.i("SC_RT", "SC_RT HUD_COUNT_RECEIVED count=$count limit=$limit showing=${ShortsHudOverlayManager.isShowing}")
         ShortsHudTriggerEngine.updateCount(count, limit)
+        Log.i("SC_RT",
+            "SC_RT HUD_STATE_UPDATE id=onCountChanged count=$count limit=$limit",
+        )
         Log.i("SC_COUNT",
             "SC_COUNT HUD_COUNT_RENDER count=$count limit=$limit showing=${ShortsHudOverlayManager.isShowing}",
         )
-        // If the HUD overlay is already showing, it will recompose automatically
-        // because ShortsHudUiState uses Compose mutableStateOf. If it is not
-        // showing (e.g. settings page), no action needed — the next
-        // onSurfaceChanged() call will pick up the fresh count.
+
+        // ---- HUD recovery ----
+        // If the HUD overlay is already showing, Compose recomposes automatically
+        // via mutableStateOf — no action needed.
+        //
+        // If the overlay is NOT showing (e.g. it was removed by a transient
+        // null surface state), re-show it now: a valid count update proves the
+        // monitoring session is active.
+        if (ShortsHudOverlayManager.isShowing) {
+            Log.i("SC_RT", "SC_RT HUD_RECOVERY_CHECK showing=true count=$count")
+        } else {
+            Log.i("SC_RT", "SC_RT HUD_RECOVERY_CHECK showing=false count=$count")
+            val ctx = context
+            if (ctx == null) {
+                Log.w("SC_RT", "SC_RT HUD_RECOVERY_SHOW_RESULT result=BLOCKED_NO_CONTEXT")
+                return
+            }
+            val store = ShortsHudSettingsStore(ctx)
+            Log.i("SC_RT", "SC_RT HUD_RECOVERY_SHOW_REQUEST count=$count")
+            ShortsHudOverlayManager.show(ctx, ShortsHudTriggerEngine.uiState, store.appearance())
+            val recovered = ShortsHudOverlayManager.isShowing
+            Log.i("SC_RT",
+                "SC_RT HUD_RECOVERY_SHOW_RESULT result=${if (recovered) "SUCCESS" else "BLOCKED"} count=$count",
+            )
+        }
     }
 }

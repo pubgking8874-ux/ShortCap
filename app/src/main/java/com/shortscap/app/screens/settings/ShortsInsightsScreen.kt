@@ -25,18 +25,24 @@ import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
 
 /**
- * Shorts Insights — read-only Shorts usage summaries
+ * Shorts Insights — real Shorts usage summaries from Room
  * (Settings → Short Control → Shorts Insights).
  *
- * Shows the four period rows (Yesterday / Today / This Week / This Month).
- * Backend/reporting data is not connected yet, so the rows render an
- * explicit empty state (a "—" value + an explanatory card) instead of fake
- * numbers. No second reporting engine is created here: when the existing
- * backend sync/reporting layer provides Shorts aggregates, they plug in
- * behind this read-only shape without UI changes.
+ * Shows the four period rows (Yesterday / Today / This Week / This Month)
+ * with real counted-Short data from the existing shorts_usage table.
  */
 @Composable
-fun ShortsInsightsScreen(onBack: () -> Unit) {
+fun ShortsInsightsScreen(
+    onBack: () -> Unit,
+    todayDurationMillis: Long = 0L,
+    todayCount: Int = 0,
+    yesterdayDurationMillis: Long = 0L,
+    yesterdayCount: Int = 0,
+    weekDurationMillis: Long = 0L,
+    weekCount: Int = 0,
+    monthDurationMillis: Long = 0L,
+    monthCount: Int = 0,
+) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
 
@@ -52,36 +58,55 @@ fun ShortsInsightsScreen(onBack: () -> Unit) {
         ) {
             SectionTitle(strings.shortsInsights)
 
-            PeriodRow(label = strings.shortsInsightsToday)
-            PeriodRow(label = strings.shortsInsightsYesterday)
-            PeriodRow(label = strings.shortsInsightsThisWeek)
-            PeriodRow(label = strings.shortsInsightsThisMonth)
-
-            // Explicit empty state — no backend Shorts data connected yet.
-            Text(
-                text = strings.shortsInsightsEmpty,
-                color = colors.TextSecondary,
-                style = ScTextStyles.Body,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(colors.Card, RoundedCornerShape(22.dp))
-                    .border(1.dp, colors.Divider, RoundedCornerShape(22.dp))
-                    .padding(horizontal = 18.dp, vertical = 20.dp),
+            PeriodRow(
+                label = strings.shortsInsightsToday,
+                durationMillis = todayDurationMillis,
+                count = todayCount,
+            )
+            PeriodRow(
+                label = strings.shortsInsightsYesterday,
+                durationMillis = yesterdayDurationMillis,
+                count = yesterdayCount,
+            )
+            PeriodRow(
+                label = strings.shortsInsightsThisWeek,
+                durationMillis = weekDurationMillis,
+                count = weekCount,
+            )
+            PeriodRow(
+                label = strings.shortsInsightsThisMonth,
+                durationMillis = monthDurationMillis,
+                count = monthCount,
             )
         }
     }
 }
 
 /**
- * One read-only period row — period label on the left, "—" placeholder on the
- * right until backend aggregates are available (never a fake number).
+ * One read-only period row — period label on the left, usage summary on the
+ * right. Shows "—" when there are no records for the period.
  */
 @Composable
-private fun PeriodRow(label: String) {
+private fun PeriodRow(
+    label: String,
+    durationMillis: Long,
+    count: Int,
+) {
     val colors = LocalScColors.current
     val shape = RoundedCornerShape(22.dp)
+    val valueText = if (count > 0) {
+        val minutes = (durationMillis / 60_000L).toInt()
+        val hours = minutes / 60
+        val mins = minutes % 60
+        val durationText = when {
+            hours > 0 -> "${hours}h ${mins}m"
+            mins > 0 -> "${mins}m"
+            else -> "<1m"
+        }
+        "$durationText \u00b7 $count Shorts"
+    } else {
+        "\u2014"
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -98,8 +123,8 @@ private fun PeriodRow(label: String) {
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "—",
-            color = colors.TextSecondary,
+            text = valueText,
+            color = if (count > 0) colors.TextPrimary else colors.TextSecondary,
             style = ScTextStyles.BodySemiBold.copy(fontSize = 15.sp),
         )
     }

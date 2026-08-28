@@ -344,11 +344,18 @@ fun SettingsNavHost(
         }
 
         composable(SettingsDestinations.SHORTS_INSIGHTS) {
-            // Shorts Insights — read-only usage summaries (Yesterday / Today
-            // / This Week / This Month). Explicit empty state until backend
-            // aggregates are connected; no second reporting engine.
+            // Shorts Insights — real usage summaries from Room-backed
+            // ShortsUsageRepository (Phase 1).
             ShortsInsightsScreen(
                 onBack = { navController.backOrClose(onClose) },
+                todayDurationMillis = state.shortsTodayDurationMillis,
+                todayCount = state.shortsTodayCount,
+                yesterdayDurationMillis = state.shortsYesterdayDurationMillis,
+                yesterdayCount = state.shortsYesterdayCount,
+                weekDurationMillis = state.shortsWeekDurationMillis,
+                weekCount = state.shortsWeekCount,
+                monthDurationMillis = state.shortsMonthDurationMillis,
+                monthCount = state.shortsMonthCount,
             )
         }
 

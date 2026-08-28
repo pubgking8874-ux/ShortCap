@@ -64,6 +64,7 @@ import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScScreen
 import com.shortscap.app.model.SettingsDestination
 import com.shortscap.app.shorts.ShortsControlEngine
+import com.shortscap.app.shorts.ShortsUsageRepository
 import com.shortscap.app.favicon.FaviconRepository
 import com.shortscap.app.web.WebAnalyticsPeriod
 import com.shortscap.app.web.WebRepository
@@ -114,6 +115,17 @@ data class AppUiState(
     // repository seam, so Home and Activity can never drift apart).
     val homeAppsUsedToday: Int =
         ActivityRepository.reportFor(ActivityPeriod.DAILY).distribution.count { it.minutes > 0 },
+
+    // ---- Phase 1: Real Shorts usage metrics (Room-backed) ----
+    // Updated by the ViewModel's polling loop from ShortsUsageRepository.
+    val shortsTodayDurationMillis: Long = 0L,
+    val shortsTodayCount: Int = 0,
+    val shortsYesterdayDurationMillis: Long = 0L,
+    val shortsYesterdayCount: Int = 0,
+    val shortsWeekDurationMillis: Long = 0L,
+    val shortsWeekCount: Int = 0,
+    val shortsMonthDurationMillis: Long = 0L,
+    val shortsMonthCount: Int = 0,
 
     // ActivityScreen: range chip + dedicated report screens. The report data
     // itself is derived in ActivityRepository.reportFor(period) /
@@ -252,12 +264,10 @@ data class AppUiState(
     val allowedWebCount: Int get() = webRules.count { it.status == WebRuleStatus.ALLOWED }
 
     // Home Quick Stats "Today Usage" — today's TOTAL usage minutes, derived
-    // live from the exact same Daily report (ActivityRepository Daily
-    // aggregation) that powers Activity → Daily chart + timeline. Because it
-    // is a computed getter over the single data seam, the Home card always
-    // reflects the current-day total — never a separate hardcoded value.
+    // Phase 1: Today's Shorts usage minutes — from real Room-backed
+    // ShortsUsageRepository, not from ActivityRepository seed data.
     val homeTodayUsageMinutes: Int
-        get() = ActivityRepository.reportFor(ActivityPeriod.DAILY).totalMinutes
+        get() = (shortsTodayDurationMillis / 60_000L).toInt()
 
     // ---- Centralized monitoring-paused state (derived, never stored) ----
     // Monitoring is considered PAUSED whenever it is switched on but a
@@ -393,6 +403,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 delay(1_000L)
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Phase 1: Real Shorts usage metrics — polls ShortsUsageRepository
+        // every 5 seconds to keep Dashboard + Insights in sync with Room.
+        // ------------------------------------------------------------------
+        viewModelScope.launch {
+            val database = ShortsCapDatabase.getInstance(getApplication())
+            val shortsUsageRepo = ShortsUsageRepository(database.shortsStoreDao())
+            while (isActive) {
+                val summaries = shortsUsageRepo.getAllSummaries()
+                _uiState.update { state ->
+                    state.copy(
+                        shortsTodayDurationMillis = summaries.today.durationMillis,
+                        shortsTodayCount = summaries.today.count,
+                        shortsYesterdayDurationMillis = summaries.yesterday.durationMillis,
+                        shortsYesterdayCount = summaries.yesterday.count,
+                        shortsWeekDurationMillis = summaries.thisWeek.durationMillis,
+                        shortsWeekCount = summaries.thisWeek.count,
+                        shortsMonthDurationMillis = summaries.thisMonth.durationMillis,
+                        shortsMonthCount = summaries.thisMonth.count,
+                    )
+                }
+                delay(5_000L)
             }
         }
     }
