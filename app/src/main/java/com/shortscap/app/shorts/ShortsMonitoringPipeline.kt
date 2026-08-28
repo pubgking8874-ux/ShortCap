@@ -375,14 +375,29 @@ class ShortsMonitoringPipeline(
                 sessionInProgress = sessionInProgress,
             )
             if (surfaceDecision.role == ShortSurfaceClassifier.SurfaceRole.TRANSIENT_UI) {
-                if (sessionInProgress) {
-                    // Active session: suppress scroll to prevent false counts
-                    // from overlay-generated scroll events.
+                if (context.sessionState == SessionState.QUALIFIED) {
+                    // QUALIFIED session: the 3000ms engagement requirement is
+                    // already met. A genuine TYPE_VIEW_SCROLLED must not be
+                    // suppressed by stale transient UI labels in cached content
+                    // evidence (e.g. like/share/comment keywords that persist
+                    // in the accessibility tree while the Short player is active).
                     Log.i("SC_SCROLL_DECISION",
                         "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
                             "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${if (context.shortStartedAt > 0) now - context.shortStartedAt else 0L}ms " +
                             "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
-                            "supportedPlatform=true isQualified=${context.sessionState == SessionState.QUALIFIED} " +
+                            "supportedPlatform=true isQualified=true " +
+                            "scrollSource=TYPE_VIEW_SCROLLED willCount=true reason=QUALIFIED_TRANSIENT_UI_BYPASS " +
+                            "surfaceRole=${surfaceDecision.role} gateReason=${surfaceDecision.reason}",
+                    )
+                    // Fall through — continue to existing qualification/count path
+                } else if (sessionInProgress) {
+                    // WATCHING session (not yet qualified): suppress scroll to
+                    // prevent false counts from overlay-generated scroll events.
+                    Log.i("SC_SCROLL_DECISION",
+                        "SC_SCROLL_DECISION pkg=$packageName sessionState=${context.sessionState} " +
+                            "shortStartedAt=${context.shortStartedAt} now=$now elapsed=${if (context.shortStartedAt > 0) now - context.shortStartedAt else 0L}ms " +
+                            "threshold=${SHORT_MIN_ENGAGEMENT_MILLIS} samePackage=true " +
+                            "supportedPlatform=true isQualified=false " +
                             "scrollSource=TYPE_VIEW_SCROLLED willCount=false reason=TRANSIENT_UI " +
                             "surfaceRole=${surfaceDecision.role} gateReason=${surfaceDecision.reason}",
                     )
