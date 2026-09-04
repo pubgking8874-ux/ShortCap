@@ -33,6 +33,7 @@ import com.shortscap.app.activity.ActivityPeriod
 import com.shortscap.app.activity.ActivityRange
 import com.shortscap.app.activity.ActivityRepository
 import com.shortscap.app.activity.ActivitySlice
+import com.shortscap.app.activity.AppUsageColorProvider
 import com.shortscap.app.charts.ChartSlice
 import com.shortscap.app.charts.ChartStyle
 import com.shortscap.app.charts.ScDistributionChart
@@ -54,13 +55,15 @@ import kotlin.math.roundToInt
 fun ActivitySlice.displayName(strings: AppStrings): String =
     if (id == "other") strings.activityOther else name
 
-/** Theme-aware app palette color for a distribution slice. */
-fun ActivitySlice.pieColor(colors: ScColors): Color = when (id) {
-    "instagram" -> colors.PieInstagram
-    "youtube" -> colors.PieYouTube
-    "chrome" -> colors.PieChrome
-    else -> colors.PieOther
-}
+/**
+ * Brand color for a distribution slice — delegated to the centralized
+ * [com.shortscap.app.activity.AppUsageColorProvider] (keyed by package
+ * identity, never display label) so Activity, its report screens and Home
+ * share ONE source of truth. The "Other" slice (packageName == null) stays
+ * neutral; known apps keep their brand color regardless of rank/order.
+ */
+fun ActivitySlice.pieColor(colors: ScColors): Color =
+    AppUsageColorProvider.colorFor(packageName, colors)
 
 /** Cycling time-slice palette so every hour / day / range has a distinct hue. */
 fun timeSliceColor(colors: ScColors, index: Int): Color {
@@ -98,6 +101,9 @@ fun ActivityScreen(
     range: String,
     onRangeChange: (String) -> Unit,
     chartStyle: ChartStyle,
+    // Bumped by the reporting poll when persisted data changes, so the
+    // real-data report recomputes instead of staying cached.
+    dataTick: Long = 0L,
     onOpenReport: (ActivityPeriod) -> Unit,
     onOpenRange: (ActivityRange) -> Unit,
 ) {
@@ -111,7 +117,7 @@ fun ActivityScreen(
             else -> ActivityPeriod.DAILY
         }
     }
-    val report = remember(period) { ActivityRepository.reportFor(period) }
+    val report = remember(period, dataTick) { ActivityRepository.reportFor(period) }
 
     // Distribution → shared chart slices (same data, pie-palette colors).
     val chartSlices = remember(report, strings, colors) {
@@ -142,7 +148,7 @@ fun ActivityScreen(
         }.filterNotNull()
     }
     // Monthly ranges (labels match report.points) for the tooltip drill-down.
-    val monthlyRanges = remember(period) {
+    val monthlyRanges = remember(period, dataTick) {
         if (period == ActivityPeriod.MONTHLY) ActivityRepository.monthlyRanges() else emptyList()
     }
 
@@ -166,6 +172,19 @@ fun ActivityScreen(
     val selectedPoint = report.points.firstOrNull { it.label == selectedLabel }
     val barSelectedIndex = report.points.indexOfFirst { it.label == selectedLabel }.takeIf { it >= 0 }
     val donutSelectedIndex = timeSlices.indexOfFirst { it.label == selectedLabel }.takeIf { it >= 0 }
+    // Phase 1.3 — the reportable applications used during the selected hour
+    // (Daily only), computed from the SAME persisted sessions + classifier as
+    // the timeline, so the detail card's Apps Used breakdown always agrees
+    // with the hour total. Weekly/Monthly points carry no per-hour data.
+    val selectedHourApps = remember(period, selectedLabel, dataTick) {
+        if (period == ActivityPeriod.DAILY) {
+            report.points.indexOfFirst { it.label == selectedLabel }.takeIf { it >= 0 }
+                ?.let { hourIndex -> ActivityRepository.hourApps(hourIndex) }
+                .orEmpty()
+        } else {
+            emptyList()
+        }
+    }
     fun toggleSelect(label: String) {
         selectedLabel = if (selectedLabel == label) null else label
     }
@@ -261,10 +280,10 @@ fun ActivityScreen(
                             chartStyle = ChartStyle.CIRCULAR,
                             modifier = Modifier.size(190.dp),
                             centerContent = {
-                                ScDonutCenterTotal(
-                                    total = totalText,
-                                    subtitle = ActivityRepository.periodDateCaption(period),
-                                )
+                                // Phase 1.3: the donut center shows ONLY the
+                                // total — the date caption stays above the
+                                // chart in the Usage Timeline card header.
+                                ScDonutCenterTotal(total = totalText)
                             },
                             selectedIndex = donutSelectedIndex,
                             onSliceClick = onDonutTap,
@@ -290,6 +309,8 @@ fun ActivityScreen(
                     title = point.detailTitle ?: point.label,
                     usage = formatWebDuration(point.minutes, strings),
                     timeRange = point.timeRange,
+                    apps = selectedHourApps,
+                    appsFormatter = { minutes -> formatWebDuration(minutes, strings) },
                     actionLabel = tooltipActionLabel,
                     onAction = tooltipAction,
                     onClose = { selectedLabel = null },
@@ -321,14 +342,15 @@ fun ActivityScreen(
             }
         }
 
-        // Stats row — unchanged demo values.
+        // Stats row — real period values from the persisted app-usage
+        // sessions (closed foreground sessions + their average length).
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ScCard(modifier = Modifier.weight(1f)) {
-                Text("38", color = colors.TextPrimary, style = ScTextStyles.StatValue)
+                Text("${report.unlockCount}", color = colors.TextPrimary, style = ScTextStyles.StatValue)
                 Text(strings.activityUnlockCount, color = colors.TextSecondary, style = ScTextStyles.Label)
             }
             ScCard(modifier = Modifier.weight(1f)) {
-                Text("6m 40s", color = colors.TextPrimary, style = ScTextStyles.StatValue)
+                Text(formatClockSeconds(report.avgSessionSeconds), color = colors.TextPrimary, style = ScTextStyles.StatValue)
                 Text(strings.activityAvgSession, color = colors.TextSecondary, style = ScTextStyles.Label)
             }
         }
@@ -365,4 +387,12 @@ fun ActivityScreen(
             }
         }
     }
+}
+
+/** "6m 40s" / "1h 5m" — clock-style duration text for the avg-session stat. */
+private fun formatClockSeconds(totalSeconds: Long): String = when {
+    totalSeconds <= 0L -> "0s"
+    totalSeconds < 60L -> "${totalSeconds}s"
+    totalSeconds < 3_600L -> "${totalSeconds / 60}m ${totalSeconds % 60}s"
+    else -> "${totalSeconds / 3_600}h ${(totalSeconds % 3_600) / 60}m"
 }

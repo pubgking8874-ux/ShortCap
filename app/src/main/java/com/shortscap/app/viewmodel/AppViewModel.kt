@@ -3,15 +3,19 @@ package com.shortscap.app.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shortscap.app.activity.ActivityAppNames
 import com.shortscap.app.activity.ActivityPeriod
 import com.shortscap.app.activity.ActivityRange
-import com.shortscap.app.activity.ActivityRepository
+import com.shortscap.app.activity.AppUsageColorProvider
+import com.shortscap.app.activity.PackageClassifier
 import com.shortscap.app.appearance.AppearanceRepository
 import com.shortscap.app.appearance.FontMode
 import com.shortscap.app.appearance.TextSizeMode
 import com.shortscap.app.charts.ChartStyle
+import com.shortscap.app.db.ScreenActivityUsageEntity
 import com.shortscap.app.db.ShortsCapDatabase
 import com.shortscap.app.theme.ScFonts
 import com.shortscap.app.theme.ThemeMode
@@ -24,6 +28,8 @@ import com.shortscap.app.icons.IconStyle
 import com.shortscap.app.model.DrawerScreen
 import com.shortscap.app.model.MonitoringSettings
 import com.shortscap.app.model.ProfileData
+import com.shortscap.app.model.ScEntity
+import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.monitoring.MonitoringService
 import com.shortscap.app.notifications.NotificationRepository
 import com.shortscap.app.notifications.NotificationSetting
@@ -75,7 +81,13 @@ import com.shortscap.app.web.PlaceholderBlockingEngine
 import com.shortscap.app.web.WebUsageRecord
 import com.shortscap.app.web.domain.BlockedDomainRepository
 import com.shortscap.app.web.vpn.VpnStateManager
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -101,20 +113,25 @@ data class AppUiState(
     val homeLoading: Boolean = true,
     val toastMessage: String? = null,
 
-    // Home hero circular analytics — mocked here for the frontend; the
-    // ViewModel will replace these with backend API responses later
-    // (only the data source changes, the UI stays the same).
+    // Home hero circular analytics — filled by the reporting poll from REAL
+    // persisted Shorts data (shorts_usage, local calendar day). Zero state
+    // until the first poll — fabricated numbers never appear as user data.
     val homeMetrics: List<ScCircularMetric> = listOf(
-        ScCircularMetric(id = "shorts-watch-time", label = "Today's Shorts Watch Time", value = "1h 30m", progress = 0.75f),
-        ScCircularMetric(id = "shorts-watched", label = "Today's Shorts Watched", value = "245", unit = "Shorts", progress = 0.65f),
+        ScCircularMetric(id = "shorts-watch-time", label = "Today's Shorts Watch Time", value = "0m", progress = 0f),
+        ScCircularMetric(id = "shorts-watched", label = "Today's Shorts Watched", value = "0", unit = "Shorts", progress = 0f),
     ),
 
-    // Home Quick Stats "Apps Used" — apps with real usage today, derived from
-    // the SAME ActivityRepository data the Activity → Daily screen renders
-    // (one centralized source; the future backend feeds both through the same
-    // repository seam, so Home and Activity can never drift apart).
-    val homeAppsUsedToday: Int =
-        ActivityRepository.reportFor(ActivityPeriod.DAILY).distribution.count { it.minutes > 0 },
+    // Home Quick Stats "Apps Used" — distinct foreground apps persisted TODAY
+    // in screen_activity_usage, updated by the reporting poll.
+    val homeAppsUsedToday: Int = 0,
+
+    // Home Recent Activity — real closed foreground sessions from
+    // screen_activity_usage, most recent first (updated by the reporting poll).
+    val homeRecentActivity: List<ScEntity> = emptyList(),
+
+    // Bumped by the reporting poll so Activity/Reports re-render when
+    // persisted data changes (their remember keys include this tick).
+    val activityDataTick: Long = 0L,
 
     // ---- Phase 1: Real Shorts usage metrics (Room-backed) ----
     // Updated by the ViewModel's polling loop from ShortsUsageRepository.
@@ -354,77 +371,74 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // ------------------------------------------------------------------
-        // Shorts goal synchronization — polls the AUTHORITATIVE
-        // ShortsControlEngine.shared (the single source of truth for both the
-        // daily Shorts limit and the current Shorts count) every second.
-        //
-        // Before this, the Dashboard circular goal used hardcoded mock values
-        // ("245 Shorts", progress 0.65f) that were never updated from the
-        // counting pipeline or the Settings limit.  After this fix:
-        //
-        //   Dashboard current count == ShortsControlEngine.currentCount
-        //   Dashboard goal/limit   == ShortsControlEngine.limitCount
-        //   Dashboard progress     == currentCount / limitCount (clamped 0..1)
-        //
-        // The polling interval (1 s) matches the ShortsLimitScreen tick and
-        // is light enough for battery — one Room read per second on IO.
-        // ------------------------------------------------------------------
-        viewModelScope.launch {
-            while (isActive) {
-                val engineState = ShortsControlEngine.shared.currentState()
-                val count = engineState.currentCount
-                val limit = engineState.limitCount
-                val watchTimeMillis = engineState.cycle?.cycleDurationMillis ?: 0L
-                val progress = if (limit > 0) (count.toFloat() / limit).coerceIn(0f, 1f) else 0f
-                val watchHours = watchTimeMillis / 3_600_000L
-                val watchMinutes = (watchTimeMillis % 3_600_000L) / 60_000L
-                val watchTimeText = when {
-                    watchHours > 0 -> "${watchHours}h ${watchMinutes}m"
-                    watchMinutes > 0 -> "${watchMinutes}m"
-                    else -> "0m"
-                }
-                _uiState.update { state ->
-                    state.copy(
-                        homeMetrics = listOf(
-                            ScCircularMetric(
-                                id = "shorts-watch-time",
-                                label = "Today's Shorts Watch Time",
-                                value = watchTimeText,
-                                progress = progress,
-                            ),
-                            ScCircularMetric(
-                                id = "shorts-watched",
-                                label = "Today's Shorts Watched",
-                                value = "$count",
-                                unit = "Shorts",
-                                progress = progress,
-                            ),
-                        ),
-                    )
-                }
-                delay(1_000L)
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Phase 1: Real Shorts usage metrics — polls ShortsUsageRepository
-        // every 5 seconds to keep Dashboard + Insights in sync with Room.
+        // Phase 1 reporting poll — reads the REAL persisted reporting tables
+        // (shorts_usage + screen_activity_usage) every 5 seconds so Home
+        // (ring + Quick Stats + Recent Activity), Activity/Reports and
+        // Insights all render the same local-calendar-day data. The 24-hour
+        // enforcement cycle (ShortsControlEngine) is untouched — reporting
+        // "Today" is always the device's local calendar day.
         // ------------------------------------------------------------------
         viewModelScope.launch {
             val database = ShortsCapDatabase.getInstance(getApplication())
             val shortsUsageRepo = ShortsUsageRepository(database.shortsStoreDao())
+            val screenActivityDao = database.screenActivityDao()
+            val zone = ZoneId.systemDefault()
             while (isActive) {
                 val summaries = shortsUsageRepo.getAllSummaries()
+                val todayMillis = summaries.today.durationMillis
+                val todayCount = summaries.today.count
+                // Goal ring progress: today's counted Shorts vs the saved limit
+                // (the engine's configured limit; the enforcement cycle itself
+                // is never read for reporting).
+                val limit = ShortsControlEngine.shared.currentState().limitCount
+                val progress = if (limit > 0) (todayCount.toFloat() / limit).coerceIn(0f, 1f) else 0f
+
+                // Real Recent Activity + Apps Used today from the persisted
+                // app-usage sessions (screen_activity_usage). Phase 1.2: the
+                // SAME PackageClassifier the Activity report uses filters out
+                // system UI / IME / launcher / ShortsCap-internal packages
+                // BEFORE aggregation and BEFORE the Recent Activity top-3, so
+                // Home and Activity always agree on the reportable app set.
+                val appContext = getApplication<Application>()
+                val todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+                val tomorrowStart = LocalDate.now(zone).plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                val todaySessions = screenActivityDao.usageInRange(todayStart, tomorrowStart)
+                    .filter { PackageClassifier.isReportable(PackageClassifier.classify(it.packageName, appContext)) }
+                val recentSessions = screenActivityDao.recentSessions(MAX_RECENT_ACTIVITY_BATCH)
+                val recentActivity = recentSessions
+                    .filter { PackageClassifier.isReportable(PackageClassifier.classify(it.packageName, appContext)) }
+                    .take(MAX_RECENT_ACTIVITY_ROWS)
+                    .map { it.toRecentEntity() }
+
                 _uiState.update { state ->
                     state.copy(
-                        shortsTodayDurationMillis = summaries.today.durationMillis,
-                        shortsTodayCount = summaries.today.count,
+                        shortsTodayDurationMillis = todayMillis,
+                        shortsTodayCount = todayCount,
                         shortsYesterdayDurationMillis = summaries.yesterday.durationMillis,
                         shortsYesterdayCount = summaries.yesterday.count,
                         shortsWeekDurationMillis = summaries.thisWeek.durationMillis,
                         shortsWeekCount = summaries.thisWeek.count,
                         shortsMonthDurationMillis = summaries.thisMonth.durationMillis,
                         shortsMonthCount = summaries.thisMonth.count,
+                        // Home ring — calendar-day Shorts from shorts_usage.
+                        homeMetrics = listOf(
+                            ScCircularMetric(
+                                id = "shorts-watch-time",
+                                label = "Today's Shorts Watch Time",
+                                value = formatWatchTime(todayMillis),
+                                progress = progress,
+                            ),
+                            ScCircularMetric(
+                                id = "shorts-watched",
+                                label = "Today's Shorts Watched",
+                                value = "$todayCount",
+                                unit = "Shorts",
+                                progress = progress,
+                            ),
+                        ),
+                        homeAppsUsedToday = todaySessions.map { it.packageName }.distinct().size,
+                        homeRecentActivity = recentActivity,
+                        activityDataTick = state.activityDataTick + 1L,
                     )
                 }
                 delay(5_000L)
@@ -1352,3 +1366,66 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         showToast { it.toastSettingsReset }
     }
 }
+
+/** How many recent app-usage sessions Home's Recent Activity shows. */
+private const val MAX_RECENT_ACTIVITY_ROWS = 3
+
+/**
+ * How many of the most recent persisted sessions are fetched before the
+ * reportable-package filter, so system UI / IME / launcher rows can never
+ * consume the Recent Activity slots (filtering happens BEFORE take(3)).
+ */
+private const val MAX_RECENT_ACTIVITY_BATCH = 50
+
+/** "45m" / "1h 30m" — watch-time text for Home's "Today's Shorts Watch Time" ring. */
+private fun formatWatchTime(millis: Long): String {
+    val totalMinutes = (millis / 60_000L).toInt()
+    return when {
+        totalMinutes <= 0 -> "0m"
+        totalMinutes < 60 -> "${totalMinutes}m"
+        else -> {
+            val h = totalMinutes / 60
+            val m = totalMinutes % 60
+            if (m == 0) "${h}h" else "${h}h ${m}m"
+        }
+    }
+}
+
+/** "45m" / "1h 30m" — duration text for one Recent Activity row. */
+private fun formatRecentDuration(minutes: Int): String = when {
+    minutes <= 0 -> "0m"
+    minutes < 60 -> "${minutes}m"
+    else -> {
+        val h = minutes / 60
+        val m = minutes % 60
+        if (m == 0) "${h}h" else "${h}h ${m}m"
+    }
+}
+
+/** Local clock time ("3:42 PM") for a Recent Activity row's timestamp. */
+private val sessionTimeFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+
+private fun formatSessionTime(epochMillis: Long): String =
+    Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(sessionTimeFormatter)
+
+/** One real Recent Activity row for a closed foreground session. */
+private fun ScreenActivityUsageEntity.toRecentEntity(): ScEntity {
+    val minutes = (durationSeconds / 60.0).roundToInt()
+    return ScEntity(
+        id = packageName,
+        title = ActivityAppNames.friendlyName(packageName, appName),
+        type = ScEntityType.APP,
+        packageName = packageName,
+        fallbackColor = packageColor(packageName),
+        usageTime = formatRecentDuration(minutes),
+        timestamp = formatSessionTime(occurredAt),
+    )
+}
+
+/** Brand color for a Home Recent Activity row — delegated to the centralized
+ *  [AppUsageColorProvider] (keyed by package identity), so Home and Activity
+ *  always show the SAME application colors. Unknown apps keep the neutral.
+ */
+private fun packageColor(packageName: String): Color =
+    AppUsageColorProvider.colorFor(packageName)

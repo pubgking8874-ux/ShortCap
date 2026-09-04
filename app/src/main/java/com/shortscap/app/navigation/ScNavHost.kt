@@ -114,10 +114,12 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
             ScScreen.HOME -> HomeScreen(
                 loading = state.homeLoading,
                 metrics = state.homeMetrics,
-                // Today's total usage — same ActivityRepository Daily data the
-                // Activity → Daily chart uses (Home stays in sync with it).
+                // Today's total usage — real calendar-day Shorts watch time
+                // from shorts_usage (same source the Activity reports use).
                 todayUsageMinutes = state.homeTodayUsageMinutes,
                 appsUsedToday = state.homeAppsUsedToday,
+                // Real Recent Activity rows from screen_activity_usage.
+                recentActivity = state.homeRecentActivity,
                 blockedWebCount = state.blockedWebCount,
                 allowedWebCount = state.allowedWebCount,
                 // Centralized monitoring-paused state (derived from the live
@@ -163,11 +165,13 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                         period = ActivityPeriod.MONTHLY,
                         range = rangeDetail,
                         chartStyle = state.chartStyle,
+                        dataTick = state.activityDataTick,
                         onBack = viewModel::closeActivityRangeDetail,
                     )
                     reportPeriod != null -> ActivityReportScreen(
                         period = reportPeriod,
                         chartStyle = state.chartStyle,
+                        dataTick = state.activityDataTick,
                         onBack = viewModel::closeActivityReport,
                         onOpenRange = viewModel::openActivityRangeDetail,
                     )
@@ -175,6 +179,7 @@ fun ScNavHost(state: AppUiState, viewModel: AppViewModel) {
                         range = state.activityRange,
                         onRangeChange = viewModel::setActivityRange,
                         chartStyle = state.chartStyle,
+                        dataTick = state.activityDataTick,
                         onOpenReport = viewModel::openActivityReport,
                         onOpenRange = viewModel::openActivityRangeDetail,
                     )

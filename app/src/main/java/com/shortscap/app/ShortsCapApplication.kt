@@ -1,6 +1,7 @@
 package com.shortscap.app
 
 import android.app.Application
+import com.shortscap.app.activity.ActivityRepository
 import com.shortscap.app.db.ShortsCapDatabase
 import com.shortscap.app.screenactivity.RoomScreenActivityStore
 import com.shortscap.app.screenactivity.ScreenActivityEngine
@@ -48,5 +49,14 @@ class ShortsCapApplication : Application() {
             ShortsControlEngine(store = RoomShortsLimitCycleStore(database.shortsLimitCycleDao()))
         )
         ShortsMonitoringPipeline.installControlEngine(ShortsControlEngine.shared)
+        // Phase 1 reporting: Activity aggregates REAL persisted data from the
+        // two existing tables (shorts_usage + screen_activity_usage). Before
+        // this install the reporting layer reports zeros, never fake values.
+        ActivityRepository.installDataSource(
+            ActivityRepository.RoomDataSource(
+                shortsDao = database.shortsStoreDao(),
+                screenActivityDao = database.screenActivityDao(),
+            )
+        )
     }
 }

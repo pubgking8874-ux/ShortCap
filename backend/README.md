@@ -2134,7 +2134,7 @@ reporting and ranking keep working unchanged.
 | `monitoring/MonitoringEventHub.kt` | Funnel for foreground-app events (doc note added) | Future Shorts detector subscribes here; hub stays a dumb funnel |
 | `accessibility/ShortsCapAccessibilityService.kt` | Package-only window-state observation + Brain overlay | Unchanged — future detector consumes the same events via the hub |
 | `monitoring/BrainOverlayManager.kt` (`SupportedShortVideoPackages`) | Overlay show/hide package set | Unchanged; registry centralizes recognition going forward |
-| `activity/ActivityRepository.kt` / `ActivityModels.kt` | Seeded usage reports | Unchanged; future Shorts reports consume aggregator/budget data |
+| `activity/ActivityRepository.kt` / `ActivityModels.kt` / `activity/PackageClassifier.kt` / `activity/AppUsageColorProvider.kt` | Real reporting aggregation over `shorts_usage` + `screen_activity_usage` (Phase 1: no seeds). Phase 1.2: system/IME/launcher/ShortsCap-internal packages are filtered at the reporting layer via `PackageClassifier` (totals, timeline, distribution, "Other" and Home all use the same reportable user-app set; raw `screen_activity_usage` rows and the Room schema are unchanged). Phase 1.3: selected-hour per-app breakdown (`hourApps`) + centralized deterministic app colors (`AppUsageColorProvider`) | Unchanged; a future backend fills the same `ActivityReport` shape |
 | `model/Models.kt` (`ShortVideoPlatform`) | Settings UI platform catalog (with `enabled`) | Unchanged; the new typed enums are the detection-side model |
 
 ## Database Migration

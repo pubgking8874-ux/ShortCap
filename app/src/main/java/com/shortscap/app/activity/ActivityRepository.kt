@@ -1,219 +1,149 @@
 package com.shortscap.app.activity
 
+import com.shortscap.app.db.ScreenActivityDao
+import com.shortscap.app.db.ScreenActivityUsageEntity
+import com.shortscap.app.db.ShortsStoreDao
+import com.shortscap.app.db.ShortsUsageEntity
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
-import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
- * ActivityRepository — the single data seam for the Activity section.
+ * ActivityRepository — the reporting seam for the Activity section.
  *
- * Today [seedUsageRecords] returns deterministic RAW usage records (the same
- * values the Activity page has always shown: the reference week's exact
- * Mon–Sun series, today's hourly profile, and a full previous + current
- * month so every monthly date range and trend has real data). [reportFor]
- * then AGGREGATES those same records dynamically according to the selected
- * period:
- *   - DAILY   → grouped by hour of the reference day (24-point timeline,
- *               12 AM – 11 PM);
- *   - WEEKLY  → grouped by weekday, Monday–Sunday (exactly 7 points);
- *   - MONTHLY → grouped into 7-day date ranges of the current month
- *               (Aug 1–7, Aug 8–14, …; the count adapts to the month's days).
- * There are NO separate fake datasets per period — one raw record set feeds
- * every chart, and [rangeReportFor] drills into one range's per-day usage.
+ * Phase 1 — every displayed value is aggregated from REAL persisted data:
+ *  - app usage (timeline, distribution, unlock/avg-session stats) comes from
+ *    `screen_activity_usage` (ScreenActivityEngine's closed foreground
+ *    sessions);
+ *  - Shorts count / watch time / per-platform breakdown comes from
+ *    `shorts_usage` (the counting pipeline's persisted counted-Short rows).
  *
- * Tomorrow [seedUsageRecords] is replaced by a backend API / database fetch
- * behind the exact same [ActivityRecord] / [ActivityReport] shapes — no UI,
- * chart or navigation changes required.
+ * "Today" is ALWAYS the device's local calendar day
+ * ([ZoneId.systemDefault()]) — never the 24-hour enforcement cycle. The
+ * enforcement cycle ([com.shortscap.app.shorts.ShortsControlEngine]) is
+ * untouched; reporting and enforcement are separate concepts.
  *
- * Chart style is NOT part of this layer: it is a presentation preference
- * (Settings → Appearance → Chart) and never appears in activity data.
+ * [DataSource] is installed at app start ([installDataSource]). Before
+ * install the empty source reports zeros — never fabricated values.
  */
 object ActivityRepository {
 
-    // ---- Seed data (used only until real tracking / backend data) ----
+    /** Raw persisted reporting rows the repository aggregates. */
+    interface DataSource {
+        /** Counted Shorts usage rows with occurredAt in [startMillis, endMillis). */
+        suspend fun shortsUsage(startMillis: Long, endMillis: Long): List<ShortsUsageEntity>
 
-    /** Fixed reference "today" so every aggregation is deterministic. */
-    private val referenceDate: LocalDate = LocalDate.of(2026, 8, 7)
+        /** Closed app-usage sessions with occurredAt in [startMillis, endMillis). */
+        suspend fun appSessions(startMillis: Long, endMillis: Long): List<ScreenActivityUsageEntity>
+    }
 
-    /** Base minutes per weekday — the familiar weekly series (Sun..Sat). */
-    private val baseMinutesByDay = mapOf(
-        DayOfWeek.SUNDAY to 190,
-        DayOfWeek.MONDAY to 210,
-        DayOfWeek.TUESDAY to 185,
-        DayOfWeek.WEDNESDAY to 260,
-        DayOfWeek.THURSDAY to 150,
-        DayOfWeek.FRIDAY to 300,
-        DayOfWeek.SATURDAY to 340,
-    )
+    /** Before install: report zeros, never fake numbers. */
+    private object EmptyDataSource : DataSource {
+        override suspend fun shortsUsage(startMillis: Long, endMillis: Long): List<ShortsUsageEntity> = emptyList()
+        override suspend fun appSessions(startMillis: Long, endMillis: Long): List<ScreenActivityUsageEntity> = emptyList()
+    }
 
-    /** Deterministic day-level offsets so ranges/months aggregate differently. */
-    private val dayVariation = intArrayOf(0, 12, -8, 5, -15, 10, -5, 18, -12, 7, -3, 14, -9, 6)
+    @Volatile
+    private var source: DataSource = EmptyDataSource
 
-    /**
-     * Today's hourly usage SHAPE (weights, deterministic). The shape is
-     * scaled in [scaledHourlyProfile] so today's hourly total equals the
-     * reference day's base value — the daily total therefore matches the
-     * Friday bar in the weekly chart, and the weekly total stays exactly at
-     * the established Mon–Sun series (27h 15m).
-     */
-    private val todayHourlyShape = listOf(
-        7 to 15, 8 to 40, 9 to 55, 10 to 35, 11 to 60, 12 to 75, 13 to 50,
-        14 to 45, 15 to 70, 16 to 30, 17 to 85, 18 to 110, 19 to 95,
-        20 to 80, 21 to 65, 22 to 40,
-    )
+    @Volatile
+    private var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
-    /** App distribution — the values the Activity page has always shown. */
-    private val distribution = listOf(
-        ActivitySlice(id = "instagram", name = "Instagram", percent = 42),
-        ActivitySlice(id = "youtube", name = "YouTube", percent = 27),
-        ActivitySlice(id = "chrome", name = "Chrome", percent = 18),
-        ActivitySlice(id = "other", name = "Other", percent = 13),
-    )
+    /** Installs the real Room-backed source (called from [com.shortscap.app.ShortsCapApplication]). */
+    fun installDataSource(dataSource: DataSource) {
+        source = dataSource
+    }
 
-    /** Share of usage spent on Shorts — seed heuristic until real tracking. */
-    private const val SHORTS_SHARE = 0.38f
-    /** Average Shorts length in minutes — seed heuristic until real tracking. */
-    private const val AVG_SHORTS_MINUTES = 2
+    /** Room-backed source over the two existing tables (read-only). */
+    class RoomDataSource(
+        private val shortsDao: ShortsStoreDao,
+        private val screenActivityDao: ScreenActivityDao,
+    ) : DataSource {
+        override suspend fun shortsUsage(startMillis: Long, endMillis: Long): List<ShortsUsageEntity> =
+            shortsDao.usageInRange(startMillis, endMillis)
 
-    /**
-     * Deterministic raw usage records: one day-level record per day of the
-     * previous month (for trend comparisons) through the end of the current
-     * month (so every monthly date range has data), plus today's hourly
-     * profile. The reference week keeps the exact base series (weekly total
-     * stays 27h 15m; today's daily total equals its Friday bar). Day-level
-     * records sit in the 0-hour bucket.
-     */
-    fun seedUsageRecords(): List<ActivityRecord> {
-        val records = mutableListOf<ActivityRecord>()
-        val first = referenceDate.withDayOfMonth(1).minusMonths(1)
-        val last = referenceDate.withDayOfMonth(1).plusMonths(1).minusDays(1)
-        val refWeekStart = referenceDate.with(DayOfWeek.MONDAY)
-        val refWeekEnd = refWeekStart.plusDays(6)
-        var cursor = first
-        var dayIndex = 0
-        while (!cursor.isAfter(last)) {
-            val inReferenceWeek = !cursor.isBefore(refWeekStart) && !cursor.isAfter(refWeekEnd)
-            val variation = if (inReferenceWeek) 0 else dayVariation[dayIndex % dayVariation.size]
-            val minutes = (baseMinutesByDay.getValue(cursor.dayOfWeek) + variation).coerceAtLeast(20)
-            records += ActivityRecord(date = cursor, hour = 0, minutes = minutes)
-            cursor = cursor.plusDays(1)
-            dayIndex++
-        }
-        // Replace the reference day's flat record with its hourly profile,
-        // scaled to the day's base total so daily and weekly stay consistent.
-        records.removeAll { it.date == referenceDate }
-        scaledHourlyProfile(baseMinutesByDay.getValue(referenceDate.dayOfWeek))
-            .forEach { (hour, minutes) ->
-                records += ActivityRecord(date = referenceDate, hour = hour, minutes = minutes)
-            }
-        return records
+        override suspend fun appSessions(startMillis: Long, endMillis: Long): List<ScreenActivityUsageEntity> =
+            screenActivityDao.usageInRange(startMillis, endMillis)
+    }
+
+    /** Max real app slices shown in the distribution; the rest folds into "Other". */
+    private const val MAX_DISTRIBUTION_SLICES = 5
+
+    // ------------------------------------------------------------------
+    // Public API — same signatures as before (the UI is unchanged).
+    // ------------------------------------------------------------------
+
+    /** Structured activity data for [period], aggregated from persisted rows. */
+    fun reportFor(period: ActivityPeriod, today: LocalDate = LocalDate.now()): ActivityReport {
+        val (from, to) = periodSpan(period, today)
+        val (prevFrom, _) = previousSpan(period, today)
+        val shorts = loadShorts(minOf(from, prevFrom), to)
+        val sessions = loadSessions(minOf(from, prevFrom), to)
+        return buildReport(period, today, shorts, sessions)
     }
 
     /**
-     * Scales the hourly shape so its sum equals [target] minutes exactly
-     * (integer math; rounding drift is distributed one minute at a time).
+     * Per-day detail for one date range (opened by tapping a monthly bar):
+     * one point per day, full weekday labels, trend vs the previous
+     * equal-length window. The same persisted rows feed this as every other
+     * view.
      */
-    private fun scaledHourlyProfile(target: Int): List<Pair<Int, Int>> {
-        val shapeSum = todayHourlyShape.sumOf { it.second }
-        val scaled = todayHourlyShape.map { (hour, weight) -> hour to weight * target / shapeSum }
-        var diff = target - scaled.sumOf { it.second }
-        val result = scaled.toMutableList()
-        var i = 0
-        while (diff > 0) {
-            val (hour, minutes) = result[i]
-            result[i] = hour to minutes + 1
-            diff--
-            i = (i + 1) % result.size
-        }
-        return result
-    }
+    fun rangeReportFor(range: ActivityRange): ActivityReport {
+        val from = range.from
+        val to = range.to
+        val spanDays = (ChronoUnit.DAYS.between(from, to) + 1)
+        val prevTo = from.minusDays(1)
+        val prevFrom = prevTo.minusDays(spanDays - 1)
+        val shorts = loadShorts(minOf(from, prevFrom), to)
+        // Phase 1.2: filter system/IME/launcher/ShortsCap-internal packages
+        // BEFORE aggregation so every metric below (day points, prev window,
+        // distribution, unlock/avg) uses the same reportable user-app set.
+        val sessions = reportableSessions(loadSessions(minOf(from, prevFrom), to))
+        val zone = ZoneId.systemDefault()
 
-    /**
-     * Structured activity data for [period]. Pure and deterministic — the UI
-     * only renders this; it never mutates or recalculates it.
-     */
-    fun reportFor(period: ActivityPeriod): ActivityReport {
-        val records = seedUsageRecords()
-        val points = when (period) {
-            ActivityPeriod.DAILY -> aggregateByHour(records, referenceDate)
-            ActivityPeriod.WEEKLY -> aggregateByWeekday(records, referenceDate)
-            ActivityPeriod.MONTHLY -> aggregateByMonthRanges(records, referenceDate)
-        }
-        val total = points.sumOf { it.minutes }
-        val shortsMinutes = (total * SHORTS_SHARE).toInt()
-        return ActivityReport(
-            period = period,
-            totalMinutes = total,
-            points = points,
-            distribution = distributionWithMinutes(total),
-            shortsMinutes = shortsMinutes,
-            shortsCount = shortsMinutes / AVG_SHORTS_MINUTES,
-            busiestLabel = points.maxByOrNull { it.minutes }?.label.orEmpty(),
-            trendPercent = trendFor(period, records),
-        )
-    }
-
-    // ---- Aggregation (pure functions over the same raw records) ----
-
-    /** DAILY → all 24 hours of the reference day; zero hours stay empty. */
-    private fun aggregateByHour(records: List<ActivityRecord>, date: LocalDate): List<ActivityPoint> {
-        val byHour = records
-            .filter { it.date == date }
-            .groupBy { it.hour }
-            .mapValues { (_, rs) -> rs.sumOf { it.minutes } }
-        return (0..23).map { hour ->
+        val days = spanDays.toInt()
+        val dayPoints = (0 until days).map { i ->
+            val date = from.plusDays(i.toLong())
+            val minutes = sessions
+                .filter { inRange(it.occurredAt, date, date, zone) }
+                .sumOf { minutesOf(it.durationSeconds * 1000L) }
             ActivityPoint(
-                label = hourLabel(hour),
-                minutes = byHour[hour] ?: 0,
+                label = shortDayDateLabel(date),
+                minutes = minutes,
                 detailTitle = fullDateLabel(date),
-                timeRange = hourRangeLabel(hour),
             )
         }
-    }
+        val total = dayPoints.sumOf { it.minutes }
+        val prevTotal = sessions
+            .filter { inRange(it.occurredAt, prevFrom, prevTo, zone) }
+            .sumOf { minutesOf(it.durationSeconds * 1000L) }
 
-    /** WEEKLY → exactly 7 points, Monday-first, short day + actual date labels. */
-    private fun aggregateByWeekday(records: List<ActivityRecord>, date: LocalDate): List<ActivityPoint> {
-        val weekStart = date.with(DayOfWeek.MONDAY)
-        val weekEnd = weekStart.plusDays(6)
-        val byDay = records
-            .filter { !it.date.isBefore(weekStart) && !it.date.isAfter(weekEnd) }
-            .groupBy { it.date.dayOfWeek }
-            .mapValues { (_, rs) -> rs.sumOf { it.minutes } }
-        val order = listOf(
-            DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
-            DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,
+        return buildReportForWindow(
+            period = ActivityPeriod.MONTHLY,
+            from = from,
+            to = to,
+            total = total,
+            points = dayPoints,
+            shorts = shorts.filter { inRange(it.occurredAt, from, to, zone) },
+            sessions = sessions,
+            zone = zone,
+            trendPercent = percentChange(total, prevTotal),
         )
-        return order.mapIndexed { index, day ->
-            val dayDate = weekStart.plusDays(index.toLong())
-            ActivityPoint(
-                label = shortDayDateLabel(dayDate),
-                minutes = byDay[day] ?: 0,
-                detailTitle = fullDateLabel(dayDate),
-            )
-        }
     }
-
-    /**
-     * MONTHLY → the current month split into 7-day date ranges
-     * (Aug 1–7, Aug 8–14, …). The final range holds the remaining days, so
-     * the count adapts to the actual number of days in the month.
-     */
-    private fun aggregateByMonthRanges(records: List<ActivityRecord>, date: LocalDate): List<ActivityPoint> =
-        monthlyRanges(date).map { range ->
-            val minutes = records
-                .filter { !it.date.isBefore(range.from) && !it.date.isAfter(range.to) }
-                .sumOf { it.minutes }
-            ActivityPoint(label = range.label, minutes = minutes, detailTitle = range.label)
-        }
 
     /**
      * The current month's 7-day date ranges (public so the UI can map a
      * tapped monthly bar back to its range and open the per-range detail).
      */
-    fun monthlyRanges(date: LocalDate = referenceDate): List<ActivityRange> {
+    fun monthlyRanges(date: LocalDate = LocalDate.now()): List<ActivityRange> {
         val first = date.withDayOfMonth(1)
         val last = date.withDayOfMonth(1).plusMonths(1).minusDays(1)
         val monthShort = first.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)
@@ -232,91 +162,364 @@ object ActivityRepository {
     }
 
     /**
-     * Per-day detail for one date range (opened by tapping a monthly bar):
-     * one point per day, full weekday labels, trend vs the previous
-     * equal-length window. The same raw records feed this as every other view.
+     * "Friday, August 7" / "Aug 3 – Aug 9" / "August 2026" — the exact
+     * calendar span the selected period covers, shown near the chart.
      */
-    fun rangeReportFor(range: ActivityRange): ActivityReport {
-        val records = seedUsageRecords()
-        val days = (ChronoUnit.DAYS.between(range.from, range.to) + 1).toInt()
-        val dayPoints = (0 until days).map { i ->
-            val date = range.from.plusDays(i.toLong())
-            val minutes = records.filter { it.date == date }.sumOf { it.minutes }
-            ActivityPoint(
-                label = shortDayDateLabel(date),
-                minutes = minutes,
-                detailTitle = fullDateLabel(date),
-            )
+    fun periodDateCaption(period: ActivityPeriod, today: LocalDate = LocalDate.now()): String = when (period) {
+        ActivityPeriod.DAILY -> fullDateLabel(today)
+        ActivityPeriod.WEEKLY -> {
+            val start = today.with(DayOfWeek.MONDAY)
+            val end = start.plusDays(6)
+            "${start.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} ${start.dayOfMonth} – " +
+                "${end.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} ${end.dayOfMonth}"
         }
-        val total = dayPoints.sumOf { it.minutes }
-        val prevFrom = range.from.minusDays(days.toLong())
-        val prevTotal = records
-            .filter { !it.date.isBefore(prevFrom) && it.date.isBefore(range.from) }
-            .sumOf { it.minutes }
-        val shortsMinutes = (total * SHORTS_SHARE).toInt()
-        return ActivityReport(
-            period = ActivityPeriod.MONTHLY,
-            totalMinutes = total,
-            points = dayPoints,
-            distribution = distributionWithMinutes(total),
-            shortsMinutes = shortsMinutes,
-            shortsCount = shortsMinutes / AVG_SHORTS_MINUTES,
-            busiestLabel = dayPoints.maxByOrNull { it.minutes }?.label.orEmpty(),
+        ActivityPeriod.MONTHLY ->
+            "${today.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${today.year}"
+    }
+
+    /** FUTURE: GET /activity/summary?period=… — same shape, backend source. */
+    suspend fun fetchReportFromBackend(period: ActivityPeriod): ActivityReport =
+        reportFor(period)
+
+    // ------------------------------------------------------------------
+    // Pure aggregation over persisted rows (unit-testable).
+    // ------------------------------------------------------------------
+
+    /** Aggregates [shorts] + [sessions] into a full report for the period. */
+    internal fun buildReport(
+        period: ActivityPeriod,
+        today: LocalDate,
+        shorts: List<ShortsUsageEntity>,
+        sessions: List<ScreenActivityUsageEntity>,
+    ): ActivityReport {
+        val zone = ZoneId.systemDefault()
+        val (from, to) = periodSpan(period, today)
+        val (prevFrom, prevTo) = previousSpan(period, today)
+
+        // Phase 1.2: filter BEFORE aggregation — totals, timeline, distribution
+        // and percentages must all operate on the same reportable user-app set
+        // (system UI / IME / launcher / ShortsCap-internal never reach the
+        // report; raw screen_activity_usage rows are untouched).
+        val reportable = reportableSessions(sessions)
+
+        val points = when (period) {
+            ActivityPeriod.DAILY -> aggregateByHour(reportable, today, zone)
+            ActivityPeriod.WEEKLY -> aggregateByWeekday(reportable, from, to, zone)
+            ActivityPeriod.MONTHLY -> aggregateByDateRanges(reportable, today, zone)
+        }
+        val total = points.sumOf { it.minutes }
+        val prevTotal = reportable
+            .filter { inRange(it.occurredAt, prevFrom, prevTo, zone) }
+            .sumOf { minutesOf(it.durationSeconds * 1000L) }
+
+        return buildReportForWindow(
+            period = period,
+            from = from,
+            to = to,
+            total = total,
+            points = points,
+            shorts = shorts.filter { inRange(it.occurredAt, from, to, zone) },
+            sessions = reportable,
+            zone = zone,
             trendPercent = percentChange(total, prevTotal),
         )
     }
 
     /**
-     * The app distribution for one report — per-app MINUTES derived from the
-     * period's aggregated total, so the displayed hours/minutes are real usage
-     * data (and sum EXACTLY to the period total; rounding remainder is
-     * distributed one minute at a time). [percent] stays the proportional
-     * source that drives the charts. A future backend provides minutes
-     * directly behind the same shape.
+     * Phase 1.2: keeps only sessions whose package the [PackageClassifier]
+     * considers reportable user-facing usage. Filtering happens HERE, before
+     * any aggregation, so totals, timeline, distribution, percentages and
+     * "Other" all operate on the same user-app dataset (system UI, keyboards,
+     * the launcher and ShortsCap itself never reach the user reports). Raw
+     * `screen_activity_usage` rows are untouched.
      */
-    private fun distributionWithMinutes(total: Int): List<ActivitySlice> {
-        if (total <= 0) return distribution
-        val minutes = distribution.map { total * it.percent / 100 }.toMutableList()
-        var remainder = total - minutes.sum()
-        var i = 0
-        while (remainder > 0) {
-            minutes[i] = minutes[i] + 1
-            remainder--
-            i = (i + 1) % minutes.size
-        }
-        return distribution.mapIndexed { index, slice -> slice.copy(minutes = minutes[index]) }
+    private fun reportableSessions(sessions: List<ScreenActivityUsageEntity>): List<ScreenActivityUsageEntity> =
+        sessions.filter { PackageClassifier.isReportable(PackageClassifier.classify(it.packageName)) }
+
+    /** Shared window aggregation for a report (used by reportFor + rangeReportFor). */
+    private fun buildReportForWindow(
+        period: ActivityPeriod,
+        from: LocalDate,
+        to: LocalDate,
+        total: Int,
+        points: List<ActivityPoint>,
+        shorts: List<ShortsUsageEntity>,
+        sessions: List<ScreenActivityUsageEntity>,
+        zone: ZoneId,
+        trendPercent: Int,
+    ): ActivityReport {
+        val shortsMinutes = (shorts.sumOf { it.durationMillis } / 60_000.0).roundToInt()
+        val shortsCount = shorts.sumOf { it.countDelta }
+        val unlockCount = sessions.count { inRange(it.occurredAt, from, to, zone) }
+        val avgSessionSeconds = averageSessionSeconds(sessions, from, to, zone)
+        return ActivityReport(
+            period = period,
+            totalMinutes = total,
+            points = points,
+            distribution = distributionFor(sessions, from, to, zone),
+            shortsMinutes = shortsMinutes,
+            shortsCount = shortsCount,
+            shortsByPlatform = shortsByPlatform(shorts),
+            busiestLabel = points.maxByOrNull { it.minutes }?.label.orEmpty(),
+            trendPercent = trendPercent,
+            unlockCount = unlockCount,
+            avgSessionSeconds = avgSessionSeconds,
+        )
     }
 
-    /** Trend % vs the previous comparable period, derived from the records. */
-    private fun trendFor(period: ActivityPeriod, records: List<ActivityRecord>): Int = when (period) {
-        ActivityPeriod.DAILY -> {
-            val today = records.filter { it.date == referenceDate }.sumOf { it.minutes }
-            val yesterday = records.filter { it.date == referenceDate.minusDays(1) }.sumOf { it.minutes }
-            percentChange(today, yesterday)
-        }
-        ActivityPeriod.WEEKLY -> {
-            percentChange(
-                weekTotal(records, referenceDate),
-                weekTotal(records, referenceDate.minusWeeks(1)),
+    // ---- App-usage aggregation (screen_activity_usage) ----
+
+    /** DAILY → all 24 hours of [date]; sessions are split across the hours
+     *  they actually spanned, so a session crossing an hour boundary shows
+     *  up in every hour it covered. */
+    private fun aggregateByHour(sessions: List<ScreenActivityUsageEntity>, date: LocalDate, zone: ZoneId): List<ActivityPoint> {
+        val dayStart = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val byHour = mutableMapOf<Int, Long>()
+        sessions
+            .filter { it.occurredAt >= dayStart && it.occurredAt < dayEnd }
+            .forEach { session ->
+                splitByHour(session.occurredAt, session.durationSeconds * 1000L, zone)
+                    .forEach { (hour, millis) -> byHour.merge(hour, millis, Long::plus) }
+            }
+        return (0..23).map { hour ->
+            ActivityPoint(
+                label = hourLabel(hour),
+                minutes = minutesOf(byHour[hour] ?: 0L),
+                detailTitle = fullDateLabel(date),
+                timeRange = hourRangeLabel(hour),
             )
+        }
+    }
+
+    /** WEEKLY → exactly 7 points, Monday-first, short day + actual date labels. */
+    private fun aggregateByWeekday(
+        sessions: List<ScreenActivityUsageEntity>,
+        from: LocalDate,
+        to: LocalDate,
+        zone: ZoneId,
+    ): List<ActivityPoint> {
+        val byDay = sessions
+            .filter { inRange(it.occurredAt, from, to, zone) }
+            .groupBy { dateOf(it.occurredAt, zone).dayOfWeek }
+            .mapValues { (_, rows) -> rows.sumOf { minutesOf(it.durationSeconds * 1000L) } }
+        return listOf(
+            DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
+            DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,
+        ).mapIndexed { index, day ->
+            val dayDate = from.plusDays(index.toLong())
+            ActivityPoint(
+                label = shortDayDateLabel(dayDate),
+                minutes = byDay[day] ?: 0,
+                detailTitle = fullDateLabel(dayDate),
+            )
+        }
+    }
+
+    /** MONTHLY → the current month split into 7-day date ranges. */
+    private fun aggregateByDateRanges(sessions: List<ScreenActivityUsageEntity>, today: LocalDate, zone: ZoneId): List<ActivityPoint> =
+        monthlyRanges(today).map { range ->
+            val minutes = sessions
+                .filter { inRange(it.occurredAt, range.from, range.to, zone) }
+                .sumOf { minutesOf(it.durationSeconds * 1000L) }
+            ActivityPoint(label = range.label, minutes = minutes, detailTitle = range.label)
+        }
+
+    /** Real per-app distribution for the window — minutes + percent from the
+     *  persisted sessions; the longest apps are shown, the tail folds into a
+     *  single localized "Other" slice. */
+    private fun distributionFor(
+        sessions: List<ScreenActivityUsageEntity>,
+        from: LocalDate,
+        to: LocalDate,
+        zone: ZoneId,
+    ): List<ActivitySlice> {
+        val inWindow = sessions.filter { inRange(it.occurredAt, from, to, zone) }
+        if (inWindow.isEmpty()) return emptyList()
+        val byPackage = inWindow
+            .groupBy { it.packageName }
+            .mapValues { (_, rows) ->
+                rows.sumOf { it.durationSeconds } to (rows.firstNotNullOfOrNull { it.appName })
+            }
+            .entries
+            .sortedByDescending { it.value.first }
+        val totalSeconds = byPackage.sumOf { it.value.first }
+        if (totalSeconds <= 0) return emptyList()
+
+        val visible = byPackage.take(MAX_DISTRIBUTION_SLICES)
+        val slices = visible.map { (pkg, value) ->
+            val (seconds, appName) = value
+            ActivitySlice(
+                id = sliceIdFor(pkg),
+                name = ActivityAppNames.friendlyName(pkg, appName),
+                percent = ((seconds * 100) / totalSeconds).toInt().coerceIn(0, 100),
+                minutes = minutesOf(seconds * 1000L),
+                // Package identity travels with the slice so the UI colors it
+                // through AppUsageColorProvider (never by display label).
+                packageName = pkg,
+            )
+        }
+        val remainderSeconds = totalSeconds - visible.sumOf { it.value.first }
+        return if (remainderSeconds > 0) {
+            slices + ActivitySlice(
+                id = "other",
+                name = "Other",
+                percent = ((remainderSeconds * 100) / totalSeconds).toInt().coerceIn(0, 100),
+                minutes = minutesOf(remainderSeconds * 1000L),
+            )
+        } else {
+            slices
+        }
+    }
+
+    /**
+     * Phase 1.3: the reportable applications active during [hour] of [date]
+     * (local 24-hour clock, 0..23) and their exact durations — the data
+     * behind a selected hour's "Apps Used" breakdown in the Activity detail
+     * card. Sessions are split across hour boundaries with the same
+     * [splitByHour] logic the timeline uses, so a session crossing into
+     * [hour] contributes only its overlap (e.g. 12:55 → 1:10 PM contributes
+     * 10m to the 1 PM hour, never 15m). Durations are grouped per package
+     * and sorted longest-first.
+     */
+    fun hourApps(hour: Int, date: LocalDate = LocalDate.now()): List<ActivityAppUsage> =
+        hourAppsFromSessions(hour, date, loadSessions(date, date))
+
+    /** Pure aggregation behind [hourApps] (unit-testable, no Room needed). */
+    internal fun hourAppsFromSessions(
+        hour: Int,
+        date: LocalDate,
+        sessions: List<ScreenActivityUsageEntity>,
+    ): List<ActivityAppUsage> {
+        val zone = ZoneId.systemDefault()
+        val dayStart = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val hourStart = dayStart + hour * 3_600_000L
+        val millisByPackage = mutableMapOf<String, Long>()
+        val appNameByPackage = mutableMapOf<String, String?>()
+        reportableSessions(sessions).forEach { session ->
+            val overlapMillis = splitByHour(session.occurredAt, session.durationSeconds * 1000L, zone)[hour] ?: 0L
+            if (overlapMillis <= 0L) return@forEach
+            millisByPackage.merge(session.packageName, overlapMillis, Long::plus)
+            appNameByPackage.putIfAbsent(session.packageName, session.appName)
+        }
+        return millisByPackage.entries
+            .sortedByDescending { it.value }
+            .map { (pkg, millis) ->
+                ActivityAppUsage(
+                    packageName = pkg,
+                    name = ActivityAppNames.friendlyName(pkg, appNameByPackage[pkg]),
+                    minutes = minutesOf(millis),
+                )
+            }
+            .filter { it.minutes > 0 }
+    }
+
+    /** Number of closed foreground sessions + their average length in the window. */
+    private fun averageSessionSeconds(
+        sessions: List<ScreenActivityUsageEntity>,
+        from: LocalDate,
+        to: LocalDate,
+        zone: ZoneId,
+    ): Long {
+        val inWindow = sessions.filter { inRange(it.occurredAt, from, to, zone) }
+        if (inWindow.isEmpty()) return 0L
+        return inWindow.sumOf { it.durationSeconds } / inWindow.size
+    }
+
+    // ---- Shorts aggregation (shorts_usage) ----
+
+    /** Per-platform Shorts totals, using the persisted platform value exactly. */
+    private fun shortsByPlatform(shorts: List<ShortsUsageEntity>): List<PlatformShortsSlice> =
+        shorts
+            .groupBy { it.platform }
+            .map { (platform, rows) ->
+                PlatformShortsSlice(
+                    platformName = platform,
+                    count = rows.sumOf { it.countDelta },
+                    minutes = (rows.sumOf { it.durationMillis } / 60_000.0).roundToInt(),
+                )
+            }
+            .sortedByDescending { it.count }
+
+    // ---- Loading + date helpers ----
+
+    private fun loadShorts(from: LocalDate, to: LocalDate): List<ShortsUsageEntity> {
+        val zone = ZoneId.systemDefault()
+        return runBlocking(ioDispatcher) {
+            source.shortsUsage(
+                from.atStartOfDay(zone).toInstant().toEpochMilli(),
+                to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
+            )
+        }
+    }
+
+    private fun loadSessions(from: LocalDate, to: LocalDate): List<ScreenActivityUsageEntity> {
+        val zone = ZoneId.systemDefault()
+        return runBlocking(ioDispatcher) {
+            source.appSessions(
+                from.atStartOfDay(zone).toInstant().toEpochMilli(),
+                to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
+            )
+        }
+    }
+
+    /** Inclusive date span of [period] around [today]. */
+    private fun periodSpan(period: ActivityPeriod, today: LocalDate): Pair<LocalDate, LocalDate> = when (period) {
+        ActivityPeriod.DAILY -> today to today
+        ActivityPeriod.WEEKLY -> {
+            val monday = today.with(DayOfWeek.MONDAY)
+            monday to monday.plusDays(6)
         }
         ActivityPeriod.MONTHLY -> {
-            percentChange(
-                monthTotal(records, YearMonth.from(referenceDate)),
-                monthTotal(records, YearMonth.from(referenceDate).minusMonths(1)),
-            )
+            val first = today.withDayOfMonth(1)
+            first to first.plusMonths(1).minusDays(1)
         }
     }
 
-    private fun weekTotal(records: List<ActivityRecord>, date: LocalDate): Int {
-        val start = date.with(DayOfWeek.MONDAY)
-        return records
-            .filter { !it.date.isBefore(start) && !it.date.isAfter(start.plusDays(6)) }
-            .sumOf { it.minutes }
+    /** Inclusive date span of the previous equal-length window. */
+    private fun previousSpan(period: ActivityPeriod, today: LocalDate): Pair<LocalDate, LocalDate> {
+        val (from, to) = periodSpan(period, today)
+        val spanDays = ChronoUnit.DAYS.between(from, to) + 1
+        val prevTo = from.minusDays(1)
+        return (prevTo.minusDays(spanDays - 1)) to prevTo
     }
 
-    private fun monthTotal(records: List<ActivityRecord>, month: YearMonth): Int =
-        records.filter { YearMonth.from(it.date) == month }.sumOf { it.minutes }
+    private fun inRange(epochMillis: Long, from: LocalDate, to: LocalDate, zone: ZoneId): Boolean {
+        val date = dateOf(epochMillis, zone)
+        return !date.isBefore(from) && !date.isAfter(to)
+    }
+
+    private fun dateOf(epochMillis: Long, zone: ZoneId): LocalDate =
+        Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
+
+    /** Splits [durationMillis] starting at [startMillis] across local hour
+     *  buckets (handles sessions spanning hour boundaries and midnight). */
+    private fun splitByHour(startMillis: Long, durationMillis: Long, zone: ZoneId): Map<Int, Long> {
+        if (durationMillis <= 0L) return emptyMap()
+        val start = Instant.ofEpochMilli(startMillis).atZone(zone)
+        val end = start.plus(durationMillis, ChronoUnit.MILLIS)
+        val result = mutableMapOf<Int, Long>()
+        var cursor = start
+        while (cursor.isBefore(end)) {
+            val nextHour = cursor.toLocalDate().atTime(cursor.hour + 1, 0).atZone(zone)
+            val sliceEnd = if (nextHour.isAfter(end)) end else nextHour
+            val millis = ChronoUnit.MILLIS.between(cursor, sliceEnd).coerceAtLeast(0L)
+            result.merge(cursor.hour, millis, Long::plus)
+            cursor = sliceEnd
+        }
+        return result
+    }
+
+    /** Whole minutes for a duration, rounded to the nearest minute. */
+    private fun minutesOf(millis: Long): Int = (millis / 60_000.0).roundToInt()
+
+    /** Stable distribution slice id for a package (keeps themed colors). */
+    private fun sliceIdFor(packageName: String): String = when (packageName) {
+        "com.instagram.android" -> "instagram"
+        "com.google.android.youtube" -> "youtube"
+        "com.android.chrome" -> "chrome"
+        else -> packageName
+    }
 
     private fun percentChange(current: Int, previous: Int): Int =
         if (previous <= 0) 0 else (current - previous) * 100 / previous
@@ -346,28 +549,38 @@ object ActivityRepository {
     private fun fullDateLabel(date: LocalDate): String =
         "${date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH)}, " +
             "${date.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${date.dayOfMonth}"
+}
 
-    /**
-     * "Friday, August 7" / "Aug 3 – Aug 9" / "August 2026" — the exact
-     * calendar span the selected period covers, shown near the chart.
-     */
-    fun periodDateCaption(period: ActivityPeriod): String = when (period) {
-        ActivityPeriod.DAILY -> fullDateLabel(referenceDate)
-        ActivityPeriod.WEEKLY -> {
-            val start = referenceDate.with(DayOfWeek.MONDAY)
-            val end = start.plusDays(6)
-            "${start.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} ${start.dayOfMonth} – " +
-                "${end.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} ${end.dayOfMonth}"
-        }
-        ActivityPeriod.MONTHLY ->
-            "${referenceDate.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${referenceDate.year}"
-    }
+/**
+ * Friendly display names for packages recorded by Screen Activity — shared by
+ * Activity's distribution and Home's Recent Activity. Falls back to the last
+ * segment of the package name so unknown apps are still readable.
+ */
+object ActivityAppNames {
 
-    // ---- Future backend seams (placeholders only — not implemented) ----
+    private val known = mapOf(
+        "com.google.android.youtube" to "YouTube",
+        "com.instagram.android" to "Instagram",
+        "com.ss.android.ugc.aweme" to "TikTok",
+        "com.zhiliaoapp.musically" to "TikTok",
+        "com.snapchat.android" to "Snapchat",
+        "com.facebook.katana" to "Facebook",
+        "in.mohalla.video" to "Moj",
+        "com.twitter.android" to "X",
+        "com.twitter.android.lite" to "X",
+        "com.linkedin.android" to "LinkedIn",
+        "com.sharechat.android" to "ShareChat",
+        "com.android.chrome" to "Chrome",
+        "com.whatsapp" to "WhatsApp",
+        "com.shortscap.app" to "ShortsCap",
+    )
 
-    /** FUTURE: GET /activity/summary?period=… — real usage from the backend. */
-    suspend fun fetchReportFromBackend(period: ActivityPeriod): ActivityReport {
-        // TODO: backend / database call; keep the same ActivityReport shape.
-        return reportFor(period)
+    /** Best-effort readable app name: persisted appName, known package, or the
+     *  package's last segment. */
+    fun friendlyName(packageName: String, appName: String? = null): String {
+        if (!appName.isNullOrBlank()) return appName
+        known[packageName]?.let { return it }
+        val segment = packageName.substringAfterLast('.')
+        return if (segment.isBlank()) packageName else segment
     }
 }

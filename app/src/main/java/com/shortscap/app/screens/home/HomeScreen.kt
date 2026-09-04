@@ -30,24 +30,12 @@ import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.icons.IconKey
 import com.shortscap.app.model.ScCircularMetric
 import com.shortscap.app.model.ScEntity
-import com.shortscap.app.model.ScEntityType
 import com.shortscap.app.permissions.PermissionActions
 import com.shortscap.app.permissions.PermissionId
 import com.shortscap.app.screens.settings.permissionTitle
 import com.shortscap.app.screens.web.formatWebDuration
 import com.shortscap.app.theme.LocalScColors
-import com.shortscap.app.theme.ScChrome
-import com.shortscap.app.theme.ScInstagram
 import com.shortscap.app.theme.ScTextStyles
-import com.shortscap.app.theme.ScWhatsApp
-
-// Timestamps are mock data; they follow the language catalog so the Recent
-// Activity rows never show a stale language.
-private fun recentActivity(strings: com.shortscap.app.i18n.AppStrings) = listOf(
-    ScEntity(id = "instagram", title = "Instagram", type = ScEntityType.APP, packageName = "com.instagram.android", usageTime = "42m", timestamp = strings.homeRecentTime1, fallbackColor = ScInstagram),
-    ScEntity(id = "chrome", title = "Chrome", type = ScEntityType.APP, packageName = "com.android.chrome", usageTime = "28m", timestamp = strings.homeRecentTime2, fallbackColor = ScChrome),
-    ScEntity(id = "whatsapp", title = "WhatsApp", type = ScEntityType.APP, packageName = "com.whatsapp", usageTime = "15m", timestamp = strings.homeRecentTime3, fallbackColor = ScWhatsApp),
-)
 
 /**
  * Mirrors function HomeScreen({ loading }) { ... }.
@@ -77,6 +65,9 @@ fun HomeScreen(
     // the Home card and the Daily Activity timeline can never disagree.
     todayUsageMinutes: Int,
     appsUsedToday: Int,
+    // Real Recent Activity rows from screen_activity_usage (most recent
+    // first); empty when nothing has been persisted yet.
+    recentActivity: List<ScEntity> = emptyList(),
     blockedWebCount: Int,
     allowedWebCount: Int,
     monitoringPaused: Boolean = false,
@@ -214,27 +205,30 @@ fun HomeScreen(
             }
         }
 
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(strings.homeRecentActivity, color = colors.TextSecondary, style = ScTextStyles.SectionTitle)
-                Text(strings.homeSeeAll, color = colors.Accent, fontSize = 12.sp)
-            }
-            Spacer(Modifier.height(12.dp))
-            ScCard(modifier = Modifier.fillMaxWidth()) {
-                val items = recentActivity(strings)
-                items.forEachIndexed { index, item ->
-                    ScEntityRow(
-                        entity = item,
-                        subtitle = item.timestamp,
-                        trailing = {
-                            Text(item.usageTime ?: "", color = colors.TextSecondary, fontSize = 13.sp)
-                        },
-                    )
-                    if (index < items.size - 1) ScDivider()
+        // Real Recent Activity — hidden until at least one foreground session
+        // has been persisted (never placeholder rows).
+        if (recentActivity.isNotEmpty()) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.homeRecentActivity, color = colors.TextSecondary, style = ScTextStyles.SectionTitle)
+                    Text(strings.homeSeeAll, color = colors.Accent, fontSize = 12.sp)
+                }
+                Spacer(Modifier.height(12.dp))
+                ScCard(modifier = Modifier.fillMaxWidth()) {
+                    recentActivity.forEachIndexed { index, item ->
+                        ScEntityRow(
+                            entity = item,
+                            subtitle = item.timestamp,
+                            trailing = {
+                                Text(item.usageTime ?: "", color = colors.TextSecondary, fontSize = 13.sp)
+                            },
+                        )
+                        if (index < recentActivity.size - 1) ScDivider()
+                    }
                 }
             }
         }

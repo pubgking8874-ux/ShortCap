@@ -66,11 +66,13 @@ fun ActivityReportScreen(
     chartStyle: ChartStyle,
     onBack: () -> Unit,
     range: ActivityRange? = null,
+    // Bumped by the reporting poll when persisted data changes.
+    dataTick: Long = 0L,
     onOpenRange: ((ActivityRange) -> Unit)? = null,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
-    val report = remember(period, range) {
+    val report = remember(period, range, dataTick) {
         if (range != null) ActivityRepository.rangeReportFor(range)
         else ActivityRepository.reportFor(period)
     }
@@ -91,7 +93,7 @@ fun ActivityReportScreen(
         }.filterNotNull()
     }
     // Monthly report ranges (labels match report.points) for the drill-down.
-    val monthlyRanges = remember(period) {
+    val monthlyRanges = remember(period, dataTick) {
         if (period == ActivityPeriod.MONTHLY && range == null) ActivityRepository.monthlyRanges() else emptyList()
     }
 
@@ -267,7 +269,8 @@ fun ActivityReportScreen(
                 }
             }
 
-            // Shorts — derived from the same report data (no separate system).
+            // Shorts — real counted-Short totals + per-platform breakdown,
+            // all from persisted shorts_usage (no separate system).
             ScCard(modifier = Modifier.fillMaxWidth()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -277,6 +280,27 @@ fun ActivityReportScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("${report.shortsCount}", color = colors.TextPrimary, style = ScTextStyles.StatValue)
                         Text(strings.reportShortsWatched, color = colors.TextSecondary, style = ScTextStyles.Label)
+                    }
+                }
+                if (report.shortsByPlatform.isNotEmpty()) {
+                    ScDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    report.shortsByPlatform.forEach { platform ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(999.dp)).background(colors.PieOther))
+                            Text(platform.platformName, color = colors.TextSecondary, style = ScTextStyles.Body, modifier = Modifier.weight(1f))
+                            Text(
+                                "${platform.count} \u00b7 ${formatWebDuration(platform.minutes, strings)}",
+                                color = colors.TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                style = ScTextStyles.Body,
+                            )
+                        }
                     }
                 }
             }

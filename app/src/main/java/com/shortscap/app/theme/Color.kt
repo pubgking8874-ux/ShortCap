@@ -115,6 +115,18 @@ val ScInstagram = Color(0xFFE1306C)
 val ScChrome = Color(0xFF4285F4)
 val ScWhatsApp = Color(0xFF25D366)
 
+// Phase 1.3 — recognizable brand colors for REPORTED applications, keyed by
+// package identity in [com.shortscap.app.activity.AppUsageColorProvider]. All
+// are brand-associated solid colors chosen to stay readable on the dark theme.
+val ScYouTube = Color(0xFFFF0000)
+val ScFacebook = Color(0xFF1877F2)
+val ScSnapchat = Color(0xFFFFFC00)
+val ScTikTok = Color(0xFF69C9D0)
+val ScX = Color(0xFFE7E9EA)
+val ScTelegram = Color(0xFF229ED9)
+val ScLinkedIn = Color(0xFF0A66C2)
+val ScReddit = Color(0xFFFF4500)
+
 /** Radii used throughout (sc-root, sc-card, sc-chip, etc.) */
 object ScShapes {
     const val RootRadius = 36

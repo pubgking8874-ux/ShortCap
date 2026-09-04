@@ -76,6 +76,27 @@ class ScreenActivityEngine(
         collector.onForegroundAppChanged(packageName)?.let { repository.recordSession(it) }
     }
 
+    /**
+     * Closes the in-flight session at the current time and persists it (when
+     * it meets the minimum duration). This is the screen-off boundary (Phase
+     * 1.2): locked / screen-off time must never be charged to the last
+     * foreground app, so the accessibility service tells the engine to close
+     * the session the moment the screen turns off.
+     *
+     * Idempotent: a second call (e.g. a service stop right after the
+     * screen-off close) closes nothing and never produces a duplicate row —
+     * [ScreenActivityCollector.closeActive] nulls the active session.
+     */
+    fun closeActiveSession() {
+        if (!gate()) {
+            // Screen Activity is off — the partial session is dropped, exactly
+            // like a foreground change while the toggle is off.
+            collector.closeActive()
+            return
+        }
+        collector.closeActive()?.let { repository.recordSession(it) }
+    }
+
     /** Current unsynced sessions (read-only view for tests/debugging). */
     fun pendingSessions(): List<ScreenActivitySession> = repository.pendingSessions()
 
@@ -123,6 +144,15 @@ class ScreenActivityEngine(
         /** Unsubscribes the shared engine (flushes the in-flight session). */
         fun stop() {
             shared.stop()
+        }
+
+        /**
+         * Closes the in-flight session on the shared engine — the screen-off
+         * boundary invoked by the accessibility service's ACTION_SCREEN_OFF
+         * receiver. Idempotent; never creates a duplicate row.
+         */
+        fun closeActiveSession() {
+            shared.closeActiveSession()
         }
     }
 }

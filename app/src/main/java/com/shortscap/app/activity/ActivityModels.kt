@@ -58,15 +58,18 @@ data class ActivitySlice(
     val name: String,
     val percent: Int,
     val minutes: Int = 0,
+    /** The raw package the slice represents (null for the "Other" bucket) —
+     *  lets the UI color every slice by package identity (Phase 1.3). */
+    val packageName: String? = null,
 )
 
 /**
  * Structured activity/report data consumed by the Activity page and the
  * dedicated Weekly / Monthly report screens.
  *
- * Today [ActivityRepository] seeds deterministic values; tomorrow the exact
- * same shape is filled by a backend API / database — the UI, chart
- * rendering and navigation never change.
+ * Phase 1: [ActivityRepository] aggregates EVERY value from real persisted
+ * data — app usage from `screen_activity_usage`, Shorts from `shorts_usage`.
+ * A future backend fills the exact same shape with zero UI changes.
  *
  * Deliberately NO presentation fields: chart style is a user preference
  * (Settings → Appearance → Chart) and lives outside this layer.
@@ -78,6 +81,35 @@ data class ActivityReport(
     val distribution: List<ActivitySlice>,
     val shortsMinutes: Int,
     val shortsCount: Int,
+    /** Shorts broken down per platform (from persisted `shorts_usage.platform`). */
+    val shortsByPlatform: List<PlatformShortsSlice> = emptyList(),
     val busiestLabel: String,
     val trendPercent: Int,
+    /** Number of closed foreground app sessions in the period (real unlocks). */
+    val unlockCount: Int = 0,
+    /** Average closed-session length in seconds for the period (0 when none). */
+    val avgSessionSeconds: Long = 0L,
+)
+
+/**
+ * One platform's Shorts totals for a period — count and watch minutes derived
+ * from persisted `shorts_usage` rows grouped by the stored platform value.
+ */
+data class PlatformShortsSlice(
+    val platformName: String,
+    val count: Int,
+    val minutes: Int,
+)
+
+/**
+ * One application's usage inside a single selected hour (Phase 1.3) — package
+ * identity, human-readable name and exact rounded minutes, derived from the
+ * SAME persisted `screen_activity_usage` sessions + [PackageClassifier] as
+ * every other report. Sessions crossing the hour boundary contribute only
+ * their overlap with the selected hour.
+ */
+data class ActivityAppUsage(
+    val packageName: String,
+    val name: String,
+    val minutes: Int,
 )

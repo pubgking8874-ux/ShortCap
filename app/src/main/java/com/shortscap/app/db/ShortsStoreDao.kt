@@ -53,6 +53,12 @@ interface ShortsStoreDao {
     @Query("SELECT * FROM shorts_usage ORDER BY usageId ASC")
     suspend fun usageSnapshot(): List<ShortsUsageEntity>
 
+    /** Raw usage rows whose occurredAt is in [rangeStart, rangeEnd) — used by
+     *  Activity/Home reporting (local-calendar-day bucketing happens in the
+     *  reporting layer, never here). Read-only; no schema change. */
+    @Query("SELECT * FROM shorts_usage WHERE occurredAt >= :rangeStart AND occurredAt < :rangeEnd ORDER BY occurredAt ASC")
+    suspend fun usageInRange(rangeStart: Long, rangeEnd: Long): List<ShortsUsageEntity>
+
     /** Unsynced events in insertion order (oldest first). */
     @Query("SELECT * FROM shorts_events ORDER BY eventId ASC")
     suspend fun eventSnapshot(): List<ShortsEventEntity>

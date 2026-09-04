@@ -97,6 +97,52 @@ class ScreenActivityEngineTest {
         assertEquals(1, store.sessionSnapshot().size)
     }
 
+    // ---- Screen-off session boundary (Phase 1.2) ----
+
+    @Test
+    fun `closeActiveSession closes and persists the in-flight session`() {
+        engine.onForegroundAppChanged("com.example.alpha", null)
+        advance(2_000)
+        engine.closeActiveSession() // screen off
+        assertEquals(1, store.sessionSnapshot().size)
+        assertEquals(2_000L, store.sessionSnapshot().single().durationMillis)
+    }
+
+    @Test
+    fun `closeActiveSession twice persists only one session`() {
+        engine.onForegroundAppChanged("com.example.alpha", null)
+        advance(2_000)
+        engine.closeActiveSession()
+        engine.closeActiveSession() // service stop right after screen-off — no duplicate
+        assertEquals(1, store.sessionSnapshot().size)
+    }
+
+    @Test
+    fun `session after unlock starts at its own foreground event - lock gap not charged`() {
+        engine.onForegroundAppChanged("com.example.alpha", null)
+        advance(2_000)
+        engine.closeActiveSession() // screen off — alpha ends here
+        advance(60_000) // locked / idle time — charged to NOBODY
+        engine.onForegroundAppChanged("com.example.beta", null) // unlock → user opens beta
+        advance(3_000)
+        engine.onForegroundAppChanged("com.example.gamma", null) // beta closes
+        val sessions = store.sessionSnapshot()
+        assertEquals(2, sessions.size)
+        assertEquals("com.example.alpha", sessions[0].packageName)
+        assertEquals(2_000L, sessions[0].durationMillis)
+        assertEquals("com.example.beta", sessions[1].packageName)
+        assertEquals(3_000L, sessions[1].durationMillis)
+    }
+
+    @Test
+    fun `closeActiveSession with screen activity off records nothing`() {
+        enabled = false
+        engine.onForegroundAppChanged("com.example.alpha", null)
+        advance(5_000)
+        engine.closeActiveSession() // screen off while the toggle is off
+        assertTrue(store.sessionSnapshot().isEmpty())
+    }
+
     // ---- Independence from Shorts ----
 
     @Test

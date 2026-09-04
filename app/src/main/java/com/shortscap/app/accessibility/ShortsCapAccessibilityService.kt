@@ -1,7 +1,11 @@
 package com.shortscap.app.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -76,6 +80,11 @@ class ShortsCapAccessibilityService :
         // versa). The gate reads the same persisted monitoring toggle the
         // Settings screen writes.
         ScreenActivityEngine.start { MonitoringService.isMonitoringEnabled(this@ShortsCapAccessibilityService) }
+        // Phase 1.2 — screen-off boundary: close the in-flight Screen Activity
+        // session the moment the screen turns off, so locked/idle time is never
+        // charged to the last foreground app. A new session starts ONLY when a
+        // real foreground window event arrives (never on unlock alone).
+        registerScreenStateReceiver()
         // The Shorts HUD consumes the detection pipeline's surface-state
         // broadcasts (presentation only — never detects Shorts itself).
         ShortsHudController.start(this)
@@ -376,6 +385,7 @@ class ShortsCapAccessibilityService :
         ShortsRestrictionEngine.stop()
         ShortsHudController.stop()
         ScreenActivityEngine.stop()
+        unregisterScreenStateReceiver()
         MonitoringEventHub.unsubscribe(this)
         return super.onUnbind(intent)
     }
@@ -384,8 +394,55 @@ class ShortsCapAccessibilityService :
         ShortsRestrictionEngine.stop()
         ShortsHudController.stop()
         ScreenActivityEngine.stop()
+        unregisterScreenStateReceiver()
         MonitoringEventHub.unsubscribe(this)
         super.onDestroy()
+    }
+
+    // =========================================================================
+    // Phase 1.2 — screen-state boundary
+    // =========================================================================
+    // The Screen Activity session must close when the device screen turns off:
+    // locked / screen-off time is not app usage and must never accumulate
+    // against the last foreground window (the observed 13h "systemui" session
+    // was exactly this). Only ACTION_SCREEN_OFF is observed here; a new
+    // session starts exclusively through the normal foreground-window
+    // mechanism (ScreenActivityCollector), so unlock time itself is never
+    // charged to any package.
+
+    /** Registered while the service is connected; closes the in-flight
+     *  general app-usage session when the screen turns off. */
+    private var screenStateReceiver: BroadcastReceiver? = null
+
+    private fun registerScreenStateReceiver() {
+        if (screenStateReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    // Close (and persist) the in-flight Screen Activity session
+                    // at the screen-off instant. Idempotent: a later service
+                    // stop or a repeated SCREEN_OFF closes nothing new and
+                    // never creates a duplicate row. Shorts monitoring state
+                    // is untouched.
+                    ScreenActivityEngine.closeActiveSession()
+                }
+            }
+        }
+        val filter = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(receiver, filter)
+        }
+        screenStateReceiver = receiver
+    }
+
+    private fun unregisterScreenStateReceiver() {
+        screenStateReceiver?.let {
+            runCatching { unregisterReceiver(it) }
+            screenStateReceiver = null
+        }
     }
 
     // =========================================================================

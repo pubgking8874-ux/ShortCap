@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import com.shortscap.app.activity.ActivityAppUsage
+import com.shortscap.app.activity.AppUsageColorProvider
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -661,12 +663,21 @@ private fun donutIndexAt(
  * every chart style. [timeRange] is the daily clock window
  * ("2:00 PM – 3:00 PM"); [actionLabel]/[onAction] offers a drill-down
  * (e.g. "View details" for a monthly date range); [onClose] dismisses.
+ *
+ * Phase 1.3: for a selected DAILY hour, [apps] carries the reportable
+ * applications used during that hour (longest-first, from the same persisted
+ * sessions + PackageClassifier as the timeline) and [appsFormatter] renders
+ * each duration; every app row is color-dotted through
+ * [AppUsageColorProvider]. When [apps] is empty no Apps Used section is
+ * drawn (Weekly/Monthly points, or an hour with no data).
  */
 @Composable
 fun ScPointTooltipCard(
     title: String,
     usage: String,
     timeRange: String? = null,
+    apps: List<ActivityAppUsage> = emptyList(),
+    appsFormatter: ((Int) -> String)? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
@@ -726,6 +737,42 @@ fun ScPointTooltipCard(
             fontWeight = FontWeight.SemiBold,
             style = ScTextStyles.Caption,
         )
+        if (apps.isNotEmpty() && appsFormatter != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = strings.homeAppsUsed,
+                color = colors.TextSecondary,
+                style = ScTextStyles.Label,
+            )
+            apps.forEach { app ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(AppUsageColorProvider.colorFor(app.packageName, colors)),
+                    )
+                    Text(
+                        text = app.name,
+                        color = colors.TextSecondary,
+                        style = ScTextStyles.Caption,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = appsFormatter(app.minutes),
+                        color = colors.TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        style = ScTextStyles.Caption,
+                    )
+                }
+            }
+        }
         if (actionLabel != null && onAction != null) {
             Text(
                 text = actionLabel,
