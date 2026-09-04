@@ -142,7 +142,7 @@ class MonitoringService : Service() {
 
     private fun buildNotification(): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_brain)
+            .setSmallIcon(R.drawable.ic_stat_shortscap)
             .setContentTitle(getString(R.string.monitoring_notification_title))
             .setContentText(getString(R.string.monitoring_notification_text))
             .setOngoing(true)
