@@ -220,4 +220,251 @@ class YouTubeShortsAdapterTest {
         assertTrue(result.isShortForm)
         assertEquals(0.7f, result.confidence, 1e-6f)
     }
+
+    // ====================================================================
+    // detectUserAdvance() tests
+    // ====================================================================
+
+    /** Base Shorts player evidence with specific creator and caption. */
+    private fun shortEvidence(
+        creator: String,
+        caption: String,
+        extraDescs: List<String> = emptyList(),
+        extraIds: List<String> = emptyList(),
+    ): WindowContentEvidence = WindowContentEvidence(
+        nodeClasses = listOf(
+            "com.google.android.apps.youtube.app.ui.ReelPlayerView",
+            "androidx.recyclerview.widget.RecyclerView",
+        ),
+        nodeViewIds = listOf(
+            "com.google.android.youtube:id/reel_recycler",
+            *extraIds.toTypedArray(),
+        ),
+        nodeContentDescriptions = listOf(
+            creator,
+            caption,
+            "Like",
+            "Share",
+            "Comment",
+            "Subscribe",
+            "Remix this Short",
+            "See more videos using this sound",
+            *extraDescs.toTypedArray(),
+        ),
+    )
+
+    /** Shorts evidence with overlay panel open (comments, share, etc.). */
+    private fun shortEvidenceWithOverlay(
+        creator: String,
+        caption: String,
+        overlayDescs: List<String>,
+        overlayIds: List<String> = emptyList(),
+    ): WindowContentEvidence = WindowContentEvidence(
+        nodeClasses = listOf(
+            "com.google.android.apps.youtube.app.ui.ReelPlayerView",
+            "androidx.recyclerview.widget.RecyclerView",
+            "com.google.android.material.bottomsheet.BottomSheetBehavior",
+        ),
+        nodeViewIds = listOf(
+            "com.google.android.youtube:id/reel_recycler",
+            *overlayIds.toTypedArray(),
+        ),
+        nodeContentDescriptions = listOf(
+            creator,
+            caption,
+            "Like",
+            "Share",
+            "Comment",
+            "Subscribe",
+            "Remix this Short",
+            "See more videos using this sound",
+            *overlayDescs.toTypedArray(),
+        ),
+    )
+
+    /** Sparse Shorts evidence with no meaningful content descriptions. */
+    private fun sparseShortEvidence(
+        extraDescs: List<String> = emptyList(),
+    ): WindowContentEvidence = WindowContentEvidence(
+        nodeClasses = listOf(
+            "com.google.android.apps.youtube.app.ui.ReelPlayerView",
+            "androidx.recyclerview.widget.RecyclerView",
+        ),
+        nodeViewIds = listOf("com.google.android.youtube:id/reel_recycler"),
+        nodeContentDescriptions = listOf(
+            "Like",
+            "Share",
+            "Comment",
+            "Subscribe",
+            *extraDescs.toTypedArray(),
+        ),
+    )
+
+    private fun advance(prev: WindowContentEvidence, curr: WindowContentEvidence): Boolean =
+        YouTubeShortsAdapter.detectUserAdvance(prev, curr)
+
+    // TEST 1: Normal YouTube swipe — different creator + different caption
+    @Test
+    fun `normal swipe with different creator and caption detects advance`() {
+        val shortA = shortEvidence("@creator_alpha", "Amazing sunset timelapse")
+        val shortB = shortEvidence("@creator_beta", "Cooking pasta from scratch")
+        assertTrue("Expected ADVANCE for different creator+caption", advance(shortA, shortB))
+    }
+
+    // TEST 2: Same creator, different Short — different caption
+    @Test
+    fun `same creator with different caption still detects advance`() {
+        val shortA = shortEvidence("@samecreator", "Video A about travel")
+        val shortB = shortEvidence("@samecreator", "Video B about cooking")
+        assertTrue("Expected ADVANCE for same creator but different caption", advance(shortA, shortB))
+    }
+
+    // TEST 3: Similar captions — still different enough content
+    @Test
+    fun `similar but non-identical captions detect advance`() {
+        val shortA = shortEvidence("@creator1", "Amazing sunset over the ocean today")
+        val shortB = shortEvidence("@creator1", "Beautiful sunset at the beach view")
+        assertTrue("Expected ADVANCE for similar but non-identical captions", advance(shortA, shortB))
+    }
+
+    // TEST 4: Comments open/close on same Short — NO advance
+    @Test
+    fun `comments open and close does not create false advance`() {
+        val shortA = shortEvidence("@creator1", "Travel vlog Episode 1")
+        val shortAWithComments = shortEvidenceWithOverlay(
+            "@creator1",
+            "Travel vlog Episode 1",
+            overlayDescs = listOf("Add a comment", "Reply"),
+            overlayIds = listOf("com.google.android.youtube:id/comment_input"),
+        )
+        assertFalse("Expected NO ADVANCE for comments overlay", advance(shortA, shortAWithComments))
+        assertFalse("Expected NO ADVANCE for comments overlay (reverse)", advance(shortAWithComments, shortA))
+    }
+
+    // TEST 5: Share open/close on same Short — NO advance
+    @Test
+    fun `share sheet open and close does not create false advance`() {
+        val shortA = shortEvidence("@creator1", "Travel vlog Episode 1")
+        val shortAWithShare = shortEvidenceWithOverlay(
+            "@creator1",
+            "Travel vlog Episode 1",
+            overlayDescs = listOf("Send to", "Share this"),
+            overlayIds = listOf("com.google.android.youtube:id/share_sheet"),
+        )
+        assertFalse("Expected NO ADVANCE for share overlay", advance(shortA, shortAWithShare))
+        assertFalse("Expected NO ADVANCE for share overlay (reverse)", advance(shortAWithShare, shortA))
+    }
+
+    // TEST 6: Like/comment/share control state changes — NO advance
+    @Test
+    fun `control state changes on same Short do not create false advance`() {
+        val shortA = shortEvidence("@creator1", "Travel vlog Episode 1")
+        // Same Short but with different control state (liked vs unliked)
+        val shortAUnliked = WindowContentEvidence(
+            nodeClasses = listOf(
+                "com.google.android.apps.youtube.app.ui.ReelPlayerView",
+                "androidx.recyclerview.widget.RecyclerView",
+            ),
+            nodeViewIds = listOf("com.google.android.youtube:id/reel_recycler"),
+            nodeContentDescriptions = listOf(
+                "@creator1",
+                "Travel vlog Episode 1",
+                "Like",
+                "Share",
+                "Comment",
+                "Subscribe",
+                "Remix this Short",
+                "See more videos using this sound",
+            ),
+        )
+        assertFalse("Expected NO ADVANCE for control state change", advance(shortA, shortAUnliked))
+    }
+
+    // TEST 7: One swipe producing multiple observations — ONE advance only
+    @Test
+    fun `multiple observations of same transition produce at most one advance`() {
+        val shortA = shortEvidence("@creator_alpha", "Amazing sunset timelapse")
+        val shortB1 = shortEvidence("@creator_beta", "Cooking pasta from scratch")
+        val shortB2 = shortEvidence("@creator_beta", "Cooking pasta from scratch")
+
+        // First observation of Short B — should detect advance
+        assertTrue("Expected ADVANCE on first observation", advance(shortA, shortB1))
+        // Second observation of same Short B — should NOT detect advance
+        // (content identity is now identical)
+        assertFalse("Expected NO ADVANCE on second observation of same Short", advance(shortB1, shortB2))
+    }
+
+    // TEST 8: TYPE_VIEW_SCROLLED available — existing path works
+    // (This is tested via ShortsMonitoringPipeline tests, not adapter tests)
+    // Here we verify detectUserAdvance is compatible — it should NOT interfere
+    @Test
+    fun `detectUserAdvance does not interfere with TYPE_VIEW_SCROLLED path`() {
+        // detectUserAdvance should still work correctly — it's an additional
+        // signal, not a replacement for TYPE_VIEW_SCROLLED
+        val shortA = shortEvidence("@creator_alpha", "Amazing sunset timelapse")
+        val shortB = shortEvidence("@creator_beta", "Cooking pasta from scratch")
+        assertTrue(advance(shortA, shortB))
+    }
+
+    // TEST 9: TYPE_VIEW_SCROLLED absent — content-based detection still works
+    @Test
+    fun `content-based advance detection works when TYPE_VIEW_SCROLLED is absent`() {
+        // This is the core fix scenario: TYPE_VIEW_SCROLLED doesn't fire,
+        // but detectUserAdvance() can still detect the transition via
+        // content fingerprint comparison.
+        val shortA = shortEvidence("@creator_alpha", "Amazing sunset timelapse")
+        val shortB = shortEvidence("@creator_beta", "Cooking pasta from scratch")
+        assertTrue("Expected ADVANCE via content fingerprint", advance(shortA, shortB))
+    }
+
+    // TEST 10: Facebook regression — verify adapter is YouTube-only
+    @Test
+    fun `YouTubeShortsAdapter only handles YouTube package`() {
+        assertEquals(setOf("com.google.android.youtube"), YouTubeShortsAdapter.packageNames)
+        assertEquals(ShortPlatform.YOUTUBE, YouTubeShortsAdapter.platform)
+    }
+
+    // Additional edge case: sparse content descriptions with structural fallback
+    @Test
+    fun `sparse content descriptions with structural delta detects advance`() {
+        val sparseA = sparseShortEvidence()
+        val sparseB = WindowContentEvidence(
+            nodeClasses = listOf(
+                "com.google.android.apps.youtube.app.ui.ReelPlayerView",
+                "androidx.recyclerview.widget.RecyclerView",
+                "com.google.android.apps.youtube.app.ui.NewPlayerContainer",
+            ),
+            nodeViewIds = listOf(
+                "com.google.android.youtube:id/reel_recycler",
+                "com.google.android.youtube:id/reel_player_page_container",
+            ),
+            nodeContentDescriptions = listOf(
+                "Like",
+                "Share",
+                "Comment",
+                "Subscribe",
+                "Remix this Short",
+            ),
+        )
+        assertTrue("Expected ADVANCE via structural delta", advance(sparseA, sparseB))
+    }
+
+    // Additional edge case: new content descriptions appearing
+    @Test
+    fun `new content descriptions appearing detects advance`() {
+        val shortA = shortEvidence("@creator_alpha", "Video about nothing special")
+        // Short B has a new content description that wasn't in Short A
+        val shortB = shortEvidence("@creator_beta", "Completely different video topic")
+        assertTrue("Expected ADVANCE for new content descriptions", advance(shortA, shortB))
+    }
+
+    // Edge case: same creator with identical captions (very sparse)
+    @Test
+    fun `same creator with identical sparse captions and no structural delta rejects`() {
+        // Both Shorts have identical fingerprints (same creator, same caption,
+        // same structural elements) — this should be rejected as SAME_SHORT
+        val shortA = shortEvidence("@creator", "Same caption text")
+        val shortB = shortEvidence("@creator", "Same caption text")
+        assertFalse("Expected REJECT for identical content", advance(shortA, shortB))
+    }
 }

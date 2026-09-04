@@ -325,26 +325,144 @@ object YouTubeShortsAdapter : ShortPlatformAdapter {
         "likes", "views", "videos",
     )
 
-    // ---- Genuine user advance detection ----
+    // =========================================================================
+    // YouTube-specific overlay detection (replaces generic ShortSurfaceClassifier)
+    // =========================================================================
+
+    /**
+     * View ID keywords that indicate a YouTube overlay (comments panel, share
+     * sheet, description panel, menu). These are distinct from the Shorts
+     * player's own button IDs (like_button, share_button) — they represent
+     * overlay CONTAINERS, not the player's built-in controls.
+     *
+     * The Shorts player's own buttons ("like", "share", "comment", "subscribe")
+     * are ALWAYS present and are NOT overlays. Only the overlay panels that
+     * OPEN ON TOP of the player are transient UI.
+     */
+    private val YT_OVERLAY_VIEW_ID_KEYWORDS = setOf(
+        // Comments panel (distinct from the "comment" button)
+        "comment_input", "comment_list", "comment_thread",
+        "reply_container", "reply_input",
+        // Share sheet
+        "share_sheet", "share_dialog", "share_panel", "share_menu",
+        "send_to",
+        // Description panel
+        "description_panel", "description_sheet",
+        // Menu / bottom sheet overlays
+        "bottom_sheet", "bottom_dialog", "popup_menu",
+        "more_menu", "action_sheet", "overlay_menu",
+        // Dialog / modal
+        "dialog", "modal", "alert_dialog",
+    )
+
+    /**
+     * Class name keywords that indicate overlay widget containers (BottomSheet,
+     * Dialog, Popup, etc.). These are Android framework widgets used for
+     * overlays, distinct from the Shorts player's own view classes.
+     */
+    private val YT_OVERLAY_CLASS_KEYWORDS = setOf(
+        "BottomSheet", "Dialog", "Popup", "Modal",
+        "Snackbar", "Tooltip", "ContextMenu", "PopupMenu",
+        "AlertDialog",
+    )
+
+    /**
+     * View IDs that identify the Shorts PLAYER container (used for structural
+     * fingerprint signals). These are always present while the Shorts player
+     * is visible and distinguish the player from overlay panels.
+     */
+    private val YT_SHORTS_PLAYER_VIEW_IDS = setOf(
+        "reel_watch_fragment_root",
+        "reel_recycler",
+        "reel_player_page_container",
+        "shorts_video_pager",
+        "shorts_player",
+        "reel_player",
+    )
+
+    /**
+     * Class name keywords that identify Shorts player structural elements.
+     * Used for structural fingerprinting (detecting genuine Short-to-Short
+     * transitions via accessibility tree changes).
+     */
+    private val YT_SHORTS_PLAYER_CLASS_KEYWORDS = setOf(
+        "reel", "shorts",
+    )
+
+    /**
+     * YouTube Shorts player's own button labels. These are ALWAYS present in
+     * the Shorts player's accessibility tree and are NOT transient UI.
+     *
+     * Distinguishing these from true overlays:
+     *  - Shorts player buttons: "like", "share", "comment", "subscribe"
+     *    (always present, part of the player)
+     *  - Comments overlay: "add a comment", "reply", "replies" (only when
+     *    comments panel is open)
+     *  - Share overlay: "send to", "share this" (only when share sheet is open)
+     *  - Menu overlay: "more actions", "more options" (only when menu is open)
+     *
+     * The generic ShortSurfaceClassifier treats ALL of these as TRANSIENT_UI,
+     * which incorrectly blocks advance detection for the Shorts player itself.
+     * YouTube-specific overlay detection focuses on the OVERLAY-specific signals.
+     */
+    private val YT_SHORTS_PLAYER_BUTTON_LABELS = setOf(
+        "like", "share", "comment", "subscribe",
+    )
+
+    /**
+     * Shorts player button labels for content fingerprint filtering.
+     * These are ALWAYS present in the Shorts player accessibility tree and
+     * must be excluded from the content identity fingerprint — they are
+     * player controls, not Short-specific content.
+     *
+     * Checked case-insensitively against the LOWERCASED content description.
+     */
+    private val SHORTS_PLAYER_BUTTON_LABELS = setOf(
+        "like", "dislike", "share", "comment", "subscribe",
+        "remix", "save", "download",
+    )
+
+    /**
+     * Check if a content description is a Shorts player control button.
+     * These are ALWAYS present in the Shorts player and must NOT be used
+     * as Short identity content.
+     */
+    private fun String.isShortsPlayerButton(): Boolean {
+        val lower = this.lowercase().trim()
+        return SHORTS_PLAYER_BUTTON_LABELS.any { lower == it }
+    }
+
+    // =========================================================================
+    // Genuine user advance detection
+    // =========================================================================
 
     /**
      * YouTube does not always generate reliable TYPE_VIEW_SCROLLED events
      * (e.g., vivo device delivers NO scroll events). We detect genuine
-     * advances by comparing Shorts-specific content descriptions between
-     * the previous and current content evidence.
+     * advances by comparing content evidence between the previous and current
+     * snapshots.
      *
-     * During normal playback of a single Short, the content descriptions
-     * (creator name, title, action buttons) remain stable. A genuine swipe
-     * to the next Short changes the creator/title content, while keeping
-     * Shorts-unique structural labels ("Remix this Short", "See more videos
-     * using this sound") stable.
+     * Strategy (multi-signal, YouTube-specific):
      *
-     * We compare content-specific descriptions (excluding Shorts-unique
-     * labels) as a fingerprint. When the fingerprint changes, it indicates
-     * a genuine transition to a different Short.
+     * 1. YouTube-specific overlay detection: reject genuine overlays (comments
+     *    panel, share sheet, menus) while allowing the Shorts player's own
+     *    controls ("like", "share", "comment", "subscribe") to pass through.
+     *    The generic ShortSurfaceClassifier is too aggressive — it classifies
+     *    the Shorts player itself as TRANSIENT_UI because its buttons contain
+     *    keywords like "like" and "share".
      *
-     * Non-Shorts changes (ads, rendering transitions, accessibility tree
-     * refresh) affect generic classes but not content-specific descriptions.
+     * 2. Content fingerprint comparison: compare Shorts-specific content
+     *    descriptions (creator name, caption) plus Shorts-unique labels
+     *    ("Remix this Short") and structural view IDs. When content identity
+     *    changes significantly, it indicates a genuine Short-to-Short transition.
+     *
+     * 3. Structural-delta fallback: when content descriptions are too sparse
+     *    or similar (e.g., same creator, similar captions), detect genuine
+     *    advances by structural changes in the accessibility tree (new player
+     *    container classes, different view IDs). This handles the case where
+     *    two consecutive Shorts from the same creator have similar text but
+     *    different underlying structure.
+     *
      * The pipeline's 3-second protection window provides additional defense
      * against false positives.
      */
@@ -352,128 +470,444 @@ object YouTubeShortsAdapter : ShortPlatformAdapter {
         previousEvidence: WindowContentEvidence,
         currentEvidence: WindowContentEvidence,
     ): Boolean {
-        // ===== TRANSIENT UI GATE =====
-        // If the current evidence shows transient UI (comments, share, menu,
-        // etc.), reject the advance. The evidence change is caused by an
-        // overlay, not by a genuine Short-to-Short transition.
-        val currentDecision = ShortSurfaceClassifier.classify(
-            packageName = packageNames.first(),
-            evidence = currentEvidence,
-            sessionInProgress = true,
-        )
-        if (currentDecision.role == ShortSurfaceClassifier.SurfaceRole.TRANSIENT_UI) {
+        // ===== YouTube-specific overlay detection =====
+        // Reject genuine overlays (comments panel, share sheet, menu) while
+        // allowing the Shorts player's own controls to pass through.
+        // Checking BOTH evidence snapshots prevents false advances when the
+        // user opens and closes an overlay (e.g., comments → close).
+        if (hasTransientOverlay(currentEvidence)) {
             Log.i("SC_YT_ADVANCE",
                 "SC_YT_ADVANCE pkg=$packageNames advance=false " +
-                    "reason=TRANSIENT_UI_CURRENT evidence=${currentDecision.reason}",
+                    "reason=TRANSIENT_OVERLAY evidence=CURRENT"
             )
-            Log.i("SC_YT_FALSE_ADVANCE_GUARD",
-                "SC_YT_FALSE_ADVANCE_GUARD blocked=true pkg=$packageNames " +
-                    "reason=TRANSIENT_UI_CURRENT evidence=${currentDecision.reason}",
+            return false
+        }
+        if (hasTransientOverlay(previousEvidence)) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames advance=false " +
+                    "reason=TRANSIENT_OVERLAY evidence=PREVIOUS"
             )
             return false
         }
 
-        // Also check if previous evidence was transient UI — if so, the
-        // transition from transient → player is not a genuine advance.
-        val prevDecision = ShortSurfaceClassifier.classify(
-            packageName = packageNames.first(),
-            evidence = previousEvidence,
-            sessionInProgress = true,
-        )
-        if (prevDecision.role == ShortSurfaceClassifier.SurfaceRole.TRANSIENT_UI) {
-            Log.i("SC_YT_ADVANCE",
-                "SC_YT_ADVANCE pkg=$packageNames advance=false " +
-                    "reason=TRANSIENT_UI_PREVIOUS evidence=${prevDecision.reason}",
-            )
-            Log.i("SC_YT_FALSE_ADVANCE_GUARD",
-                "SC_YT_FALSE_ADVANCE_GUARD blocked=true pkg=$packageNames " +
-                    "reason=TRANSIENT_UI_PREVIOUS evidence=${prevDecision.reason}",
-            )
-            return false
-        }
+        // ===== YouTube Shorts player presence check =====
+        val currentOnShorts = hasShortsPlayerSignal(currentEvidence)
+        val previousOnShorts = hasShortsPlayerSignal(previousEvidence)
 
+        // ===== Content fingerprint comparison =====
+        // Multi-signal fingerprint: content identity descriptions (creator,
+        // caption) + Shorts-unique labels + Shorts player view IDs.
+        // Shorts player button labels (like/share/comment/subscribe) are
+        // EXCLUDED from the content identity portion — they are static UI,
+        // not content.
         val prevFingerprint = identityFingerprint(previousEvidence)
         val currFingerprint = identityFingerprint(currentEvidence)
 
-        // Empty fingerprints: no identity signals available → no advance.
-        if (prevFingerprint.isEmpty() && currFingerprint.isEmpty()) {
-            Log.i("SC_YT_ADVANCE",
-                "SC_YT_ADVANCE pkg=$packageNames identityEmpty=true advance=false",
-            )
-            return false
+        // Overlap is computed using ONLY content identity descriptions
+        // (creator, caption) — Shorts-unique labels and player view IDs
+        // are structural signals, not identity signals.
+        val prevContentIds = prevFingerprint.filter { it.startsWith("content:") }.toSet()
+        val currContentIds = currFingerprint.filter { it.startsWith("content:") }.toSet()
+
+        val contentChanged: Boolean = if (prevContentIds.isEmpty() && currContentIds.isEmpty()) {
+            // No content identity descriptions available in either snapshot.
+            // Fall through to structural check.
+            false
+        } else if (prevContentIds.isEmpty() || currContentIds.isEmpty()) {
+            // Asymmetric: one has content identity, other doesn't.
+            // This is a strong signal of a transition.
+            true
+        } else {
+            val intersection = prevContentIds.intersect(currContentIds)
+            val union = prevContentIds.union(currContentIds)
+            val overlap = if (union.isEmpty()) 1.0 else intersection.size.toDouble() / union.size
+            overlap <= IDENTITY_OVERLAP_THRESHOLD
         }
 
-        // Asymmetric: one has identity, other doesn't → too uncertain.
-        if (prevFingerprint.isEmpty() || currFingerprint.isEmpty()) {
-            Log.i("SC_YT_ADVANCE",
-                "SC_YT_ADVANCE pkg=$packageNames asymmetric=true " +
-                    "prevSize=${prevFingerprint.size} currSize=${currFingerprint.size} advance=false",
-            )
-            return false
+        // ===== Structural-delta fallback =====
+        // When content descriptions are sparse or similar (same creator,
+        // similar captions), detect genuine advances by structural changes:
+        // Shorts player view IDs, class names, Shorts-specific node counts,
+        // and content identity description counts.
+        val structuralChanged = hasStructuralDelta(previousEvidence, currentEvidence)
+
+        // ===== New content descriptions check =====
+        // If content identity descriptions appear in current that were not
+        // in previous (and aren't Shorts player buttons), this is a strong
+        // signal of a new Short — the new Short's creator/caption loaded.
+        val newContentDescriptions = currContentIds.subtract(prevContentIds)
+        val newContentAppear = newContentDescriptions.isNotEmpty()
+
+        val overlap = if (prevContentIds.isEmpty() && currContentIds.isEmpty()) {
+            1.0
+        } else if (prevContentIds.isEmpty() || currContentIds.isEmpty()) {
+            0.0
+        } else {
+            val intersection = prevContentIds.intersect(currContentIds)
+            val union = prevContentIds.union(currContentIds)
+            if (union.isEmpty()) 1.0 else intersection.size.toDouble() / union.size
         }
-
-        // Compute identity overlap: what fraction of identity descriptors
-        // are shared between previous and current evidence?
-        val intersection = prevFingerprint.intersect(currFingerprint)
-        val union = prevFingerprint.union(currFingerprint)
-        val overlap = if (union.isEmpty()) 1.0 else intersection.size.toDouble() / union.size
-
-        // High overlap (>50%) = same Short with UI changes.
-        // Low overlap (<=50%) = different Short (genuine advance).
-        val isAdvance = overlap <= IDENTITY_OVERLAP_THRESHOLD
 
         Log.i("SC_YT_ADVANCE",
             "SC_YT_ADVANCE pkg=$packageNames " +
-                "prevIdentity=${prevFingerprint.take(3)} currIdentity=${currFingerprint.take(3)} " +
-                "overlap=${String.format("%.2f", overlap)} threshold=$IDENTITY_OVERLAP_THRESHOLD " +
-                "advance=$isAdvance",
+                "prevFinger=${prevFingerprint.take(5)} currFinger=${currFingerprint.take(5)} " +
+                "prevSize=${prevFingerprint.size} currSize=${currFingerprint.size} " +
+                "prevContentIds=${prevContentIds.size} currContentIds=${currContentIds.size} " +
+                "prevOnShorts=$previousOnShorts currOnShorts=$currentOnShorts " +
+                "overlap=${"%.2f".format(overlap)} contentChanged=$contentChanged " +
+                "structuralChanged=$structuralChanged newContentAppear=$newContentAppear"
         )
 
-        if (!isAdvance) {
-            Log.i("SC_YT_FALSE_ADVANCE_GUARD",
-                "SC_YT_FALSE_ADVANCE_GUARD blocked=true pkg=$packageNames " +
-                    "reason=SAME_SHORT_UI_CHANGE overlap=${String.format("%.2f", overlap)}",
+        if (contentChanged) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames decision=ADVANCE " +
+                    "reason=CONTENT_ID_CHANGED prevContent=${prevContentIds.take(3)} " +
+                    "currContent=${currContentIds.take(3)} overlap=${"%.2f".format(overlap)}"
             )
+            return true
         }
 
-        return isAdvance
+        if (structuralChanged) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames decision=ADVANCE " +
+                    "reason=STRUCTURE_CHANGED prevFinger=${prevFingerprint.take(3)} " +
+                    "currFinger=${currFingerprint.take(3)}"
+            )
+            return true
+        }
+
+        if (newContentAppear) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames decision=ADVANCE " +
+                    "reason=NEW_CONTENT_APPEARED newContent=${newContentDescriptions.take(3)}"
+            )
+            return true
+        }
+
+        // ===== No advance detected =====
+        // Content identity is identical AND no structural change AND no new
+        // content descriptions → same Short with UI updates (overlay
+        // open/close, ad, rendering refresh, control state change).
+        Log.i("SC_YT_ADVANCE",
+            "SC_YT_ADVANCE pkg=$packageNames decision=REJECT " +
+                "reason=SAME_SHORT prevFinger=${prevFingerprint.take(3)} " +
+                "currFinger=${currFingerprint.take(3)} overlap=${"%.2f".format(overlap)} " +
+                "structuralChanged=$structuralChanged newContentAppear=$newContentAppear"
+        )
+        return false
+    }
+
+    // =========================================================================
+    // YouTube-specific helpers
+    // =========================================================================
+
+    /**
+     * Check whether the evidence shows a genuine YouTube overlay (comments
+     * panel, share sheet, menu) — NOT the Shorts player's own controls.
+     *
+     * The Shorts player always has buttons like "like", "share", "comment",
+     * "subscribe" in its accessibility tree. These are part of the player
+     * and must NOT be treated as transient UI.
+     *
+     * True overlays add ADDITIONAL signals:
+     *  - Comments panel: "add a comment", "reply", "replies", comment input IDs
+     *  - Share sheet: "send to", "share this", share sheet IDs
+     *  - Menu: "more actions", "more options", popup/dialog class names
+     *
+     * Detection requires BOTH a description/ID signal AND a structural signal
+     * (overlay class name or overlay container ID) to reduce false positives.
+     */
+    private fun hasTransientOverlay(evidence: WindowContentEvidence): Boolean {
+        // Check for overlay-specific content descriptions
+        for (desc in evidence.nodeContentDescriptions) {
+            val lower = desc.lowercase()
+            if (YT_OVERLAY_DESC_KEYWORDS.any { lower.contains(it) }) {
+                return true
+            }
+        }
+
+        // Check for overlay container view IDs
+        for (id in evidence.nodeViewIds) {
+            val lower = id.lowercase()
+            if (YT_OVERLAY_VIEW_ID_KEYWORDS.any { lower.contains(it) }) {
+                return true
+            }
+        }
+
+        // Check for overlay widget class names (BottomSheet, Dialog, Popup, etc.)
+        for (cls in evidence.nodeClasses) {
+            val lower = cls.lowercase()
+            if (YT_OVERLAY_CLASS_KEYWORDS.any { lower.contains(it.lowercase()) }) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /**
+     * Content description keywords that indicate a YouTube OVERLAY is open.
+     * These are distinct from the Shorts player's own button labels.
+     *
+     * The Shorts player has: "like", "share", "comment", "subscribe"
+     * (always present, NOT overlays).
+     *
+     * Overlays add: "add a comment" (input field), "reply"/"replies" (thread),
+     * "send to" (share sheet), "more actions"/"more options" (menu).
+     */
+    private val YT_OVERLAY_DESC_KEYWORDS = setOf(
+        // Comments panel (input field + thread indicators)
+        "add a comment", "write a comment",
+        "reply", "replies",
+        "comments section", "view comments",
+        // Share sheet
+        "send to", "share this",
+        // Menu / more actions
+        "more actions", "more options",
+        // Description panel
+        "show more", "show less",
+        // Keyboard / input
+        "keyboard", "text input", "type a message", "compose",
+    )
+
+    /**
+     * Check whether the evidence contains a Shorts player signal.
+     *
+     * Used to confirm we're on the Shorts player (not Home, Watch, Search)
+     * before comparing fingerprints. Shorts-unique labels ("Remix this Short",
+     * "See more videos using this sound") are the most reliable signal.
+     * Structural player IDs provide a secondary check.
+     */
+    private fun hasShortsPlayerSignal(evidence: WindowContentEvidence): Boolean {
+        // Shorts-unique content descriptions (most reliable)
+        if (evidence.nodeContentDescriptions.any { it.isShortsContentDescription() }) return true
+        // Known Shorts player view IDs
+        if (evidence.nodeViewIds.any { id ->
+                val lower = id.lowercase()
+                YT_SHORTS_PLAYER_VIEW_IDS.any { lower.contains(it) }
+            }) return true
+        // Shorts-specific structural classes (reel/shorts keyword in player-like class)
+        if (evidence.nodeClasses.any { cls ->
+                val lower = cls.lowercase()
+                YT_SHORTS_PLAYER_CLASS_KEYWORDS.any { lower.contains(it) } &&
+                    (lower.contains("player") || lower.contains("pager") ||
+                        lower.contains("recycler") || lower.contains("container") ||
+                        lower.contains("fragment"))
+            }) return true
+        return false
+    }
+
+    /**
+     * Check for structural differences between previous and current evidence
+     * that indicate a genuine Short-to-Short transition.
+     *
+     * A genuine swipe changes the Shorts player's internal node structure
+     * (new container views, different resource IDs) even when the visible
+     * text is similar. This is the fallback for cases where content
+     * descriptions are too sparse or identical (same creator, similar captions).
+     *
+     * Structural delta detection:
+     *  - New Shorts player view IDs (e.g., new pager/container)
+     *  - Changed Shorts player class names (e.g., new player container)
+     *  - Net change in Shorts-specific structural nodes
+     *
+     * Generic Android widget classes (FrameLayout, LinearLayout, etc.) are
+     * excluded — they change with any UI update, not just Short transitions.
+     */
+    private fun hasStructuralDelta(
+        previous: WindowContentEvidence,
+        current: WindowContentEvidence,
+    ): Boolean {
+        // --- Shorts player view ID delta ---
+        val prevPlayerIds = previous.nodeViewIds.filter { id ->
+            val lower = id.lowercase()
+            YT_SHORTS_PLAYER_VIEW_IDS.any { lower.contains(it) }
+        }.toSet()
+        val currPlayerIds = current.nodeViewIds.filter { id ->
+            val lower = id.lowercase()
+            YT_SHORTS_PLAYER_VIEW_IDS.any { lower.contains(it) }
+        }.toSet()
+        val newPlayerIds = currPlayerIds - prevPlayerIds
+        if (newPlayerIds.isNotEmpty()) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames structuralDelta=NEW_PLAYER_IDS " +
+                    "new=${newPlayerIds.take(5)}"
+            )
+            return true
+        }
+
+        // --- Shorts player class name delta ---
+        val prevPlayerClasses = previous.nodeClasses.filter { cls ->
+            val lower = cls.lowercase()
+            YT_SHORTS_PLAYER_CLASS_KEYWORDS.any { lower.contains(it) }
+        }.toSet()
+        val currPlayerClasses = current.nodeClasses.filter { cls ->
+            val lower = cls.lowercase()
+            YT_SHORTS_PLAYER_CLASS_KEYWORDS.any { lower.contains(it) }
+        }.toSet()
+        val newPlayerClasses = currPlayerClasses - prevPlayerClasses
+        if (newPlayerClasses.isNotEmpty()) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames structuralDelta=NEW_PLAYER_CLASSES " +
+                    "new=${newPlayerClasses.take(5)}"
+            )
+            return true
+        }
+
+        // --- Shorts-specific node count net change ---
+        val prevStructuralCount = previous.nodeClasses.count { cls ->
+            val lower = cls.lowercase()
+            YT_SHORTS_PLAYER_CLASS_KEYWORDS.any { lower.contains(it) }
+        }
+        val currStructuralCount = current.nodeClasses.count { cls ->
+            val lower = cls.lowercase()
+            YT_SHORTS_PLAYER_CLASS_KEYWORDS.any { lower.contains(it) }
+        }
+        val structuralNetChange = kotlin.math.abs(currStructuralCount - prevStructuralCount)
+        if (structuralNetChange > 2) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames structuralDelta=NET_CHANGE " +
+                    "prev=$prevStructuralCount curr=$currStructuralCount delta=$structuralNetChange"
+            )
+            return true
+        }
+
+        // --- Content identity description count delta ---
+        // Count content identity descriptions (excluding Shorts player buttons,
+        // generic UI controls, and Shorts-unique labels). A significant change
+        // in this count indicates a new Short loaded with different content.
+        val prevContentCount = countContentIdentityDescriptions(previous)
+        val currContentCount = countContentIdentityDescriptions(current)
+        val contentCountDelta = kotlin.math.abs(currContentCount - prevContentCount)
+        if (contentCountDelta > 2) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames structuralDelta=CONTENT_COUNT " +
+                    "prev=$prevContentCount curr=$currContentCount delta=$contentCountDelta"
+            )
+            return true
+        }
+
+        // --- Shorts player node count delta ---
+        // Count total Shorts-related nodes (player + Shorts-unique labels).
+        // A significant change indicates structural content replacement.
+        val prevShortsNodeCount = countShortsNodes(previous)
+        val currShortsNodeCount = countShortsNodes(current)
+        val shortsNodeDelta = kotlin.math.abs(currShortsNodeCount - prevShortsNodeCount)
+        if (shortsNodeDelta > 3) {
+            Log.i("SC_YT_ADVANCE",
+                "SC_YT_ADVANCE pkg=$packageNames structuralDelta=SHORTS_NODES " +
+                    "prev=$prevShortsNodeCount curr=$currShortsNodeCount delta=$shortsNodeDelta"
+            )
+            return true
+        }
+
+        return false
+    }
+
+    /**
+     * Count content identity descriptions — content descriptions that are
+     * NOT Shorts player buttons, NOT generic UI controls, NOT Shorts-unique
+     * labels, and are >= 8 chars. These represent the Short's actual content
+     * (creator, caption, etc.).
+     */
+    private fun countContentIdentityDescriptions(evidence: WindowContentEvidence): Int {
+        return evidence.nodeContentDescriptions.count { desc ->
+            val lower = desc.lowercase().trim()
+            !lower.isShortsPlayerButton() &&
+                UI_STATE_DESCRIPTIONS.none { lower.contains(it) } &&
+                !isShortsSpecificDescription(lower) &&
+                lower.length >= 8
+        }
+    }
+
+    /**
+     * Count Shorts-related nodes: Shorts player structural classes +
+     * Shorts-unique labels. A significant change indicates structural
+     * content replacement (new Short loaded).
+     */
+    private fun countShortsNodes(evidence: WindowContentEvidence): Int {
+        val playerClassCount = evidence.nodeClasses.count { cls ->
+            val lower = cls.lowercase()
+            YT_SHORTS_PLAYER_CLASS_KEYWORDS.any { lower.contains(it) }
+        }
+        val shortsLabelCount = evidence.nodeContentDescriptions.count { desc ->
+            val lower = desc.lowercase().trim()
+            isShortsSpecificDescription(lower)
+        }
+        return playerClassCount + shortsLabelCount
     }
 
     /**
      * Extract a SHORT IDENTITY fingerprint from content evidence.
      *
      * This intentionally excludes:
-     *  - Shorts-structural labels ("Remix this Short", "See more videos using this sound")
      *  - UI-state labels (Comments, Like, Share, Save, Reply, Subscribe, etc.)
-     *  - Short/generic labels (< 8 chars) that are likely UI controls
+     *    that change with overlays, not with Short identity.
+     *  - Short/generic labels (< 8 chars) that are likely UI controls.
      *
-     * Retains only stable content-identity signals:
-     *  - Creator/channel name (e.g., "@sarthakreactss")
-     *  - Short title/caption text
-     *  - Stable media-specific descriptions
+     * Retains:
+     *  - Content-specific descriptions (creator name, caption, video title)
+     *    that change when Short A → Short B.
+     *  - Shorts-unique labels ("Remix this Short", "See more videos using
+     *    this sound") that confirm the Shorts player is present and provide
+     *    structural identity.
+     *  - Shorts player structural view IDs that provide additional identity
+     *    signals and help detect structural transitions.
      *
-     * These are the descriptions that change when Short A → Short B
-     * but remain stable when Short A → Short A + comments open.
+     * Including Shorts-unique labels in the fingerprint serves two purposes:
+     *  1. Confirms the Shorts player is present (safety signal).
+     *  2. Provides stable structural identity — when the Shorts player is
+     *     replaced by an overlay (comments/share), these labels disappear
+     *     from the fingerprint, reducing overlap and signaling a state change.
      */
     private fun identityFingerprint(evidence: WindowContentEvidence): Set<String> {
-        return evidence.nodeContentDescriptions
-            .filter { desc ->
-                val lower = desc.lowercase()
-                // Exclude Shorts-structural labels (stable across all Shorts)
-                !SHORTS_UNIQUE_DESCRIPTIONS.any { lower.contains(it) }
+        val result = mutableSetOf<String>()
+
+        // Content identity descriptions: creator name, caption, video title,
+        // and any other text that identifies WHAT Short is playing.
+        // Exclude:
+        //  - Shorts player button labels (like/share/comment/subscribe — static UI)
+        //  - Generic UI controls (play/pause/mute/fullscreen/etc.)
+        //  - Shorts-unique labels ("Remix this Short" — present on ALL Shorts)
+        //  - Short descriptions (< 8 chars) that are likely UI controls
+        for (desc in evidence.nodeContentDescriptions) {
+            val lower = desc.lowercase().trim()
+            if (lower.isShortsPlayerButton()) continue
+            if (UI_STATE_DESCRIPTIONS.any { lower.contains(it) }) continue
+            if (isShortsSpecificDescription(lower)) continue
+            if (lower.length >= 8) result.add("content:$lower")
+        }
+
+        // Shorts-unique labels: confirm Shorts player presence.
+        // These are structural signals (present on ALL Shorts), NOT content
+        // identity. Included in the fingerprint for structural confirmation
+        // but excluded from content overlap calculation.
+        for (desc in evidence.nodeContentDescriptions) {
+            val lower = desc.lowercase().trim()
+            if (SHORTS_UNIQUE_DESCRIPTIONS.any { lower.contains(it) }) {
+                result.add("yt_shorts:$lower")
             }
-            .filter { desc ->
-                val lower = desc.lowercase()
-                // Exclude UI-state labels (change with overlays, not with Short identity)
-                !UI_STATE_DESCRIPTIONS.any { lower.contains(it) }
+        }
+
+        // Shorts player structural view IDs: present on ALL Shorts.
+        // Structural signal, not content identity.
+        for (id in evidence.nodeViewIds) {
+            val lower = id.lowercase().trim()
+            if (YT_SHORTS_PLAYER_VIEW_IDS.any { lower.contains(it) }) {
+                result.add("yt_id:$lower")
             }
-            .map { it.lowercase().trim() }
-            .filter { it.length >= 8 }  // UI labels are typically short; identity is longer
-            .toSet()
+        }
+
+        return result
     }
 
-    /** Check if a class is a Shorts player node (for structural fallback). */
-    private fun isShortsPlayerNode(className: String): Boolean {
-        return className.isShortPlayerNodeClass()
+    /**
+     * Check if a lowercased content description is a Shorts-unique label
+     * ("Remix this Short", "See more videos using this sound").
+     * These appear on ALL Shorts and are NOT content identity.
+     */
+    private fun isShortsSpecificDescription(lower: String): Boolean {
+        return SHORTS_UNIQUE_DESCRIPTIONS.any { lower.contains(it) }
     }
+
 }
