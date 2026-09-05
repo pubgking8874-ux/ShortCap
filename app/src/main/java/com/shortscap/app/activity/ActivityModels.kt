@@ -113,3 +113,20 @@ data class ActivityAppUsage(
     val name: String,
     val minutes: Int,
 )
+
+/**
+ * One consolidated Home Recent Activity row (Phase 1.8) — a single
+ * application aggregated from ALL of its reportable `screen_activity_usage`
+ * sessions. [packageName] is the stable identity (never a display label),
+ * [totalDurationSeconds] is the SUM of every session's duration, and
+ * [latestOccurredAt] is the most recent session's timestamp — the row the
+ * Home card shows and the key it is sorted by. Duplicate sessions of the
+ * same application never produce multiple rows; raw session rows in
+ * `screen_activity_usage` stay untouched.
+ */
+data class RecentActivityItem(
+    val packageName: String,
+    val appName: String?,
+    val totalDurationSeconds: Long,
+    val latestOccurredAt: Long,
+)

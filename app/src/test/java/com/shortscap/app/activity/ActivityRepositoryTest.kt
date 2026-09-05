@@ -597,4 +597,128 @@ class ActivityRepositoryTest {
             ActivityRepository.installDeviceNonReportablePackages(emptySet())
         }
     }
+
+    // ------------------------------------------------------------------
+    // Phase 1.8 — Home Recent Activity consolidation (one row per app, summed
+    // duration, latest activity timestamp).
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `recent activity consolidates duplicate sessions into one row per app`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        // YouTube 11:31 PM (5m), then two tiny 11:43 PM sessions — the exact
+        // duplicate-session pattern Home used to render as three YouTube rows.
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 23 * 3_600_000L + 31 * 60_000L, durationSeconds = 300L),
+            session("com.google.android.youtube", start + 23 * 3_600_000L + 43 * 60_000L, durationSeconds = 20L),
+            session("com.google.android.youtube", start + 23 * 3_600_000L + 43 * 60_000L + 1_000L, durationSeconds = 25L),
+        )
+
+        val items = ActivityRepository.recentActivityFromSessions(sessions)
+
+        assertEquals(1, items.size)
+        val youtube = items.single()
+        assertEquals("com.google.android.youtube", youtube.packageName)
+        // Duration is the SUM of every persisted session (never just one row).
+        assertEquals(345L, youtube.totalDurationSeconds)
+        // Timestamp is the LATEST session of the app.
+        assertEquals(start + 23 * 3_600_000L + 43 * 60_000L + 1_000L, youtube.latestOccurredAt)
+    }
+
+    @Test
+    fun `recent activity is grouped by package - one row per application`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        // Interleaved duplicates across three apps.
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 600_000L, durationSeconds = 60L),
+            session("com.android.chrome", start + 601_000L, durationSeconds = 120L),
+            session("com.google.android.youtube", start + 602_000L, durationSeconds = 300L),
+            session("org.telegram.messenger", start + 603_000L, durationSeconds = 480L),
+            session("com.google.android.youtube", start + 604_000L, durationSeconds = 180L),
+            session("com.android.chrome", start + 605_000L, durationSeconds = 60L),
+        )
+
+        val items = ActivityRepository.recentActivityFromSessions(sessions)
+
+        // Exactly one item per application — never one per raw session.
+        assertEquals(3, items.size)
+        assertEquals(3, items.map { it.packageName }.toSet().size)
+        val byPackage = items.associateBy { it.packageName }
+        assertEquals(540L, byPackage.getValue("com.google.android.youtube").totalDurationSeconds) // 1m+5m+3m
+        assertEquals(180L, byPackage.getValue("com.android.chrome").totalDurationSeconds) // 2m+1m
+        assertEquals(480L, byPackage.getValue("org.telegram.messenger").totalDurationSeconds) // 8m
+    }
+
+    @Test
+    fun `recent activity keeps the latest activity timestamp and sorts by it`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 21 * 3_600_000L, durationSeconds = 300L),
+            session("com.android.chrome", start + 22 * 3_600_000L, durationSeconds = 720L),
+            session("com.google.android.youtube", start + 23 * 3_600_000L, durationSeconds = 120L), // YouTube latest
+            session("org.telegram.messenger", start + 22 * 3_600_000L + 30 * 60_000L, durationSeconds = 180L),
+        )
+
+        val items = ActivityRepository.recentActivityFromSessions(sessions)
+
+        val youtube = items.first { it.packageName == "com.google.android.youtube" }
+        // Consolidated row carries the LATEST YouTube session's time (11 PM),
+        // not the first/fetched session's time.
+        assertEquals(start + 23 * 3_600_000L, youtube.latestOccurredAt)
+        // Newest-activity-first so Home's top-N applies after consolidation.
+        assertEquals(
+            listOf("com.google.android.youtube", "org.telegram.messenger", "com.android.chrome"),
+            items.map { it.packageName },
+        )
+    }
+
+    @Test
+    fun `consolidation happens before the recent activity row limit`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        // Raw newest-first: YouTube, YouTube, Chrome, YouTube, Telegram — the
+        // first 3 RAW rows are all YouTube, but after consolidation the top-3
+        // rows must be YouTube, Chrome, Telegram (three distinct apps).
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 100_000L, durationSeconds = 60L),
+            session("com.google.android.youtube", start + 99_000L, durationSeconds = 60L),
+            session("com.android.chrome", start + 98_000L, durationSeconds = 120L),
+            session("com.google.android.youtube", start + 97_000L, durationSeconds = 300L),
+            session("com.whatsapp", start + 96_000L, durationSeconds = 480L),
+        )
+
+        val consolidated = ActivityRepository.recentActivityFromSessions(sessions)
+        val top3 = consolidated.take(3) // Home shows MAX_RECENT_ACTIVITY_ROWS after consolidation
+
+        assertEquals(listOf("YouTube", "Chrome", "WhatsApp"), top3.map { ActivityAppNames.friendlyName(it.packageName) })
+        // YouTube's one consolidated row sums all three of its sessions.
+        assertEquals(420L, top3.first().totalDurationSeconds)
+        assertEquals(start + 100_000L, top3.first().latestOccurredAt)
+    }
+
+    @Test
+    fun `tiny zero-minute sessions never become separate recent activity rows`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        // Sub-minute sessions (each displays as "0m" after conversion) belong
+        // to the SAME app as a real 5m session — one row, real summed total.
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 1_000L, durationSeconds = 300L),
+            session("com.google.android.youtube", start + 2_000L, durationSeconds = 15L),
+            session("com.google.android.youtube", start + 3_000L, durationSeconds = 25L),
+        )
+
+        val items = ActivityRepository.recentActivityFromSessions(sessions)
+
+        assertEquals(1, items.size) // no duplicate "0m" rows
+        assertEquals(340L, items.single().totalDurationSeconds) // ≈ 6m total, never three 0m/5m rows
+    }
+
+    @Test
+    fun `empty sessions produce no recent activity rows`() {
+        assertTrue(ActivityRepository.recentActivityFromSessions(emptyList()).isEmpty())
+    }
 }

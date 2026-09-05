@@ -9,13 +9,14 @@ import androidx.lifecycle.viewModelScope
 import com.shortscap.app.activity.ActivityAppNames
 import com.shortscap.app.activity.ActivityPeriod
 import com.shortscap.app.activity.ActivityRange
+import com.shortscap.app.activity.ActivityRepository
 import com.shortscap.app.activity.AppUsageColorProvider
 import com.shortscap.app.activity.PackageClassifier
+import com.shortscap.app.activity.RecentActivityItem
 import com.shortscap.app.appearance.AppearanceRepository
 import com.shortscap.app.appearance.FontMode
 import com.shortscap.app.appearance.TextSizeMode
 import com.shortscap.app.charts.ChartStyle
-import com.shortscap.app.db.ScreenActivityUsageEntity
 import com.shortscap.app.db.ShortsCapDatabase
 import com.shortscap.app.theme.ScFonts
 import com.shortscap.app.theme.ThemeMode
@@ -405,8 +406,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val todaySessions = screenActivityDao.usageInRange(todayStart, tomorrowStart)
                     .filter { PackageClassifier.isReportable(PackageClassifier.classify(it.packageName, appContext)) }
                 val recentSessions = screenActivityDao.recentSessions(MAX_RECENT_ACTIVITY_BATCH)
-                val recentActivity = recentSessions
                     .filter { PackageClassifier.isReportable(PackageClassifier.classify(it.packageName, appContext)) }
+                // Phase 1.8: consolidate duplicate sessions per application
+                // BEFORE the Recent Activity top-3 — one row per package, with
+                // the summed duration and the LATEST session's timestamp.
+                val recentActivity = ActivityRepository.recentActivityFromSessions(recentSessions)
                     .take(MAX_RECENT_ACTIVITY_ROWS)
                     .map { it.toRecentEntity() }
 
@@ -1367,13 +1371,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-/** How many recent app-usage sessions Home's Recent Activity shows. */
+/** How many recent APPLICATIONS Home's Recent Activity shows (one row per app). */
 private const val MAX_RECENT_ACTIVITY_ROWS = 3
 
 /**
  * How many of the most recent persisted sessions are fetched before the
  * reportable-package filter, so system UI / IME / launcher rows can never
- * consume the Recent Activity slots (filtering happens BEFORE take(3)).
+ * consume the Recent Activity slots. Filtering AND per-package consolidation
+ * ([ActivityRepository.recentActivityFromSessions]) both happen BEFORE the
+ * top-N take, so duplicate sessions of one app can never occupy several rows.
  */
 private const val MAX_RECENT_ACTIVITY_BATCH = 50
 
@@ -1409,9 +1415,14 @@ private val sessionTimeFormatter: DateTimeFormatter =
 private fun formatSessionTime(epochMillis: Long): String =
     Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(sessionTimeFormatter)
 
-/** One real Recent Activity row for a closed foreground session. */
-private fun ScreenActivityUsageEntity.toRecentEntity(): ScEntity {
-    val minutes = (durationSeconds / 60.0).roundToInt()
+/**
+ * One consolidated Recent Activity row for an application — every persisted
+ * foreground session of the package is folded into a single row whose
+ * duration is the SUM of the sessions and whose timestamp is the LATEST
+ * session's activity time.
+ */
+private fun RecentActivityItem.toRecentEntity(): ScEntity {
+    val minutes = (totalDurationSeconds / 60.0).roundToInt()
     return ScEntity(
         id = packageName,
         title = ActivityAppNames.friendlyName(packageName, appName),
@@ -1419,7 +1430,7 @@ private fun ScreenActivityUsageEntity.toRecentEntity(): ScEntity {
         packageName = packageName,
         fallbackColor = packageColor(packageName),
         usageTime = formatRecentDuration(minutes),
-        timestamp = formatSessionTime(occurredAt),
+        timestamp = formatSessionTime(latestOccurredAt),
     )
 }
 

@@ -473,6 +473,36 @@ object ActivityRepository {
             .filter { it.minutes > 0 }
     }
 
+    /**
+     * Phase 1.8 — Home Recent Activity consolidation: collapses raw closed
+     * foreground-session rows into ONE item per application, keyed by the
+     * stable Android `packageName` (never a display label). For each package
+     * the item carries the SUM of every session's duration and the timestamp
+     * of its LATEST session; the result is sorted newest-first by that latest
+     * activity so Home's existing top-N can be applied AFTER consolidation
+     * (duplicate sessions can never consume multiple Recent Activity rows).
+     *
+     * Callers pass the already-filtered reportable sessions (the
+     * reportable-app rules live with the classifier / catalog); this is pure
+     * aggregation — raw `screen_activity_usage` rows and every other report
+     * (Activity timeline, distribution, selected-hour apps) are untouched.
+     */
+    internal fun recentActivityFromSessions(
+        sessions: List<ScreenActivityUsageEntity>,
+    ): List<RecentActivityItem> =
+        sessions
+            .groupBy { it.packageName }
+            .map { (packageName, rows) ->
+                val latest = rows.maxByOrNull { it.occurredAt } ?: rows.first()
+                RecentActivityItem(
+                    packageName = packageName,
+                    appName = latest.appName,
+                    totalDurationSeconds = rows.sumOf { it.durationSeconds },
+                    latestOccurredAt = latest.occurredAt,
+                )
+            }
+            .sortedByDescending { it.latestOccurredAt }
+
     /** Number of closed foreground sessions + their average length in the window. */
     private fun averageSessionSeconds(
         sessions: List<ScreenActivityUsageEntity>,
