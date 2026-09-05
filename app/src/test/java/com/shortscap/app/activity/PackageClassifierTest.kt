@@ -121,6 +121,22 @@ class PackageClassifierTest {
     }
 
     @Test
+    fun `messenger is a legitimate user app and stays reportable`() {
+        // Phase 1.5 audit: the displayed "Messenger" is either the genuine
+        // Messenger package (com.facebook.orca) or Telegram (org.telegram.
+        // messenger) — both legitimate user-facing apps. Without evidence of
+        // a collection bug (the collector records real foreground windows
+        // and appName is only ever populated from backend sync), they must
+        // NOT be hidden by name.
+        assertEquals(PackageClassifier.Category.UNKNOWN, PackageClassifier.classify("com.facebook.orca"))
+        assertTrue(PackageClassifier.isReportable(PackageClassifier.classify("com.facebook.orca")))
+        // Telegram's package ends in ".messenger" but is a user app — never
+        // hidden by a label-style rule.
+        assertEquals(PackageClassifier.Category.UNKNOWN, PackageClassifier.classify("org.telegram.messenger"))
+        assertTrue(PackageClassifier.isReportable(PackageClassifier.classify("org.telegram.messenger")))
+    }
+
+    @Test
     fun `android stays SYSTEM_SERVICE and not reportable`() {
         assertEquals(PackageClassifier.Category.SYSTEM_SERVICE, PackageClassifier.classify("android"))
         assertFalse(PackageClassifier.isReportable(PackageClassifier.classify("android")))

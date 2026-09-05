@@ -549,4 +549,116 @@ class ShortsControlEngineTest {
         // Daily count also incremented
         assertEquals(2, state.dailyShortsCount)
     }
+
+    // 25. Corrupt far-future expiry (the historical debug-pause artifact that
+    // produced the observed "8489:34:56" countdown) self-heals to CONFIGURED.
+    @Test
+    fun `corrupt far-future expiry self-heals to configured preserving the limit`() {
+        val clock = Clock()
+        val store = InMemoryShortsLimitCycleStore()
+        // Simulate the persisted corrupt row: ACTIVE with expiry ~1 year out.
+        store.save(
+            ShortsLimitCycle(
+                limitCount = 390,
+                currentCount = 397,
+                cycleDurationMillis = 0L,
+                cycleStartedAt = clock.now - 3 * DAY,
+                cycleExpiresAt = clock.now + 365L * DAY,
+                status = ShortsLimitCycleStatus.LIMIT_REACHED,
+                warningTriggered = false,
+                limitReached = true,
+                dailyShortsCount = 397,
+                dailyShortsDate = "2026-09-04",
+                createdAt = clock.now - 3 * DAY,
+                updatedAt = clock.now + 365L * DAY,
+            )
+        )
+        val e = engine(store = store, clock = clock)
+        val state = e.currentState()
+
+        assertEquals(ShortsLimitCycleStatus.CONFIGURED, state.status) // READY_TO_ACTIVATE
+        assertEquals(390, state.limitCount) // the user's limit is preserved
+        assertEquals(0, state.currentCount) // phantom consumed count zeroed
+        assertEquals(390, state.remainingCount) // clean remaining = limit
+        assertEquals(0L, state.remainingCycleMillis) // no phantom countdown
+        assertNull(state.cycleStartedAt)
+        assertNull(state.cycleExpiresAt)
+        assertFalse(e.hasActiveCycle()) // no enforcement until ACTIVATE
+        assertNull(store.currentCycle()) // no ACTIVE row remains
+        val configured = store.configuredCycle()
+        assertNotNull(configured)
+        assertEquals(390, configured!!.limitCount)
+        assertEquals(397, configured.dailyShortsCount) // daily counter preserved
+    }
+
+    // 25b. A healthy active cycle is never touched by the (idempotent) repair.
+    @Test
+    fun `healthy active cycle is not treated as corrupt`() {
+        val store = InMemoryShortsLimitCycleStore()
+        val clock = Clock()
+        val e = engine(store = store, clock = clock)
+        e.setLimit(200)
+        e.activate()
+        e.onShortCounted(candidateKey = "a", occurredAt = 0L, durationMillis = 4_000L)
+        clock.advance(HOUR)
+
+        val before = e.currentState()
+        assertEquals(ShortsLimitCycleStatus.ACTIVE, before.status)
+        // Repeated explicit repairs never rewrite a healthy cycle.
+        repeat(5) { e.repairCorruptCycle() }
+        val after = e.currentState()
+
+        assertEquals(ShortsLimitCycleStatus.ACTIVE, after.status)
+        assertEquals(before.cycleStartedAt, after.cycleStartedAt)
+        assertEquals(before.cycleExpiresAt, after.cycleExpiresAt)
+        assertEquals(1, after.currentCount)
+        assertEquals(23 * HOUR, after.remainingCycleMillis) // countdown intact
+        assertEquals(1, store.history().size) // never duplicated
+    }
+
+    // 25c. After the repair the user can ACTIVATE a clean 24-hour cycle.
+    @Test
+    fun `activation after repair starts a clean 24 hour cycle from zero`() {
+        val clock = Clock()
+        val store = InMemoryShortsLimitCycleStore()
+        store.save(
+            ShortsLimitCycle(
+                limitCount = 390,
+                currentCount = 397,
+                cycleDurationMillis = 0L,
+                cycleStartedAt = clock.now - 3 * DAY,
+                cycleExpiresAt = clock.now + 365L * DAY,
+                status = ShortsLimitCycleStatus.ACTIVE,
+                warningTriggered = false,
+                limitReached = false,
+                createdAt = clock.now - 3 * DAY,
+                updatedAt = clock.now + 365L * DAY,
+            )
+        )
+        val e = engine(store = store, clock = clock)
+        assertEquals(ShortsLimitCycleStatus.CONFIGURED, e.currentState().status) // healed on read
+
+        val active = e.activate()
+        assertEquals(ShortsLimitCycleStatus.ACTIVE, active.status)
+        assertEquals(390, active.limitCount) // preserved limit
+        assertEquals(0, active.currentCount) // consumed starts at ZERO
+        assertEquals(390, active.remainingCount)
+        assertEquals(clock.now, active.cycleStartedAt)
+        assertEquals(clock.now + DAY, active.cycleExpiresAt) // exactly +24h
+        assertEquals(DAY, active.remainingCycleMillis) // countdown shows 24:00:00
+    }
+
+    // 25d. Remaining time stays within the 24-hour window across the cycle.
+    @Test
+    fun `remaining time never exceeds the 24 hour window`() {
+        val clock = Clock()
+        val e = engine(clock = clock)
+        e.setLimit(200)
+        e.activate()
+        assertEquals(DAY, e.currentState().remainingCycleMillis) // full window
+        clock.advance(HOUR)
+        assertEquals(DAY - HOUR, e.currentState().remainingCycleMillis)
+        clock.advance(DAY)
+        assertEquals(0L, e.currentState().remainingCycleMillis) // expired -> 00:00:00
+    }
 }

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.shortscap.app.activity.AppUsageColorProvider
 import com.shortscap.app.favicon.WebsiteFavicon
 import com.shortscap.app.model.ScEntity
 import com.shortscap.app.model.ScEntityType
@@ -98,6 +99,65 @@ private fun loadInstalledAppIcon(context: Context, packageName: String, sizePx: 
     val info = pm.getApplicationInfo(packageName, 0)
     info.loadIcon(pm).toBitmap(sizePx, sizePx).asImageBitmap()
 }.getOrNull()
+
+/**
+ * ScAppUsageIcon — leading icon for one REPORTABLE app-usage row (Activity
+ * Daily donut legend / Most Used Apps / selected-app detail). Resolves the
+ * REAL installed launcher icon by package identity through PackageManager;
+ * when the app is uninstalled, missing metadata or resolution fails it falls
+ * back to a clean brand-letter tile coloured through
+ * [AppUsageColorProvider] (the single app-color source) — crash-safe, never
+ * a fabricated icon. Async and keyed per package so rows do not recompose
+ * unnecessarily.
+ */
+@Composable
+fun ScAppUsageIcon(
+    packageName: String?,
+    name: String,
+    modifier: Modifier = Modifier,
+    size: Dp = 20.dp,
+    corner: Dp = 6.dp,
+) {
+    val context = LocalContext.current
+    val colors = LocalScColors.current
+    val density = LocalDensity.current
+    val loaded by produceState<ImageBitmap?>(
+        initialValue = null,
+        key1 = packageName,
+    ) {
+        if (packageName == null) {
+            value = null
+        } else {
+            val sizePx = with(density) { size.roundToPx() }
+            value = withContext(Dispatchers.IO) { loadInstalledAppIcon(context, packageName, sizePx) }
+        }
+    }
+    val icon = loaded
+    if (icon != null) {
+        Image(
+            bitmap = icon,
+            contentDescription = name,
+            modifier = modifier.size(size).clip(RoundedCornerShape(corner)),
+        )
+    } else {
+        val color = AppUsageColorProvider.colorFor(packageName, colors)
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(RoundedCornerShape(corner))
+                .background(color.copy(alpha = 0.16f), RoundedCornerShape(corner)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = name.take(1),
+                color = color,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.55f).sp,
+                maxLines = 1,
+            )
+        }
+    }
+}
 
 /** Clean placeholder/fallback: brand-letter tile for apps, globe for websites. */
 @Composable

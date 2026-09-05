@@ -682,6 +682,10 @@ fun ScPointTooltipCard(
     onAction: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    titleDotColor: Color? = null,
+    // Phase 1.6 — optional real-app-icon leading slot for the application
+    // detail card ([titleDotColor] is ignored when this is provided).
+    titleIcon: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
@@ -700,14 +704,33 @@ fun ScPointTooltipCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = title,
-                color = colors.TextPrimary,
-                fontWeight = FontWeight.SemiBold,
-                style = ScTextStyles.Body,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                // Phase 1.5/1.6 — the selected application keeps its visual
+                // identity: a real app icon when provided (titleIcon), else
+                // the brand-color dot (titleDotColor) from AppUsageColorProvider.
+                if (titleIcon != null) {
+                    titleIcon()
+                } else if (titleDotColor != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(titleDotColor),
+                    )
+                }
+                Text(
+                    text = title,
+                    color = colors.TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    style = ScTextStyles.Body,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (onClose != null) {
                 Icon(
                     Icons.Filled.Close,
@@ -851,12 +874,20 @@ fun ScDonutCenterTotal(
 }
 
 /**
- * Compact legend for a time-distribution donut — one row per slice with its
- * colour dot, time/date label, exact duration and share. Rows are tappable
- * when [onSliceClick] is provided (e.g. selecting a slice to surface its
- * exact date/time). Duration is the primary information; percent secondary.
+ * Compact legend for a distribution donut — one row per slice with its
+ * colour dot (or a real app icon via [icon]), label, exact duration and
+ * optional share. Rows are tappable when [onSliceClick] is provided (e.g.
+ * selecting a slice to surface its exact date/time or its application).
+ * Duration is the primary information; percent secondary.
  *
- * [maxVisible] caps the rows shown BY DEFAULT (e.g. 4 for a daily hourly
+ * [showPercent] hides the trailing percentage column (Phase 1.6 — the Daily
+ * application list shows only app + total duration, never percentages).
+ * [icon] replaces the generic colour dot with a per-slice leading icon
+ * composable (e.g. the real app icon via ScAppUsageIcon); when null the dot
+ * is drawn.
+ * [selectedIndex] highlights one row (tinted background + emphasised label).
+ *
+ * [maxVisible] caps the rows shown BY DEFAULT (e.g. 4 for a dense hourly
  * timeline). When the legend has more entries than that, a Show More / Show
  * Less toggle appears right after the last visible row and expands / collapses
  * the list with a smooth size animation. The data is never filtered or
@@ -871,6 +902,9 @@ fun ScTimeLegend(
     onSliceClick: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     maxVisible: Int? = null,
+    selectedIndex: Int? = null,
+    showPercent: Boolean = true,
+    icon: (@Composable (index: Int) -> Unit)? = null,
 ) {
     val colors = LocalScColors.current
     val strings = LocalAppStrings.current
@@ -889,33 +923,50 @@ fun ScTimeLegend(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         visibleSlices.forEachIndexed { index, slice ->
+            val isSelected = selectedIndex == index
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(
+                        if (onSliceClick != null || isSelected) {
+                            Modifier.clip(RoundedCornerShape(12.dp))
+                        } else Modifier,
+                    )
+                    .then(
+                        if (isSelected) {
+                            Modifier.background(colors.Accent.copy(alpha = 0.10f))
+                        } else Modifier,
+                    )
+                    .then(
                         if (onSliceClick != null) {
                             Modifier
-                                .clip(RoundedCornerShape(12.dp))
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,
                                     onClick = { onSliceClick(index) },
                                 )
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
+                        } else if (isSelected) {
+                            Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         } else Modifier,
                     ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(slice.color),
-                )
+                if (icon != null) {
+                    icon(index)
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(slice.color),
+                    )
+                }
                 Text(
                     text = slice.label,
-                    color = colors.TextSecondary,
+                    color = if (isSelected) colors.TextPrimary else colors.TextSecondary,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                     style = ScTextStyles.Body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -930,7 +981,9 @@ fun ScTimeLegend(
                         maxLines = 1,
                     )
                 }
-                if (total > 0f) {
+                // Phase 1.6 — the percentage column is optional and OFF for the
+                // Daily application list (app + duration only).
+                if (showPercent && total > 0f) {
                     Text(
                         text = "${(slice.value / total * 100).roundToInt()}%",
                         color = colors.TextDisabled,

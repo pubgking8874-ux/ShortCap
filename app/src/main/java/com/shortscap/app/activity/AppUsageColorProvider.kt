@@ -49,22 +49,57 @@ object AppUsageColorProvider {
         "com.reddit.frontpage" to ScReddit,
     )
 
-    /** Fixed neutral color for unknown reportable apps and the "Other" slice. */
+    /**
+     * Fixed neutral color for the "Other" slice and chart remainders ONLY.
+     * Gray is never used for a reportable application — every app gets either
+     * its brand color or a deterministic palette color (Phase 1.6), so the
+     * Daily donut stays colorful instead of collapsing into gray.
+     */
     val NeutralUnknownColor: Color = Color(0xFF9CA3AF)
 
     /**
-     * Theme-aware color for a recorded package. [packageName] is null for the
-     * "Other" bucket → the theme's neutral [ScColors.PieOther]; unknown
-     * reportable packages get the same neutral (deterministic).
+     * Deterministic fallback palette for reportable apps without a dedicated
+     * brand color (anything not in [brandColors]: Messenger, region apps,
+     * games, …). Chosen by package identity so the SAME app always receives
+     * the SAME color on every screen, refresh and sort order — never random,
+     * never position-dependent, and never the neutral gray.
      */
-    fun colorFor(packageName: String?, colors: ScColors): Color =
-        brandColors[packageName] ?: colors.PieOther
+    private val fallbackPalette = listOf(
+        Color(0xFFF59E0B), // amber
+        Color(0xFF22C55E), // green
+        Color(0xFF3B82F6), // blue
+        Color(0xFF8B5CF6), // violet
+        Color(0xFFEC4899), // pink
+        Color(0xFF14B8A6), // teal
+        Color(0xFFF97316), // orange
+        Color(0xFF6366F1), // indigo
+    )
+
+    /** Stable palette index for an unknown reportable package name. */
+    private fun fallbackIndex(packageName: String): Int =
+        (packageName.hashCode() and Int.MAX_VALUE) % fallbackPalette.size
+
+    /**
+     * Theme-aware color for a recorded package. [packageName] is null for the
+     * "Other" bucket → the theme's neutral [ScColors.PieOther]; known apps
+     * get their brand color; unknown reportable apps get a deterministic
+     * fallback-palette color (see [fallbackPalette]).
+     */
+    fun colorFor(packageName: String?, colors: ScColors): Color {
+        if (packageName == null) return colors.PieOther
+        brandColors[packageName]?.let { return it }
+        return fallbackPalette[fallbackIndex(packageName)]
+    }
 
     /**
      * Standalone variant (no composition theme) used by non-composable
-     * layers such as AppViewModel's Home Recent Activity rows — unknown
-     * packages and "Other" get [NeutralUnknownColor].
+     * layers such as AppViewModel's Home Recent Activity rows — "Other"
+     * (null) gets [NeutralUnknownColor]; unknown apps get the same
+     * deterministic fallback-palette color as the composable variant.
      */
-    fun colorFor(packageName: String?): Color =
-        brandColors[packageName] ?: NeutralUnknownColor
+    fun colorFor(packageName: String?): Color {
+        if (packageName == null) return NeutralUnknownColor
+        brandColors[packageName]?.let { return it }
+        return fallbackPalette[fallbackIndex(packageName)]
+    }
 }

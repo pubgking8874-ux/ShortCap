@@ -143,10 +143,16 @@ fun limitProgressFraction(currentCount: Int, limitCount: Int): Float =
 fun limitRemainingCount(currentCount: Int, limitCount: Int): Int =
     (limitCount - currentCount).coerceAtLeast(0)
 
-/** Whole hours + minutes of [remainingMillis] (countdown is DERIVED from the
- * authoritative expiry timestamp at display time — never persisted). */
+/**
+ * Whole hours + minutes of [remainingMillis] — the 24-hour cycle countdown.
+ * A real cycle can never have more than a full window remaining (expiry =
+ * start + 24h, start <= now); the engine already caps `remainingCycleMillis`,
+ * and this clamp is the final display guard so a stale/drifted value can
+ * never render as e.g. "8489:34:56". The valid display range is
+ * 24:00:00 down to 00:00:00.
+ */
 fun remainingHoursMinutes(remainingMillis: Long): Pair<Long, Long> {
-    val clamped = remainingMillis.coerceAtLeast(0L)
+    val clamped = remainingMillis.coerceIn(0L, ShortsControlEngine.CYCLE_DURATION_MILLIS)
     return (clamped / 3_600_000L) to ((clamped % 3_600_000L) / 60_000L)
 }
 
@@ -154,9 +160,12 @@ fun remainingHoursMinutes(remainingMillis: Long): Pair<Long, Long> {
  * Formats [remainingMillis] as the HH:MM:SS 24-hour countdown the circular
  * timer displays (e.g. 24:00:00 at cycle start, 00:00:00 at expiry). Derived
  * from the authoritative expiry timestamp at display time — never persisted.
+ * Clamped to the 24-hour window: the formatter can NEVER return more than
+ * "24:00:00", so the absurd "8489:34:56"-style values are impossible even if
+ * a stale duration were passed in.
  */
 fun remainingCountdownHms(remainingMillis: Long): String {
-    val clamped = remainingMillis.coerceAtLeast(0L)
+    val clamped = remainingMillis.coerceIn(0L, ShortsControlEngine.CYCLE_DURATION_MILLIS)
     val totalSeconds = clamped / 1_000L
     val h = totalSeconds / 3_600L
     val m = (totalSeconds % 3_600L) / 60L

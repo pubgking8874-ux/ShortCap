@@ -402,4 +402,199 @@ class ActivityRepositoryTest {
         assertEquals(14, report.points[13].minutes)
         assertEquals(14, apps.sumOf { it.minutes })
     }
+
+    // ------------------------------------------------------------------
+    // Phase 1.4 — consolidation (one app = one aggregated value) and the
+    // device-package exclusion shared with Home.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `same app across the day consolidates into ONE most-used slice`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        // YouTube 09:00–09:20 (20m), 13:00–13:15 (15m), 15:00–15:30 (30m).
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 9 * 3_600_000L, durationSeconds = 1_200L),
+            session("com.google.android.youtube", start + 13 * 3_600_000L, durationSeconds = 900L),
+            session("com.google.android.youtube", start + 15 * 3_600_000L, durationSeconds = 1_800L),
+        )
+        val report = ActivityRepository.buildReport(ActivityPeriod.DAILY, today, emptyList(), sessions)
+
+        // ONE consolidated row (65 min) — never three per-session rows.
+        assertEquals(1, report.distribution.size)
+        assertEquals("YouTube", report.distribution.single().name)
+        assertEquals(65, report.distribution.single().minutes)
+        assertEquals(65, report.totalMinutes)
+    }
+
+    @Test
+    fun `daily app donut dataset is application based not hourly`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        // Several sessions across several hours for three reportable apps +
+        // a filtered system package.
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 9 * 3_600_000L, durationSeconds = 1_200L),
+            session("com.google.android.youtube", start + 13 * 3_600_000L, durationSeconds = 900L),
+            session("com.google.android.youtube", start + 15 * 3_600_000L, durationSeconds = 1_800L),
+            session("com.instagram.android", start + 10 * 3_600_000L, durationSeconds = 300L),
+            session("com.instagram.android", start + 18 * 3_600_000L, durationSeconds = 1_200L),
+            session("com.android.chrome", start + 12 * 3_600_000L, durationSeconds = 600L),
+            session("android", start + 11 * 3_600_000L, durationSeconds = 3_600L), // filtered
+        )
+        val report = ActivityRepository.buildReport(ActivityPeriod.DAILY, today, emptyList(), sessions)
+
+        // The DAILY donut dataset is the per-APPLICATION distribution (the
+        // data ActivityScreen's app donut renders), never 24 hour segments:
+        // YouTube = 20+15+30 = 65m (consolidated), Instagram = 5+20 = 25m,
+        // Chrome = 10m; android never appears.
+        val apps = report.distribution.map { it.name }
+        assertEquals(listOf("YouTube", "Instagram", "Chrome"), apps)
+        assertEquals(listOf(65, 25, 10), report.distribution.map { it.minutes })
+        // App donut total matches the reportable daily total (rounding aside):
+        // 65 + 25 + 10 = 100 == report.totalMinutes. The hourly points still
+        // exist internally (24), but they are NOT the donut dataset.
+        assertEquals(24, report.points.size)
+        assertTrue(report.distribution.size < report.points.size)
+        assertEquals(100, report.distribution.sumOf { it.minutes })
+        assertEquals(100, report.totalMinutes)
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1.7 — the device user-app catalog is the single eligibility gate.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `catalog membership is the reporting gate - uninstalled apps are ignored`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 1_000L, durationSeconds = 600L),
+            session("com.instagram.android", start + 2_000L, durationSeconds = 300L),
+            // Classifier-reportable (dotted, unknown) but NOT installed as a
+            // user-facing app on this device → must be ignored by reporting.
+            session("com.ghost.background.component", start + 3_000L, durationSeconds = 3_600L),
+            // System artifacts can never be catalog members.
+            session("android", start + 4_000L, durationSeconds = 3_600L),
+            session("app", start + 5_000L, durationSeconds = 3_600L),
+        )
+        try {
+            ActivityRepository.installUserAppCatalog(
+                setOf("com.google.android.youtube", "com.instagram.android")
+            )
+            val report = ActivityRepository.buildReport(ActivityPeriod.DAILY, today, emptyList(), sessions)
+
+            // Only catalog members with real usage appear; the phantom
+            // background/system hours never reach the dataset or the total.
+            assertEquals(listOf("YouTube", "Instagram"), report.distribution.map { it.name })
+            assertEquals(listOf(10, 5), report.distribution.map { it.minutes })
+            assertEquals(15, report.totalMinutes)
+        } finally {
+            ActivityRepository.installUserAppCatalog(null)
+        }
+    }
+
+    @Test
+    fun `catalog gate keeps working when classifier-only state is restored`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        val sessions = listOf(
+            session("com.google.android.youtube", start + 1_000L, durationSeconds = 600L),
+            session("android", start + 2_000L, durationSeconds = 3_600L),
+        )
+        ActivityRepository.installUserAppCatalog(null)
+        val report = ActivityRepository.buildReport(ActivityPeriod.DAILY, today, emptyList(), sessions)
+        assertEquals(listOf("YouTube"), report.distribution.map { it.name })
+        assertEquals(10, report.totalMinutes)
+    }
+
+    @Test
+    fun `device label wins over persisted appName - telegram shows its real label`() {
+        // Phase 1.7: Android's application label is the authoritative display
+        // name. Even when the persisted/backend appName says "Messenger", the
+        // device catalog resolves org.telegram.messenger → "Telegram".
+        try {
+            ActivityAppNames.installDeviceLabels(
+                mapOf(
+                    "org.telegram.messenger" to "Telegram",
+                    "com.google.android.youtube" to "YouTube",
+                )
+            )
+            assertEquals("Telegram", ActivityAppNames.friendlyName("org.telegram.messenger", "Messenger"))
+            assertEquals("YouTube", ActivityAppNames.friendlyName("com.google.android.youtube", "YouTube"))
+        } finally {
+            ActivityAppNames.installDeviceLabels(emptyMap())
+        }
+    }
+
+    @Test
+    fun `known name map still works when no device label is installed`() {
+        ActivityAppNames.installDeviceLabels(emptyMap())
+        // Known map fallback (pre-install / uninstalled-app case).
+        assertEquals("YouTube", ActivityAppNames.friendlyName("com.google.android.youtube"))
+        // Last-segment fallback for unknown dotted packages.
+        assertEquals("someapp", ActivityAppNames.friendlyName("com.example.someapp"))
+    }
+
+    @Test
+    fun `android and bare app sessions never reach the daily app dataset`() {
+        // Phase 1.6 audit evidence: even when raw `screen_activity_usage`
+        // rows carry the bare `android` / `app` package strings (system
+        // process / dialog windows recorded by the collector), they are
+        // classified SYSTEM_SERVICE and filtered BEFORE aggregation — they
+        // can never appear in the Daily donut/list, nor inflate the total.
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        val sessions = listOf(
+            session("android", start + 1_000L, durationSeconds = 3_600L), // 1h system
+            session("app", start + 2_000L, durationSeconds = 3_600L), // 1h artifact
+            session("com.google.android.youtube", start + 3_000L, durationSeconds = 600L), // 10m
+            session("com.instagram.android", start + 4_000L, durationSeconds = 300L), // 5m
+        )
+        val report = ActivityRepository.buildReport(ActivityPeriod.DAILY, today, emptyList(), sessions)
+
+        assertEquals(listOf("YouTube", "Instagram"), report.distribution.map { it.name })
+        assertEquals(10, report.distribution.getOrNull(0)?.minutes ?: 0)
+        assertEquals(5, report.distribution.getOrNull(1)?.minutes ?: 0)
+        assertEquals(15, report.totalMinutes) // the two phantom hours are NOT counted
+    }
+
+    @Test
+    fun `same app twice within one hour merges in the selected-hour breakdown`() {
+        val today = LocalDate.now()
+        val hour12Start = dayStart(today) + 12 * 3_600_000L
+        val sessions = listOf(
+            session("com.google.android.youtube", hour12Start, durationSeconds = 1_200L), // 12:00–12:20
+            session("com.instagram.android", hour12Start + 25 * 60_000L, durationSeconds = 900L), // 12:25–12:40
+            session("com.google.android.youtube", hour12Start + 45 * 60_000L, durationSeconds = 600L), // 12:45–12:55
+        )
+
+        val apps = ActivityRepository.hourAppsFromSessions(12, today, sessions)
+
+        // Two consolidated app rows (YouTube 30m, Instagram 15m) — not three.
+        assertEquals(listOf("YouTube", "Instagram"), apps.map { it.name })
+        assertEquals(listOf(30, 15), apps.map { it.minutes })
+    }
+
+    @Test
+    fun `device non-reportable packages are excluded by the pure report path`() {
+        val today = LocalDate.now()
+        val start = dayStart(today)
+        // A launcher package NOT in the static known list — excluded via the
+        // installed device set, exactly like Home's context-aware classifier.
+        val sessions = listOf(
+            session("com.fake.device.launcher", start + 1_000L, durationSeconds = 3_600L),
+            session("com.google.android.youtube", start + 2_000L, durationSeconds = 600L),
+        )
+        try {
+            ActivityRepository.installDeviceNonReportablePackages(setOf("com.fake.device.launcher"))
+            val report = ActivityRepository.buildReport(ActivityPeriod.DAILY, today, emptyList(), sessions)
+
+            assertEquals(listOf("YouTube"), report.distribution.map { it.name })
+            assertEquals(10, report.totalMinutes)
+        } finally {
+            // Restore the clean default so no other test is affected.
+            ActivityRepository.installDeviceNonReportablePackages(emptySet())
+        }
+    }
 }

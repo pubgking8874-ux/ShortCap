@@ -1,6 +1,8 @@
 package com.shortscap.app.screens.activity
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,7 @@ import com.shortscap.app.charts.ScDonutCenterTotal
 import com.shortscap.app.charts.ScPointTooltipCard
 import com.shortscap.app.charts.ScSeriesChart
 import com.shortscap.app.charts.ScTimeLegend
+import com.shortscap.app.components.ScAppUsageIcon
 import com.shortscap.app.components.ScCard
 import com.shortscap.app.components.ScChip
 import com.shortscap.app.i18n.AppStrings
@@ -82,11 +85,13 @@ fun timeSliceColor(colors: ScColors, index: Int): Color {
 
 /**
  * Activity — daily / weekly / monthly usage with the Daily | Weekly | Monthly
- * tabs (kept exactly as they are). TIME + DAY + DATE are the primary
- * information in EVERY chart style:
- *   - Daily   → the complete 24-hour timeline with readable 3-hour markers
- *               (12 AM, 3 AM, … 9 PM); tapping any bar/point shows the exact
- *               clock window and duration.
+ * tabs (kept exactly as they are).
+ *   - Daily (Phase 1.5/1.6)   → APPLICATION-centric: the chart shows the
+ *               reportable applications used today with real app icons,
+ *               brand-coloured, size-proportional segments, total-only
+ *               center, NO percentages and NO hour-of-day; tapping a segment
+ *               or row selects/highlights that application and shows its
+ *               total usage.
  *   - Weekly  → Monday–Sunday, every bar carrying its day + real date
  *               ("Mon" / "Aug 4") and duration; tapping shows the full day.
  *   - Monthly → the current month split into 7-day date ranges (Aug 1–7,
@@ -120,11 +125,30 @@ fun ActivityScreen(
     val report = remember(period, dataTick) { ActivityRepository.reportFor(period) }
 
     // Distribution → shared chart slices (same data, pie-palette colors).
+    // Phase 1.6 — the small Most Used Apps donut is duration-proportional
+    // (value = real minutes, exactly like the Daily app donut) so segment
+    // sizes reflect actual usage, not shares that would distort the ring.
     val chartSlices = remember(report, strings, colors) {
         report.distribution.map { slice ->
             ChartSlice(
                 label = slice.displayName(strings),
-                value = slice.percent.toFloat(),
+                value = slice.minutes.toFloat(),
+                color = slice.pieColor(colors),
+            )
+        }
+    }
+    // Phase 1.5 — the DAILY app-centric donut: segments are APPLICATIONS,
+    // not hours. It uses the SAME reportable dataset as Most Used Apps
+    // (report.distribution — per-package, consolidated across the day,
+    // system/IME/launcher/ShortsCap already filtered). Value = real minutes
+    // so the legend durations are exact. Kept index-aligned with
+    // report.distribution (no filtering) so selection indices match the
+    // slices everywhere. Weekly/Monthly keep their time-series segments.
+    val appDonutSlices = remember(report, strings, colors) {
+        report.distribution.map { slice ->
+            ChartSlice(
+                label = slice.displayName(strings),
+                value = slice.minutes.toFloat(),
                 color = slice.pieColor(colors),
             )
         }
@@ -164,27 +188,14 @@ fun ActivityScreen(
     val showValues = period != ActivityPeriod.DAILY
     val valueFontSp = 8.5f
 
-    // Tap-to-select — the tooltip shows the point's exact date/time/usage in
-    // every chart style. Selection is tracked by LABEL so bar, line and donut
-    // taps always resolve to the same point even though the donut only draws
-    // the non-zero slices.
+    // Weekly/Monthly time-series selection (day / date-range tooltips) —
+    // DAILY now selects an APPLICATION instead (Phase 1.5, below). Selection
+    // is tracked by LABEL so bar, line and donut taps resolve to the same
+    // point even though the donut only draws the non-zero slices.
     var selectedLabel by remember { mutableStateOf<String?>(null) }
     val selectedPoint = report.points.firstOrNull { it.label == selectedLabel }
     val barSelectedIndex = report.points.indexOfFirst { it.label == selectedLabel }.takeIf { it >= 0 }
     val donutSelectedIndex = timeSlices.indexOfFirst { it.label == selectedLabel }.takeIf { it >= 0 }
-    // Phase 1.3 — the reportable applications used during the selected hour
-    // (Daily only), computed from the SAME persisted sessions + classifier as
-    // the timeline, so the detail card's Apps Used breakdown always agrees
-    // with the hour total. Weekly/Monthly points carry no per-hour data.
-    val selectedHourApps = remember(period, selectedLabel, dataTick) {
-        if (period == ActivityPeriod.DAILY) {
-            report.points.indexOfFirst { it.label == selectedLabel }.takeIf { it >= 0 }
-                ?.let { hourIndex -> ActivityRepository.hourApps(hourIndex) }
-                .orEmpty()
-        } else {
-            emptyList()
-        }
-    }
     fun toggleSelect(label: String) {
         selectedLabel = if (selectedLabel == label) null else label
     }
@@ -198,6 +209,19 @@ fun ActivityScreen(
     }
     val onDonutTap: ((Int) -> Unit)? = { index ->
         timeSlices.getOrNull(index)?.let { toggleSelect(it.label) }
+    }
+    // Phase 1.5 — DAILY application selection state. Tapping a donut segment
+    // or a legend row selects that APPLICATION (by package identity — "Other"
+    // has no package, so tapping it deselects). The selected segment, the
+    // legend row and the matching Most Used Apps row all highlight together.
+    var selectedAppPackage by remember { mutableStateOf<String?>(null) }
+    val selectedAppIndex: Int? = report.distribution
+        .indexOfFirst { it.packageName != null && it.packageName == selectedAppPackage }
+        .takeIf { it >= 0 }
+    val selectedAppSlice = selectedAppIndex?.let { report.distribution.getOrNull(it) }
+    val onAppSliceTap: ((Int) -> Unit)? = { index ->
+        val pkg = report.distribution.getOrNull(index)?.packageName
+        selectedAppPackage = if (selectedAppPackage == pkg) null else pkg
     }
     // Monthly: the tooltip's "View details" action opens the per-day detail
     // for the tapped date range.
@@ -253,22 +277,23 @@ fun ActivityScreen(
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
             )
-            when (chartStyle) {
-                ChartStyle.BAR, ChartStyle.GRAPH -> ScSeriesChart(
-                    points = seriesSlices,
-                    chartStyle = chartStyle,
-                    modifier = Modifier.fillMaxWidth().height(150.dp),
-                    showValues = showValues,
-                    valueFormatter = valueFormatter,
-                    labelEvery = labelEvery,
-                    valueEvery = valueEvery,
-                    labelLines = labelLines,
-                    valueFontSp = valueFontSp,
-                    onPointTap = onPointTap,
-                    onPointDrag = onPointDrag,
-                    selectedIndex = barSelectedIndex,
-                )
-                ChartStyle.CIRCULAR -> {
+            if (period == ActivityPeriod.DAILY) {
+                // Phase 1.5 — DAILY is APPLICATION-centric. The card answers
+                // "which applications did I use today, and for how long?" —
+                // the chart shows the reportable apps (same dataset as Most
+                // Used Apps), never hour-of-day segments. Tapping a segment
+                // or legend row selects that application: it highlights
+                // everywhere and a detail card shows its name + total usage
+                // (no date, no clock time, no session timestamps).
+                if (chartStyle == ChartStyle.BAR) {
+                    ScDistributionChart(
+                        slices = appDonutSlices,
+                        chartStyle = ChartStyle.BAR,
+                        modifier = Modifier.fillMaxWidth().height(150.dp),
+                        selectedIndex = selectedAppIndex,
+                        onSliceClick = onAppSliceTap,
+                    )
+                } else {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -276,58 +301,175 @@ fun ActivityScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         ScDistributionChart(
-                            slices = timeSlices,
+                            slices = appDonutSlices,
                             chartStyle = ChartStyle.CIRCULAR,
                             modifier = Modifier.size(190.dp),
                             centerContent = {
-                                // Phase 1.3: the donut center shows ONLY the
-                                // total — the date caption stays above the
-                                // chart in the Usage Timeline card header.
+                                // Phase 1.3/1.5: the donut center shows ONLY
+                                // the total (sum of reportable app usage) —
+                                // the date caption stays above the chart.
                                 ScDonutCenterTotal(total = totalText)
                             },
-                            selectedIndex = donutSelectedIndex,
-                            onSliceClick = onDonutTap,
+                            selectedIndex = selectedAppIndex,
+                            onSliceClick = onAppSliceTap,
                         )
                     }
-                    Spacer(modifier = Modifier.height(18.dp))
-                    // The Daily circle chart's hourly timeline stays compact by
-                    // default (first 4 entries + Show More) so the screen never
-                    // becomes one long list; Weekly/Monthly legends keep every
-                    // row visible exactly as before.
-                    ScTimeLegend(
-                        slices = timeSlices,
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                // Phase 1.6 — the Daily application list shows REAL app icons
+                // (one per slice), app name + total duration, and NO
+                // percentages. Icon identity = package; colour = the SAME
+                // AppUsageColorProvider colour as the donut segment.
+                ScTimeLegend(
+                    slices = appDonutSlices,
+                    valueFormatter = valueFormatter,
+                    onSliceClick = onAppSliceTap,
+                    selectedIndex = selectedAppIndex,
+                    showPercent = false,
+                    icon = { index ->
+                        ScAppUsageIcon(
+                            packageName = report.distribution.getOrNull(index)?.packageName,
+                            name = appDonutSlices.getOrNull(index)?.label.orEmpty(),
+                            size = 20.dp,
+                            corner = 6.dp,
+                        )
+                    },
+                )
+                // Selected application detail — real icon + name + total usage
+                // only (no date, no clock time, no session timestamps).
+                selectedAppSlice?.let { slice ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ScPointTooltipCard(
+                        title = slice.displayName(strings),
+                        usage = formatWebDuration(slice.minutes, strings),
+                        timeRange = null,
+                        titleIcon = {
+                            ScAppUsageIcon(
+                                packageName = slice.packageName,
+                                name = slice.displayName(strings),
+                                size = 20.dp,
+                                corner = 6.dp,
+                            )
+                        },
+                        onClose = { selectedAppPackage = null },
+                    )
+                }
+            } else {
+                when (chartStyle) {
+                    ChartStyle.BAR, ChartStyle.GRAPH -> ScSeriesChart(
+                        points = seriesSlices,
+                        chartStyle = chartStyle,
+                        modifier = Modifier.fillMaxWidth().height(150.dp),
+                        showValues = showValues,
                         valueFormatter = valueFormatter,
-                        onSliceClick = onDonutTap,
-                        maxVisible = if (period == ActivityPeriod.DAILY) 4 else null,
+                        labelEvery = labelEvery,
+                        valueEvery = valueEvery,
+                        labelLines = labelLines,
+                        valueFontSp = valueFontSp,
+                        onPointTap = onPointTap,
+                        onPointDrag = onPointDrag,
+                        selectedIndex = barSelectedIndex,
+                    )
+                    ChartStyle.CIRCULAR -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 2.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            ScDistributionChart(
+                                slices = timeSlices,
+                                chartStyle = ChartStyle.CIRCULAR,
+                                modifier = Modifier.size(190.dp),
+                                centerContent = {
+                                    // Phase 1.3: the donut center shows ONLY the
+                                    // total — the date caption stays above the
+                                    // chart in the Usage Timeline card header.
+                                    ScDonutCenterTotal(total = totalText)
+                                },
+                                selectedIndex = donutSelectedIndex,
+                                onSliceClick = onDonutTap,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(18.dp))
+                        ScTimeLegend(
+                            slices = timeSlices,
+                            valueFormatter = valueFormatter,
+                            onSliceClick = onDonutTap,
+                            selectedIndex = donutSelectedIndex,
+                        )
+                    }
+                }
+                // Tapped point detail — exact date/usage for the selected
+                // day or date range (Weekly/Monthly never carried hour data).
+                selectedPoint?.let { point ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ScPointTooltipCard(
+                        title = point.detailTitle ?: point.label,
+                        usage = formatWebDuration(point.minutes, strings),
+                        timeRange = point.timeRange,
+                        actionLabel = tooltipActionLabel,
+                        onAction = tooltipAction,
+                        onClose = { selectedLabel = null },
                     )
                 }
             }
-            // Tapped point detail — exact date/time/usage, in every style.
-            selectedPoint?.let { point ->
-                Spacer(modifier = Modifier.height(12.dp))
-                ScPointTooltipCard(
-                    title = point.detailTitle ?: point.label,
-                    usage = formatWebDuration(point.minutes, strings),
-                    timeRange = point.timeRange,
-                    apps = selectedHourApps,
-                    appsFormatter = { minutes -> formatWebDuration(minutes, strings) },
-                    actionLabel = tooltipActionLabel,
-                    onAction = tooltipAction,
-                    onClose = { selectedLabel = null },
-                )
-            }
         }
 
-        // Most used apps — the same distribution, rendered in the chart style.
+        // Most used apps — the SAME reportable dataset as the Daily app donut
+        // (report.distribution), rendered in the chart style. Tapping the
+        // mini donut or a row selects that application and highlights it here
+        // and in the Daily chart above (Phase 1.5).
         ScCard(modifier = Modifier.fillMaxWidth()) {
             Text(strings.activityMostUsedApps, color = colors.TextSecondary, style = ScTextStyles.SectionTitle, modifier = Modifier.padding(bottom = 14.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                ScDistributionChart(slices = chartSlices, chartStyle = chartStyle, modifier = Modifier.size(100.dp))
+                ScDistributionChart(
+                    slices = chartSlices,
+                    chartStyle = chartStyle,
+                    modifier = Modifier.size(100.dp),
+                    selectedIndex = selectedAppIndex,
+                    onSliceClick = onAppSliceTap,
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                     report.distribution.forEach { slice ->
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(999.dp)).background(slice.pieColor(colors)))
-                            Text(slice.displayName(strings), color = colors.TextSecondary, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
+                        val isSelected = slice.packageName != null && slice.packageName == selectedAppPackage
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .then(
+                                    if (isSelected) Modifier.background(colors.Accent.copy(alpha = 0.10f)) else Modifier,
+                                )
+                                .then(
+                                    if (isSelected) Modifier.padding(horizontal = 6.dp, vertical = 4.dp) else Modifier,
+                                )
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        selectedAppPackage =
+                                            if (selectedAppPackage == slice.packageName) null else slice.packageName
+                                    },
+                                ),
+                        ) {
+                            // Phase 1.6 — real launcher icon (brand-letter tile
+                            // fallback), sharing the same colour identity as the
+                            // Daily donut segment and main legend.
+                            ScAppUsageIcon(
+                                packageName = slice.packageName,
+                                name = slice.displayName(strings),
+                                size = 18.dp,
+                                corner = 5.dp,
+                            )
+                            Text(
+                                slice.displayName(strings),
+                                color = if (isSelected) colors.TextPrimary else colors.TextSecondary,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                fontSize = 12.5.sp,
+                                modifier = Modifier.weight(1f),
+                            )
                             // Real usage duration ("4h 35m"), derived from the
                             // period's aggregated data — never a percentage.
                             Text(

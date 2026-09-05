@@ -192,4 +192,21 @@ object PackageClassifier {
         cachedImePackages = imes
         return imes
     }
+
+    /**
+     * Phase 1.4: resolves the DEVICE-SPECIFIC non-reportable packages (the
+     * device's real launcher + every enabled input method) ONCE at app start.
+     * The pure reporting path in ActivityRepository installs this set so the
+     * Activity aggregation excludes exactly the same device packages as the
+     * context-aware Home path — no display labels, no per-screen lists.
+     * Crash-safe: resolution failures simply yield an empty set.
+     */
+    fun resolveDeviceNonReportablePackages(context: Context): Set<String> {
+        val launcher = deviceLauncher(context)
+        val imes = enabledImePackages(context)
+        return buildSet {
+            launcher?.let { add(it) }
+            addAll(imes)
+        }
+    }
 }

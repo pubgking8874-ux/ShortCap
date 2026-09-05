@@ -1,7 +1,10 @@
 package com.shortscap.app
 
 import android.app.Application
+import com.shortscap.app.activity.ActivityAppNames
 import com.shortscap.app.activity.ActivityRepository
+import com.shortscap.app.activity.PackageClassifier
+import com.shortscap.app.activity.UserAppCatalogResolver
 import com.shortscap.app.db.ShortsCapDatabase
 import com.shortscap.app.screenactivity.RoomScreenActivityStore
 import com.shortscap.app.screenactivity.ScreenActivityEngine
@@ -48,6 +51,17 @@ class ShortsCapApplication : Application() {
         ShortsControlEngine.install(
             ShortsControlEngine(store = RoomShortsLimitCycleStore(database.shortsLimitCycleDao()))
         )
+        // Shorts Limit 24-hour-cycle reset: heal any stale/corrupt persisted
+        // enforcement cycle BEFORE any consumer reads it. The observed
+        // "8489:34:56" countdown came from a removed debug "pause" that had
+        // persisted an expiry ~1 year in the future (the original expiry was
+        // kept only in memory, so it was unrecoverable after restart). The
+        // repair converts such a row IN PLACE into the CONFIGURED state — the
+        // saved limit and the daily monitoring counters are preserved, the
+        // phantom ACTIVE cycle / consumed count are zeroed — so the Shorts
+        // Limit page starts clean (READY_TO_ACTIVATE, count 0) and a fresh
+        // ACTIVATE starts an exact 24-hour cycle from zero.
+        ShortsControlEngine.shared.repairCorruptCycle()
         ShortsMonitoringPipeline.installControlEngine(ShortsControlEngine.shared)
         // Phase 1 reporting: Activity aggregates REAL persisted data from the
         // two existing tables (shorts_usage + screen_activity_usage). Before
@@ -58,5 +72,22 @@ class ShortsCapApplication : Application() {
                 screenActivityDao = database.screenActivityDao(),
             )
         )
+        // Phase 1.4: the pure Activity reporting path shares the SAME
+        // device-package exclusions as Home — the real launcher + every
+        // enabled input method, resolved once by package identity (never
+        // display labels).
+        ActivityRepository.installDeviceNonReportablePackages(
+            PackageClassifier.resolveDeviceNonReportablePackages(this)
+        )
+        // Phase 1.7: the device-local USER-APP catalog is the single
+        // eligibility gate for Activity/Home reporting — a recorded
+        // foreground package is reportable only when Android's own
+        // PackageManager reports it as an installed, launchable, user-facing
+        // application (no device-specific blacklist). Application identity,
+        // display label and icon all come from Android metadata, never from
+        // backend `appName`.
+        val userAppCatalog = UserAppCatalogResolver.resolve(this)
+        ActivityRepository.installUserAppCatalog(userAppCatalog.packages)
+        ActivityAppNames.installDeviceLabels(userAppCatalog.labels)
     }
 }

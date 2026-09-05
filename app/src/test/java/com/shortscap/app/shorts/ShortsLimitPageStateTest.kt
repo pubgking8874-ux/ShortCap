@@ -186,6 +186,19 @@ class ShortsLimitPageStateTest {
     }
 
     @Test
+    fun `countdown hours and minutes never exceed the 24 hour window`() {
+        // A real cycle can never show more than a full window remaining; even
+        // a stale/absurd duration (e.g. the historical "8489:34:56" value)
+        // clamps to 24:00:00 at the display layer.
+        assertEquals(24L to 0L, remainingHoursMinutes(24 * 3_600_000L + 3_600_000L))
+        assertEquals(
+            24L to 0L,
+            remainingHoursMinutes((8_489L * 3_600_000L) + (34L * 60_000L) + 56_000L),
+        )
+        assertEquals(24L to 0L, remainingHoursMinutes(Long.MAX_VALUE))
+    }
+
+    @Test
     fun `countdown formats as HH colon MM colon SS`() {
         assertEquals("24:00:00", remainingCountdownHms(24 * 3_600_000L))
         assertEquals("23:41:28", remainingCountdownHms(23 * 3_600_000L + 41 * 60_000L + 28_000L))
@@ -195,6 +208,15 @@ class ShortsLimitPageStateTest {
         assertEquals("00:00:00", remainingCountdownHms(-5_000L))
         // Sub-second remainder rounds down (timer shows whole seconds).
         assertEquals("23:59:59", remainingCountdownHms(24 * 3_600_000L - 999L))
+    }
+
+    @Test
+    fun `countdown never formats more than 24 hours - the absurd 8489 value is impossible`() {
+        // The historical corrupt value observed on the Shorts Limit page.
+        assertEquals("24:00:00", remainingCountdownHms(8_489L * 3_600_000L + 34L * 60_000L + 56_000L))
+        assertEquals("24:00:00", remainingCountdownHms(25 * 3_600_000L))
+        assertEquals("24:00:00", remainingCountdownHms(100 * 3_600_000L))
+        assertEquals("24:00:00", remainingCountdownHms(Long.MAX_VALUE))
     }
 
     @Test

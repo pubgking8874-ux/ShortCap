@@ -226,6 +226,20 @@ class ShortsControlEngine(
     fun hasHistory(): Boolean = store.history().isNotEmpty()
 
     /**
+     * Corruption repair for the persisted enforcement cycle (explicit entry
+     * point).
+     *
+     * [currentState] now applies this repair automatically and idempotently on
+     * every read (see the note there), so a stale/corrupt ACTIVE row heals the
+     * moment any consumer loads state — the Shorts Limit page, the HUD, the
+     * restriction engine or app startup. This method exists so startup can
+     * force the heal immediately (before any consumer reads) and so tests can
+     * exercise the repair deterministically. Returns the (possibly repaired)
+     * current state.
+     */
+    fun repairCorruptCycle(now: Long = nowMillis()): ShortsControlState = currentState(now)
+
+    /**
      * Disables Shorts control: the active window becomes DISABLED (history is
      * kept), nothing counts, and the engine reports DISABLED until re-enabled.
      */
@@ -358,7 +372,40 @@ class ShortsControlEngine(
      */
     fun currentState(now: Long = nowMillis()): ShortsControlState {
         val dailyCount = store.getDailyCount()
-        val cycle = store.currentCycle()
+        var cycle = store.currentCycle()
+        // Self-healing corruption repair (idempotent — runs on every read, a
+        // healthy cycle is never touched). A REAL 24-hour cycle can never
+        // have an expiry more than one full cycle in the future (expiry =
+        // start + 24h and start <= now). If the stored ACTIVE row still
+        // violates that, it is stale/corrupt data (historically produced by
+        // a removed debug "pause" that pushed expiry ~1 year out and kept
+        // the original expiry only in memory — the value behind the observed
+        // "8489:34:56" countdown). Convert it IN PLACE into the CONFIGURED
+        // state: the user's limit and the daily monitoring counters are
+        // preserved, the runtime count and timestamps are zeroed, so the
+        // page shows READY_TO_ACTIVATE (no phantom countdown, no phantom
+        // consumed count) and the user can press ACTIVATE for a clean
+        // 24-hour cycle.
+        if (cycle != null && cycle.cycleExpiresAt > now + cycleDurationMillis) {
+            Log.i(
+                "SC_COUNT",
+                "SC_COUNT CORRUPT_CYCLE_REPAIRED limit=${cycle.limitCount} " +
+                    "expiresAt=${cycle.cycleExpiresAt} now=$now",
+            )
+            store.save(
+                cycle.copy(
+                    currentCount = 0,
+                    cycleDurationMillis = 0L,
+                    cycleStartedAt = 0L,
+                    cycleExpiresAt = 0L,
+                    status = ShortsLimitCycleStatus.CONFIGURED,
+                    warningTriggered = false,
+                    limitReached = false,
+                    updatedAt = now,
+                )
+            )
+            cycle = null
+        }
         if (cycle != null) {
             if (cycle.cycleExpiresAt > now) return deriveState(cycle, now, dailyCount)
             // Cycle has expired.
@@ -528,7 +575,11 @@ class ShortsControlEngine(
             remainingCount = (limit - effectiveCount).coerceAtLeast(0),
             cycleStartedAt = cycle.cycleStartedAt,
             cycleExpiresAt = cycle.cycleExpiresAt,
-            remainingCycleMillis = (cycle.cycleExpiresAt - now).coerceAtLeast(0L),
+            // Phase 1.5: a real cycle can NEVER have more than 24h remaining
+            // (expiry = start + 24h, start <= now). Cap at the full window so
+            // a stale/drifted persisted expiry can never surface a
+            // multi-thousand-hour countdown; expiry stays authoritative.
+            remainingCycleMillis = (cycle.cycleExpiresAt - now).coerceIn(0L, cycleDurationMillis),
             enforcementState = enforcement,
             warningTriggered = cycle.warningTriggered,
             limitReached = if (windowOver) false else cycle.limitReached || cycle.currentCount >= limit,
@@ -551,9 +602,6 @@ class ShortsControlEngine(
     // production cycles are always locked. The UI section that calls these
     // methods is also gated by BuildConfig.DEBUG.
     // ==================================================================
-
-    /** Stored original expiry for pause/resume. 0L = not paused. */
-    @Volatile private var pausedOriginalExpiry: Long = 0L
 
     /**
      * DEBUG: Reset the current cycle to a clean testing state.
@@ -580,7 +628,6 @@ class ShortsControlEngine(
                 updatedAt = now,
             )
         )
-        pausedOriginalExpiry = 0L
         Log.i("SC_DEBUG", "SC_DEBUG RESET_CYCLE limit=$limit now=$now")
         return currentState()
     }
@@ -655,49 +702,4 @@ class ShortsControlEngine(
         Log.i("SC_DEBUG", "SC_DEBUG CLEAR_LIMIT_REACHED count=${cycle.currentCount}")
         return currentState()
     }
-
-    /**
-     * DEBUG: Pause the 24-hour cycle by extending its expiry far into the
-     * future. The cycle remains ACTIVE but the countdown effectively stops.
-     * Call [debugResumeCycle] to restore the original expiry.
-     */
-    fun debugPauseCycle(): ShortsControlState {
-        val now = nowMillis()
-        val cycle = store.currentCycle() ?: return currentState()
-        if (pausedOriginalExpiry > 0L) return currentState() // already paused
-        pausedOriginalExpiry = cycle.cycleExpiresAt
-        store.save(
-            cycle.copy(
-                cycleExpiresAt = now + 365L * 24L * 60L * 60L * 1000L, // ~1 year
-                updatedAt = now,
-            )
-        )
-        Log.i("SC_DEBUG", "SC_DEBUG PAUSE originalExpiry=$pausedOriginalExpiry")
-        return currentState()
-    }
-
-    /**
-     * DEBUG: Resume a paused cycle by restoring its original expiry.
-     * If the original expiry has already passed, the cycle is marked EXPIRED.
-     */
-    fun debugResumeCycle(): ShortsControlState {
-        val now = nowMillis()
-        val cycle = store.currentCycle() ?: return currentState()
-        val original = pausedOriginalExpiry
-        if (original <= 0L) return currentState() // not paused
-        pausedOriginalExpiry = 0L
-        if (original <= now) {
-            // Original expiry already passed — mark expired
-            store.save(cycle.copy(status = ShortsLimitCycleStatus.EXPIRED, updatedAt = now))
-            Log.i("SC_DEBUG", "SC_DEBUG RESUME expired originalExpiry=$original")
-        } else {
-            store.save(cycle.copy(cycleExpiresAt = original, updatedAt = now))
-            Log.i("SC_DEBUG", "SC_DEBUG RESUME restoredExpiry=$original")
-        }
-        return currentState()
-    }
-
-    /** DEBUG: Whether the cycle is currently paused. */
-    fun isDebugPaused(): Boolean = pausedOriginalExpiry > 0L
-
 }

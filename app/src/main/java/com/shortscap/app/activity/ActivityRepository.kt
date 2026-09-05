@@ -54,12 +54,54 @@ object ActivityRepository {
     @Volatile
     private var source: DataSource = EmptyDataSource
 
+    /** Device launcher + enabled IME packages excluded by the pure report path
+     *  (installed at app start — see [installDeviceNonReportablePackages]). */
+    @Volatile
+    private var deviceNonReportablePackages: Set<String> = emptySet()
+
+    /**
+     * Phase 1.7 — the device-local USER-APP catalog (installed at app start
+     * from [UserAppCatalogResolver]). null = catalog not installed (unit-test
+     * / pre-install state: the classifier rules alone decide eligibility); a
+     * non-null set makes catalog membership the SINGLE reporting gate — a
+     * recorded foreground package is reportable only when Android reports it
+     * as an installed, launchable, user-facing application.
+     */
+    @Volatile
+    private var userAppCatalog: Set<String>? = null
+
     @Volatile
     private var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     /** Installs the real Room-backed source (called from [com.shortscap.app.ShortsCapApplication]). */
     fun installDataSource(dataSource: DataSource) {
         source = dataSource
+    }
+
+    /**
+     * Phase 1.7: installs the device's user-facing application catalog as the
+     * eligibility gate for Activity reporting (resolved once at app start via
+     * [UserAppCatalogResolver] — Android PackageManager metadata, never a
+     * hardcoded blacklist). Raw `screen_activity_usage` rows are untouched;
+     * only reporting eligibility changes. Idempotent. Passing null (the
+     * default state) restores the classifier-only behavior used by tests and
+     * pre-install code.
+     */
+    fun installUserAppCatalog(catalogPackages: Set<String>?) {
+        userAppCatalog = catalogPackages
+    }
+
+    /**
+     * Phase 1.4: installs the DEVICE-SPECIFIC non-reportable packages (the
+     * device's launcher + every enabled input method, resolved once at app
+     * start by [com.shortscap.app.activity.PackageClassifier]). The pure
+     * aggregation in this repository is package-name based (no Context), so
+     * this set lets it exclude exactly the same device packages as Home's
+     * context-aware classifier — package identity, never display labels.
+     * Idempotent; defaults to empty so tests and pre-install state are clean.
+     */
+    fun installDeviceNonReportablePackages(packages: Set<String>) {
+        deviceNonReportablePackages = packages
     }
 
     /** Room-backed source over the two existing tables (read-only). */
@@ -226,15 +268,32 @@ object ActivityRepository {
     }
 
     /**
-     * Phase 1.2: keeps only sessions whose package the [PackageClassifier]
-     * considers reportable user-facing usage. Filtering happens HERE, before
-     * any aggregation, so totals, timeline, distribution, percentages and
-     * "Other" all operate on the same user-app dataset (system UI, keyboards,
-     * the launcher and ShortsCap itself never reach the user reports). Raw
-     * `screen_activity_usage` rows are untouched.
+     * Phase 1.2/1.4/1.7: keeps only sessions whose package is a REAL
+     * user-facing application — the single eligibility gate for Activity
+     * reporting:
+     *  1. catalog membership — when the Phase 1.7 user-app catalog is
+     *     installed (app start), the package must be an installed, launchable,
+     *     user-facing application per Android's PackageManager metadata
+     *     ([UserAppCatalogResolver]); otherwise it is ignored for reporting
+     *     (android/app/system services/launchers/IMEs can never be members).
+     *  2. not a device non-reportable package (launcher / enabled IMEs).
+     *  3. [PackageClassifier] considers it reportable (still excludes known
+     *     internals such as ShortsCap or the quick-search surface).
+     * Filtering happens HERE, before any aggregation, so totals, timeline,
+     * distribution, percentages and "Other" all operate on the same
+     * user-app dataset. Raw `screen_activity_usage` rows are untouched.
      */
-    private fun reportableSessions(sessions: List<ScreenActivityUsageEntity>): List<ScreenActivityUsageEntity> =
-        sessions.filter { PackageClassifier.isReportable(PackageClassifier.classify(it.packageName)) }
+    private fun reportableSessions(sessions: List<ScreenActivityUsageEntity>): List<ScreenActivityUsageEntity> {
+        // Local snapshot — the catalog is a @Volatile installable property and
+        // must not change mid-filter.
+        val catalog = userAppCatalog
+        return sessions.filter {
+            val pkg = it.packageName
+            (catalog == null || pkg in catalog) &&
+                pkg !in deviceNonReportablePackages &&
+                PackageClassifier.isReportable(PackageClassifier.classify(pkg))
+        }
+    }
 
     /** Shared window aggregation for a report (used by reportFor + rangeReportFor). */
     private fun buildReportForWindow(
@@ -558,6 +617,23 @@ object ActivityRepository {
  */
 object ActivityAppNames {
 
+    /**
+     * Phase 1.7 — the authoritative DISPLAY label per package, resolved from
+     * the device at app start ([UserAppCatalogResolver], Android
+     * PackageManager.loadLabel). Installed by [installDeviceLabels]; empty in
+     * tests / pre-install state. Device labels take priority over any
+     * persisted/backend `appName` so a package is always shown as Android
+     * itself names it (e.g. `org.telegram.messenger` → "Telegram", never a
+     * stale "Messenger" from backend sync).
+     */
+    @Volatile
+    private var deviceLabels: Map<String, String> = emptyMap()
+
+    /** Installs the device label map (called at app start). */
+    fun installDeviceLabels(labels: Map<String, String>) {
+        deviceLabels = labels
+    }
+
     private val known = mapOf(
         "com.google.android.youtube" to "YouTube",
         "com.instagram.android" to "Instagram",
@@ -575,9 +651,14 @@ object ActivityAppNames {
         "com.shortscap.app" to "ShortsCap",
     )
 
-    /** Best-effort readable app name: persisted appName, known package, or the
-     *  package's last segment. */
+    /**
+     * Best-effort readable app name — Android's own application label first
+     * (Phase 1.7 device catalog), then the persisted/backend `appName`, then
+     * the known-name map, then the package's last segment. Never crashes for
+     * an unknown or uninstalled package.
+     */
     fun friendlyName(packageName: String, appName: String? = null): String {
+        deviceLabels[packageName]?.let { return it }
         if (!appName.isNullOrBlank()) return appName
         known[packageName]?.let { return it }
         val segment = packageName.substringAfterLast('.')
