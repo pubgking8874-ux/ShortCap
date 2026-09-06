@@ -79,8 +79,31 @@ object ShortsRestrictionEngine {
     private var started = false
     private var context: Context? = null
 
+    /**
+     * Phase 3 — in-memory surface context for the count-driven path. The
+     * [CountChangeListener] does not receive a [ShortFormSurfaceState], so
+     * this flag records whether the last known surface was an active short-
+     * form surface. Updated ONLY by [onSurfaceStateChanged]; never persisted,
+     * never an enforcement state — it only feeds the existing decision
+     * function its surface precondition.
+     */
+    private var lastSurfaceActive = false
+
     private val surfaceListener = ShortFormSurfaceListener { state ->
         onSurfaceStateChanged(state)
+    }
+
+    /**
+     * Phase 3 — count-driven enforcement seam. The pipeline notifies this
+     * listener after every successful countShort() + persistence; the handler
+     * re-reads the AUTHORITATIVE control state and re-evaluates the SAME
+     * [shouldRestrict] decision, so the blocker appears immediately when the
+     * limit is crossed while a Short is playing (no wait for the next
+     * surface broadcast). The listener's count/limit arguments are ignored —
+     * the fresh currentState() is the only source of truth.
+     */
+    private val countListener = ShortsMonitoringPipeline.CountChangeListener { _, _ ->
+        onCountSignal()
     }
 
     /**
@@ -93,12 +116,14 @@ object ShortsRestrictionEngine {
         if (started) return
         started = true
         ShortsMonitoringPipeline.sharedInstance.addSurfaceListener(surfaceListener)
+        ShortsMonitoringPipeline.sharedInstance.addCountListener(countListener)
     }
 
     /** Unsubscribes and removes the overlay. Safe to call repeatedly. */
     fun stop() {
         if (started) {
             ShortsMonitoringPipeline.sharedInstance.removeSurfaceListener(surfaceListener)
+            ShortsMonitoringPipeline.sharedInstance.removeCountListener(countListener)
             started = false
         }
         ShortsRestrictionOverlayManager.hide()
@@ -109,9 +134,29 @@ object ShortsRestrictionEngine {
      * every surface change (never a cached flag), then show/hide.
      */
     private fun onSurfaceStateChanged(state: ShortFormSurfaceState?) {
+        // Phase 3 — remember the surface context for the count-driven path.
+        lastSurfaceActive = state != null
         val ctx = context ?: return
         val controlState = ShortsControlEngine.shared.currentState()
         if (shouldRestrict(state != null, controlState)) {
+            ShortsRestrictionOverlayManager.show(ctx)
+        } else {
+            ShortsRestrictionOverlayManager.hide()
+        }
+    }
+
+    /**
+     * Phase 3 — count-driven evaluation. Called on the Accessibility Service
+     * callback thread after every successful countShort() + persistence.
+     * Synchronous by design: no Handler/coroutine/thread of its own. Re-reads
+     * the authoritative control state (never a cached flag) and reuses the
+     * SAME decision function and overlay manager as the surface path —
+     * exactly one blocking decision, exactly one overlay.
+     */
+    private fun onCountSignal() {
+        val ctx = context ?: return
+        val controlState = ShortsControlEngine.shared.currentState()
+        if (shouldRestrict(lastSurfaceActive, controlState)) {
             ShortsRestrictionOverlayManager.show(ctx)
         } else {
             ShortsRestrictionOverlayManager.hide()

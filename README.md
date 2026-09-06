@@ -3830,6 +3830,17 @@ Android system Accessibility Settings shows the ShortsCap service **ON**.
   in `ShortUsageAggregator.kt`.
 - **Files changed:** `ShortUsageAggregator.kt` (constant value only).
 
+### Phase 3 — Immediate count-driven enforcement when the Shorts limit is reached *(Sep 6, 2026)*
+
+**Files changed:** `shorts/ShortsRestrictionEngine.kt` (only) — everything else additive-free.
+
+- **Gap closed:** enforcement previously re-evaluated only on short-form *surface* events, so when the limit was crossed while a Short was already playing, the blocker could stay hidden until the next (deduplicated) surface broadcast. Enforcement is now **immediate on the count event**.
+- **Count-driven path added:** the engine now registers a private `ShortsMonitoringPipeline.CountChangeListener` (the EXISTING listener interface — no new interface, no new data class, no new event system). The pipeline fires it after every successful `countShort()` → `ShortsControlEngine.onShortCounted()` → Room persistence, synchronously on the Accessibility Service callback thread.
+- **One decision, reused:** the new `onCountSignal()` re-reads the AUTHORITATIVE `ShortsControlEngine.shared.currentState()` (never the listener's count arguments, never a cached flag) and evaluates the SAME pure `shouldRestrict(surfaceActive, controlState)` function, then drives the SAME `ShortsRestrictionOverlayManager` — exactly one blocking decision and one overlay for both paths. The surface-event path remains fully intact as the safety/re-entry path (enter/leave/return Shorts, platform switches, service rebind).
+- **Surface context for the count path:** a small private in-memory `lastSurfaceActive` flag (updated only by `onSurfaceStateChanged`, never persisted, not an enforcement state) provides the surface precondition that the count listener does not carry.
+- **Lifecycle:** the count listener is registered idempotently in `start()` alongside the surface listener and unregistered in `stop()` before overlay cleanup — no listener survives a stop.
+- **Unchanged (LOCKED):** `ShortsControlEngine` (state machine, `limitReached`, 24-hour rolling cycle), `ShortsMonitoringPipeline` (counting, qualification, session state machine, dedup, persistence order), `shouldRestrict`, `ShortsRestrictionOverlayManager` (flags, touch blocking, permission gate, `isShowing` guard), all platform adapters, Room schema/DAOs, HUD, `DebugEnforcementSimulation`, backend/auth/sync/reporting. No Handler/coroutine/timer/polling was added — the count → listener → overlay sequence stays synchronous on the service thread.
+
 ## Database connection status
 
 - **Local MySQL:** Community Server 8.0.43 installed, `MySQL80` Windows service
