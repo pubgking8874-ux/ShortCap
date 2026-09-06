@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.shortscap.app.BuildConfig
 import com.shortscap.app.components.ScPremiumNavCard
 import com.shortscap.app.components.ScSubScreenTopBar
 import com.shortscap.app.i18n.LocalAppStrings
@@ -82,6 +83,13 @@ fun ShortsControlScreen(
                 onClick = onOpenInsights,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // DEBUG-ONLY enforcement simulation — Settings → Short Control.
+            // Never composed in release builds (BuildConfig.DEBUG); the
+            // simulation's own entry points are DEBUG-gated as well.
+            if (BuildConfig.DEBUG) {
+                DebugEnforcementPanel()
+            }
         }
     }
 }
