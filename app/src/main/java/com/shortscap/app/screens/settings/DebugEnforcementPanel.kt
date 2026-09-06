@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import com.shortscap.app.shorts.DebugEnforcementSimulation
 import com.shortscap.app.shorts.DebugEnforcementSnapshot
 import com.shortscap.app.shorts.ShortsEnforcementState
+import com.shortscap.app.shorts.ShortsEnforcementTestHarness
+import com.shortscap.app.shorts.ShortsEnforcementTestSnapshot
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -56,6 +58,9 @@ fun DebugEnforcementPanel() {
     // Numeric inputs — pre-filled from the real configured limit (read-only).
     var limitText by remember { mutableStateOf(snap.realLimit.takeIf { it > 0 }?.toString() ?: "") }
     var countText by remember { mutableStateOf("") }
+    // Phase 4A — REAL enforcement test harness state.
+    var testSnap by remember { mutableStateOf(ShortsEnforcementTestHarness.snapshot()) }
+    var testLimitText by remember { mutableStateOf("") }
 
     val shape = RoundedCornerShape(16.dp)
     Column(
@@ -190,6 +195,110 @@ fun DebugEnforcementPanel() {
                 style = ScTextStyles.Caption,
             )
         }
+
+        // ================= PHASE 4A — REAL ENFORCEMENT TEST HARNESS =================
+        Text(
+            "REAL ENFORCEMENT TEST (DEBUG BUILD ONLY)",
+            color = colors.Warning,
+            style = ScTextStyles.SectionTitle,
+        )
+        Text(
+            "Counts REAL Shorts through the real pipeline into an independent " +
+                "DEBUG test counter against a small test limit (default 5) and " +
+                "triggers the REAL full-screen restriction overlay when the test " +
+                "limit is crossed — no 24-hour wait. The production 24-hour " +
+                "cycle, real count, daily usage and settings are never modified " +
+                "or reset. A running test survives app-process restarts: the " +
+                "DEBUG test state is stored in a dedicated DEBUG-only " +
+                "namespace and the harness re-registers automatically on the " +
+                "next process start (no need to press START TEST again). The " +
+                "HUD shows TEST MODE · n / limit while running. RESET TEST / " +
+                "STOP TEST end the run and return to START TEST. " +
+                "Logcat tag: SHORTS_TEST.",
+            color = colors.TextSecondary,
+            style = ScTextStyles.Caption,
+        )
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DebugStat("Test Limit", testSnap.testLimit.toString(), colors.CardHover, Modifier.weight(1f))
+            DebugStat("Test Count", testSnap.testCount.toString(), colors.CardHover, Modifier.weight(1f))
+            DebugStat(
+                "Mode",
+                if (testSnap.enabled) "RUNNING" else "OFF",
+                colors.CardHover,
+                Modifier.weight(1f),
+            )
+            DebugStat("Enforced", if (testSnap.enforced) "YES" else "NO", colors.CardHover, Modifier.weight(1f))
+        }
+
+        if (testSnap.enforced) {
+            Text(
+                "TEST ENFORCEMENT TRIGGERED — the real restriction overlay should " +
+                    "be up over the monitored app.",
+                color = colors.Danger,
+                style = ScTextStyles.BodySemiBold,
+            )
+        }
+
+        if (!testSnap.enabled) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DebugNumberField(
+                    text = testLimitText,
+                    placeholder = "5",
+                    onTextChange = { testLimitText = it.filter { c -> c.isDigit() }.take(3) },
+                    colors = colors,
+                )
+                DebugActionButton(
+                    label = "START TEST",
+                    accent = colors.Accent,
+                    colors = colors,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    val ok = ShortsEnforcementTestHarness.startTest(
+                        testLimitText.toIntOrNull() ?: 5,
+                    )
+                    if (ok) testLimitText = ""
+                    testSnap = ShortsEnforcementTestHarness.snapshot()
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                DebugActionButton(
+                    label = "RESET TEST",
+                    accent = colors.Warning,
+                    colors = colors,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    ShortsEnforcementTestHarness.resetTest()
+                    testSnap = ShortsEnforcementTestHarness.snapshot()
+                }
+                DebugActionButton(
+                    label = "STOP TEST",
+                    accent = colors.TextSecondary,
+                    colors = colors,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    ShortsEnforcementTestHarness.stopTest()
+                    testSnap = ShortsEnforcementTestHarness.snapshot()
+                }
+            }
+            Text(
+                "Watch real Shorts now. Each counted Short logs " +
+                    "TEST_SHORT_ACCEPTED count=N limit=L (tag SHORTS_TEST); the " +
+                    "crossing logs TEST_LIMIT_REACHED + TEST_ENFORCEMENT_TRIGGERED " +
+                    "and the real overlay appears.",
+                color = colors.TextDisabled,
+                style = ScTextStyles.Caption,
+            )
+        }
+        // ================= END PHASE 4A SECTION =================
     }
 }
 

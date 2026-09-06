@@ -3,6 +3,7 @@ package com.shortscap.app.shorts
 import android.content.Context
 import android.graphics.PixelFormat
 import android.provider.Settings
+import android.util.Log
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.shortscap.app.hud.OverlayLifecycleOwner
 import com.shortscap.app.i18n.LocalAppStrings
 import com.shortscap.app.theme.LocalScColors
 import com.shortscap.app.theme.ScTextStyles
@@ -137,10 +143,26 @@ object ShortsRestrictionEngine {
         // Phase 3 — remember the surface context for the count-driven path.
         lastSurfaceActive = state != null
         val ctx = context ?: return
-        val controlState = ShortsControlEngine.shared.currentState()
-        if (shouldRestrict(state != null, controlState)) {
+        val effectiveState = effectiveControlState()
+        val decision = shouldRestrict(state != null, effectiveState)
+        // Phase 4A.2/4A.3 — DEBUG-only diagnostic (log only, no behavior
+        // change beyond the persistent test condition itself).
+        if (com.shortscap.app.BuildConfig.DEBUG) {
+            val productionLimitReached = ShortsControlEngine.shared.currentState().limitReached
+            Log.i("SHORTS_DIAG",
+                "SURFACE_EVAL testEnforced=" + ShortsEnforcementTestHarness.isTestEnforced() +
+                    " surfaceActive=" + (state != null) +
+                    " productionLimitReached=" + productionLimitReached +
+                    " effectiveLimitReached=" + effectiveState.limitReached +
+                    " decision=" + decision +
+                    " overlayShowingBefore=" + ShortsRestrictionOverlayManager.isShowing)
+        }
+        if (decision) {
             ShortsRestrictionOverlayManager.show(ctx)
         } else {
+            if (com.shortscap.app.BuildConfig.DEBUG && ShortsRestrictionOverlayManager.isShowing) {
+                Log.i("SHORTS_DIAG", "PRODUCTION_HIDE_REQUEST reason=PRODUCTION_EVAL_FALSE")
+            }
             ShortsRestrictionOverlayManager.hide()
         }
     }
@@ -155,11 +177,119 @@ object ShortsRestrictionEngine {
      */
     private fun onCountSignal() {
         val ctx = context ?: return
-        val controlState = ShortsControlEngine.shared.currentState()
-        if (shouldRestrict(lastSurfaceActive, controlState)) {
+        val effectiveState = effectiveControlState()
+        val decision = shouldRestrict(lastSurfaceActive, effectiveState)
+        // Phase 4A.2/4A.3 — DEBUG-only diagnostic (log only).
+        if (com.shortscap.app.BuildConfig.DEBUG) {
+            Log.i("SHORTS_DIAG",
+                "COUNT_EVAL testEnforced=" + ShortsEnforcementTestHarness.isTestEnforced() +
+                    " surfaceActive=$lastSurfaceActive" +
+                    " effectiveLimitReached=" + effectiveState.limitReached +
+                    " decision=$decision" +
+                    " overlayShowingBefore=" + ShortsRestrictionOverlayManager.isShowing)
+        }
+        if (decision) {
             ShortsRestrictionOverlayManager.show(ctx)
         } else {
             ShortsRestrictionOverlayManager.hide()
+        }
+    }
+
+    /**
+     * Phase 4A.3 — the single state used by BOTH production evaluation
+     * paths. Returns the authoritative production state, except when the
+     * DEBUG controlled test is currently enforced: then a LOCAL copy with
+     * `limitReached = true` is returned so the persistent test condition
+     * survives re-evaluations (the Phase 4A.2 root-cause fix). The copy is
+     * never persisted, never written back to the engine or Room, and the
+     * override is impossible in release builds
+     * ([ShortsEnforcementTestHarness.isTestEnforced] is DEBUG-gated). The
+     * SAME production [shouldRestrict] decision function and the SAME real
+     * [ShortsRestrictionOverlayManager] remain in use — no second engine,
+     * no second decision, no duplicate `shouldRestrict` logic.
+     */
+    private fun effectiveControlState(): ShortsControlState {
+        val productionState = ShortsControlEngine.shared.currentState()
+        return if (com.shortscap.app.BuildConfig.DEBUG &&
+            ShortsEnforcementTestHarness.isTestEnforced()
+        ) {
+            productionState.copy(limitReached = true)
+        } else {
+            productionState
+        }
+    }
+
+    /**
+     * Phase 4A.1 — DEBUG-only test enforcement seam.
+     *
+     * Lets the controlled test harness exercise the REAL enforcement action
+     * with a TEST decision input: when [testCondition] is true it replaces
+     * ONLY the production `limitReached` decision input (the production
+     * state's limitReached is overridden via [ShortsControlState.copy] so
+     * the SAME production [shouldRestrict] decision function still runs).
+     * The enforcement ACTION is never faked: the real
+     * [ShortsRestrictionOverlayManager.show] executes — same overlay, same
+     * WindowManager flags, same touch blocking, same permission gate, same
+     * isShowing guard, same production surface-path cleanup.
+     *
+     * Note: the overridden decision input is NOT persisted anywhere, so the
+     * next production evaluation (any surface-state change) re-derives the
+     * REAL state — with test mode at a small limit the overlay may lift on
+     * the next surface transition. That is correct: only the decision input
+     * is testable in DEBUG, never the production state.
+     *
+     * Release builds are inert (`NOT_DEBUG`, touches nothing).
+     *
+     * @param testCondition the TEST enforcement condition provided by the
+     *   harness (true when the DEBUG test limit has been reached).
+     * @return diagnostic result string for the SHORTS_TEST log:
+     *   `SHOWN` / `SHOW_FAILED` / `DECISION_FALSE` / `NO_CONTEXT` / `NOT_DEBUG`.
+     */
+    fun debugTriggerEnforcement(testCondition: Boolean = false): String {
+        if (!com.shortscap.app.BuildConfig.DEBUG) return "NOT_DEBUG"
+        val ctx = context
+        if (ctx == null) {
+            Log.w("SHORTS_TEST", "TEST_ENFORCEMENT_BLOCKED reason=NO_SERVICE_CONTEXT")
+            return "NO_CONTEXT"
+        }
+        val realState = ShortsControlEngine.shared.currentState()
+        // Test seam: override ONLY the limitReached decision input; the
+        // production decision function and action remain authoritative.
+        val effectiveState = if (testCondition) realState.copy(limitReached = true) else realState
+        val surfaceActive = lastSurfaceActive
+        val decision = shouldRestrict(surfaceActive, effectiveState)
+        // Phase 4A.2 — DEBUG-only diagnostic trace (log only).
+        Log.i("SHORTS_DIAG", "DEBUG_TRIGGER_ENTERED testCondition=$testCondition")
+        Log.i("SHORTS_DIAG",
+            "ENFORCEMENT_STATE surfaceActive=$surfaceActive" +
+                " testEnforced=" + ShortsEnforcementTestHarness.isTestEnforced() +
+                " productionLimitReached=" + realState.limitReached +
+                " effectiveLimitReached=" + effectiveState.limitReached +
+                " productionCount=" + realState.currentCount +
+                " productionLimit=" + realState.limitCount)
+        Log.i("SHORTS_DIAG", "SHOULD_RESTRICT_RESULT result=$decision")
+        Log.i("SHORTS_TEST",
+            "TEST_ENFORCEMENT_EVAL surfaceActive=$surfaceActive " +
+                "testCondition=$testCondition realLimitReached=${realState.limitReached} " +
+                "decision=$decision")
+        return if (decision) {
+            Log.i("SHORTS_DIAG",
+                "OVERLAY_SHOW_REQUEST context=" + ctx.javaClass.simpleName +
+                    " canDrawOverlays=" + android.provider.Settings.canDrawOverlays(ctx))
+            Log.i("SHORTS_DIAG", "DEBUG_TRIGGER_DECISION shouldRestrict=true")
+            ShortsRestrictionOverlayManager.show(ctx)
+            val shown = ShortsRestrictionOverlayManager.isShowing
+            Log.i("SHORTS_DIAG", "OVERLAY_SHOW_RESULT shown=$shown")
+            Log.i("SHORTS_TEST", "TEST_ENFORCEMENT_ACTION show success=$shown")
+            if (shown) "SHOWN" else "SHOW_FAILED"
+        } else {
+            Log.i("SHORTS_DIAG",
+                "DEBUG_TRIGGER_DECISION shouldRestrict=false surfaceActive=$surfaceActive " +
+                    "testCondition=$testCondition")
+            Log.w("SHORTS_TEST",
+                "TEST_ENFORCEMENT_BLOCKED reason=DECISION_FALSE surfaceActive=$surfaceActive " +
+                    "testCondition=$testCondition")
+            "DECISION_FALSE"
         }
     }
 }
@@ -176,18 +306,64 @@ object ShortsRestrictionOverlayManager {
     private var composeView: ComposeView? = null
     private var windowManager: WindowManager? = null
 
+    /**
+     * The lifecycle owner attached to the current overlay ComposeView (set on
+     * every successful [show], disposed on [hide]). System-overlay ComposeViews
+     * require the ViewTree lifecycle owners (Phase 4A.6) — a fresh owner is
+     * created per show so repeated show()/hide() cycles stay clean.
+     */
+    private var lifecycleOwner: OverlayLifecycleOwner? = null
+
     /** Whether the restriction overlay is currently on screen. */
     val isShowing: Boolean get() = composeView != null
 
     /** Shows the full-screen restriction overlay (no-op when already up or permission missing). */
     fun show(context: Context) {
-        if (composeView != null) return
+        // Phase 4A.2 — DEBUG-only diagnostics at every guard (log only, no
+        // behavior change): distinguishes skipped vs failed vs attached.
+        if (com.shortscap.app.BuildConfig.DEBUG) {
+            Log.i("SHORTS_DIAG",
+                "OVERLAY_SHOW_ENTER alreadyShowing=" + (composeView != null) +
+                    " canDrawOverlays=" + Settings.canDrawOverlays(context))
+        }
+        if (composeView != null) {
+            if (com.shortscap.app.BuildConfig.DEBUG) {
+                Log.i("SHORTS_DIAG", "OVERLAY_SKIP reason=ALREADY_SHOWING")
+            }
+            return
+        }
         // SYSTEM_ALERT_WINDOW is the only gate — fail gracefully, never assume.
-        if (!Settings.canDrawOverlays(context)) return
+        if (!Settings.canDrawOverlays(context)) {
+            if (com.shortscap.app.BuildConfig.DEBUG) {
+                Log.w("SHORTS_DIAG", "OVERLAY_SKIP reason=NO_OVERLAY_PERMISSION")
+            }
+            return
+        }
 
-        val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
+        val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        if (wm == null) {
+            if (com.shortscap.app.BuildConfig.DEBUG) {
+                Log.w("SHORTS_DIAG", "OVERLAY_SKIP reason=NO_WINDOW_MANAGER")
+            }
+            return
+        }
 
+        // System overlays have no Activity in the view tree, so this
+        // ComposeView cannot find a ViewTreeLifecycleOwner. Supply the SAME
+        // explicit owners the Shorts HUD overlay uses (shared
+        // OverlayLifecycleOwner) BEFORE the first composition so the overlay
+        // cannot crash with "ViewTreeLifecycleOwner not found" (Phase 4A.6).
+        // One owner per show() so repeated show()/hide() cycles never reuse a
+        // disposed owner.
+        val overlayLifecycle = OverlayLifecycleOwner()
         val view = ComposeView(context).apply {
+            setViewTreeLifecycleOwner(overlayLifecycle)
+            setViewTreeViewModelStoreOwner(overlayLifecycle)
+            setViewTreeSavedStateRegistryOwner(overlayLifecycle)
+            overlayLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            overlayLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            overlayLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+
             setContent {
                 ShortsCapTheme(mode = ThemePreferenceStore(context).loadThemeMode()) {
                     RestrictionOverlayContent()
@@ -208,20 +384,46 @@ object ShortsRestrictionOverlayManager {
             PixelFormat.TRANSLUCENT,
         )
 
-        runCatching { wm.addView(view, layout) }
-            .onSuccess {
-                composeView = view
-                windowManager = wm
+        // Phase 4A.5 — boundary log: immediately before window attachment.
+        if (com.shortscap.app.BuildConfig.DEBUG) {
+            Log.i("SHORTS_DIAG", "OVERLAY_ATTACHED_ATTEMPT")
+        }
+        try {
+            wm.addView(view, layout)
+        } catch (error: Exception) {
+            // Phase 4A.5 — observable, non-swallowed: log the exact failure
+            // class/message, then RETHROW so the exception propagates exactly
+            // as it naturally would (crash buffer keeps the FATAL record).
+            if (com.shortscap.app.BuildConfig.DEBUG) {
+                Log.w("SHORTS_DIAG",
+                    "OVERLAY_SHOW_EXCEPTION class=${error.javaClass.name} message=${error.message}")
             }
+            throw error
+        }
+        composeView = view
+        windowManager = wm
+        lifecycleOwner = overlayLifecycle
+        if (com.shortscap.app.BuildConfig.DEBUG) {
+            Log.i("SHORTS_DIAG", "OVERLAY_ATTACHED success=true")
+        }
     }
 
     /** Removes the overlay if it is on screen (safe to call repeatedly). */
     fun hide() {
-        val view = composeView ?: return
+        val view = composeView
+        if (com.shortscap.app.BuildConfig.DEBUG) {
+            Log.i("SHORTS_DIAG", "OVERLAY_HIDE_REQUEST wasShowing=" + (view != null))
+        }
+        if (view == null) return
         val wm = windowManager
         composeView = null
         windowManager = null
         if (wm != null) runCatching { wm.removeView(view) }
+        // Dispose the per-show lifecycle owner so its ViewModelStore /
+        // SavedStateRegistry cannot outlive the removed ComposeView
+        // (Phase 4A.6). A fresh owner is created on the next show().
+        lifecycleOwner?.dispose()
+        lifecycleOwner = null
     }
 }
 

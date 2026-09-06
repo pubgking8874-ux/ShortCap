@@ -11,6 +11,7 @@ import com.shortscap.app.screenactivity.ScreenActivityEngine
 import com.shortscap.app.shorts.RoomShortsLimitCycleStore
 import com.shortscap.app.shorts.RoomShortsLocalStore
 import com.shortscap.app.shorts.ShortsControlEngine
+import com.shortscap.app.shorts.ShortsEnforcementTestHarness
 import com.shortscap.app.shorts.ShortsMonitoringPipeline
 import com.shortscap.app.sync.RoomSyncQueue
 import com.shortscap.app.sync.SyncCoordinator
@@ -89,5 +90,12 @@ class ShortsCapApplication : Application() {
         val userAppCatalog = UserAppCatalogResolver.resolve(this)
         ActivityRepository.installUserAppCatalog(userAppCatalog.packages)
         ActivityAppNames.installDeviceLabels(userAppCatalog.labels)
+        // Phase 4A.6 — DEBUG test-harness process-restart recovery: restore any
+        // in-flight controlled enforcement test (persisted in a dedicated
+        // DEBUG-only SharedPreferences namespace) and re-register its count
+        // listener BEFORE normal Shorts monitoring begins, so a running test
+        // survives process recreation without pressing START TEST again.
+        // No-op in release builds (DEBUG-gated inside the harness).
+        ShortsEnforcementTestHarness.attach(applicationContext)
     }
 }

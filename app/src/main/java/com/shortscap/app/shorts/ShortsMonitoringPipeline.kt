@@ -201,17 +201,41 @@ class ShortsMonitoringPipeline(
                     "prevSession=${previous.sessionState}",
             )
 
-            // Our own HUD overlay (TYPE_APPLICATION_OVERLAY) causes the accessibility
-            // service to report com.shortscap.app as the foreground package. This must
-            // NOT be treated as the user leaving the Shorts platform.
+            // ===== PHASE 4B — OWN OVERLAY EVENTS ARE NEVER A SURFACE EXIT =====
+            // The accessibility service reports OUR OWN TYPE_APPLICATION_OVERLAY
+            // ComposeViews (the HUD chip AND the full-screen restriction blocker)
+            // as com.shortscap.app window events with a ComposeView class. The
+            // restriction overlay appears EXACTLY when the limit-crossing count
+            // has just reset the Shorts session to NO_SESSION — i.e. precisely
+            // when the session-gated handling below would NOT apply. Treating the
+            // overlay's own window event as a NEW_SURFACE for com.shortscap.app
+            // would broadcast a null short-form surface, and
+            // ShortsRestrictionEngine.onSurfaceStateChanged(null) would then
+            // evaluate shouldRestrict(false, limitReached=true) == false and
+            // hide() the enforcement overlay it just showed (~1 s later — the
+            // observed accessibility feedback loop). Own-overlay window events
+            // are therefore ignored entirely: the current surface context is kept
+            // and NO broadcast is emitted, so active enforcement stays visible
+            // while genuine surface exits (launcher / other apps) still broadcast
+            // normally below.
             val isOurOverlay = packageName == OUR_PACKAGE_NAME &&
                 activityClassName?.contains("ComposeView") == true
 
-            if (sessionInProgress && (samePackage && isShortsPlatform || isOurOverlay)) {
+            if (isOurOverlay) {
+                Log.i("SC_TRACE",
+                    "SC_TRACE OWN_OVERLAY_EVENT pkg=$packageName cls=$activityClassName " +
+                        "decision=IGNORE_NO_SURFACE_EXIT " +
+                        "prevPkg=${previous.packageName} prevSession=${previous.sessionState} " +
+                        "reason=OWN_OVERLAY_IS_NOT_A_PLATFORM_EXIT timestamp=$now",
+                )
+                return
+            }
+
+            if (sessionInProgress && samePackage && isShortsPlatform) {
                 val elapsedSinceStart = now - previous.shortStartedAt
                 Log.i("SC_SHORT",
                     "SC_SHORT onForegroundAppChanged CARRY_FORWARD pkg=$packageName " +
-                        "cls=$activityClassName isOurOverlay=$isOurOverlay " +
+                        "cls=$activityClassName " +
                         "sessionState=${previous.sessionState} shortStartedAt=${previous.shortStartedAt}",
                 )
                 Log.i("SC_TRACE",
@@ -234,8 +258,7 @@ class ShortsMonitoringPipeline(
                 //
                 // For WATCHING sessions (not yet qualified), still re-run
                 // notifySurfaceState() so detection can update.
-                val shouldReRunDetection = !isOurOverlay &&
-                    previous.sessionState != SessionState.QUALIFIED
+                val shouldReRunDetection = previous.sessionState != SessionState.QUALIFIED
 
                 active = previous.copy(
                     activityClassName = activityClassName,

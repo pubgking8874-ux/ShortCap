@@ -129,10 +129,29 @@ fun ShortsHudContent(
                 remaining = uiState.remaining,
                 cycleState = uiState.cycleState,
             )
-            when (appearance) {
-                ShortsHudAppearance.SHORTSCAP -> ShortsCapChip(count, limit, secondary, colors.Accent)
-                ShortsHudAppearance.BRAIN -> BrainChip(count = count, limit = limit, secondary = secondary)
-                ShortsHudAppearance.LIVE_COUNTER -> LiveCounterChip(count, limit, secondary, colors.Accent)
+            Column {
+                when (appearance) {
+                    ShortsHudAppearance.SHORTSCAP -> ShortsCapChip(count, limit, secondary, colors.Accent)
+                    ShortsHudAppearance.BRAIN -> BrainChip(count = count, limit = limit, secondary = secondary)
+                    ShortsHudAppearance.LIVE_COUNTER -> LiveCounterChip(count, limit, secondary, colors.Accent)
+                }
+                // Phase 4A.1 — DEBUG-only test-mode indicator inside the
+                // EXISTING HUD chip. Visible only while the controlled
+                // enforcement test mode is active (BuildConfig.DEBUG-gated
+                // upstream in ShortsEnforcementTestHarness); with test mode
+                // OFF this renders nothing and the production HUD is exactly
+                // as before. Reads the harness state directly — never a
+                // second independent counter.
+                if (uiState.testModeActive) {
+                    Text(
+                        text = "TEST MODE · ${uiState.testCount} / ${uiState.testLimit}" +
+                            if (uiState.testCount >= uiState.testLimit) " · LIMIT" else "",
+                        color = colors.Danger,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
@@ -167,6 +186,20 @@ class ShortsHudUiState(
     /** Friendly current-platform label (null when the platform is unknown). */
     var platformLabel by mutableStateOf<String?>(null)
         internal set
+
+    // ---- Phase 4A.1 — DEBUG-only controlled-enforcement test fields ----
+    // Written ONLY by ShortsEnforcementTestHarness (BuildConfig.DEBUG-gated
+    // upstream); all false/zero when test mode is OFF so the production HUD
+    // is unchanged. Rendered by the test indicator inside ShortsHudContent.
+
+    /** DEBUG test mode active (controlled enforcement test harness). */
+    var testModeActive by mutableStateOf(false)
+
+    /** DEBUG test counter (per validated production Short event). */
+    var testCount by mutableStateOf(0)
+
+    /** DEBUG test limit (developer-set, independent of production limit). */
+    var testLimit by mutableStateOf(0)
 }
 
 /** Branded chip: [logo] 4 / 200 + live secondary line — primary accent, compact. */
